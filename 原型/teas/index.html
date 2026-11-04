@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>六大茶类 · 茶品列表 —— 茶·图鉴</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238B7355'%3E%3Cpath d='M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19.2 2.5c1 1.66.6 6-2 9-2 2.4-6.2 3-6.2 3zM2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+  <!-- 导航栏占位 -->
+  <div id="nav-placeholder"></div>
+  <!-- 模态框占位 -->
+  <div id="modal-root"></div>
+
+  <main class="container page-main">
+
+    <!-- ===== 面包屑（JS 动态填充） ===== -->
+    <div id="breadcrumb"></div>
+
+    <!-- ===== 筛选面板 ===== -->
+    <section class="filter-bar" id="filter-bar">
+      <!-- 六大茶类 -->
+      <div class="filter-group">
+        <div class="filter-group__label">六大茶类</div>
+        <div class="filter-chips" id="filter-chips-category">
+          <!-- JS 动态生成 -->
+        </div>
+      </div>
+
+      <!-- 产地 -->
+      <div class="filter-group">
+        <div class="filter-group__label">产地</div>
+        <div class="filter-chips" id="filter-chips-origin">
+          <!-- JS 动态生成 -->
+        </div>
+      </div>
+
+      <!-- 采摘季节 -->
+      <div class="filter-group">
+        <div class="filter-group__label">采摘季节</div>
+        <div class="filter-chips" id="filter-chips-season">
+          <!-- JS 动态生成 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 已选条件区 ===== -->
+    <div class="filter-selected" id="filter-selected">
+      <span class="filter-selected__label">已选：</span>
+      <span style="color:var(--text-muted);font-size:var(--text-caption)" id="filter-selected-empty">暂无筛选，显示全部</span>
+      <button class="filter-selected__clear" id="filter-clear">清除全部</button>
+    </div>
+
+    <!-- ===== 排序 + 结果数 ===== -->
+    <div class="sort-bar">
+      <div class="sort-bar__result" id="result-count">加载中…</div>
+      <select class="sort-bar__select" id="sort-select">
+        <option value="newest">最新上架</option>
+        <option value="favorite">收藏最多</option>
+      </select>
+    </div>
+
+    <!-- ===== 骨架屏（默认显示，JS 替换） ===== -->
+    <div class="tea-grid" id="tea-skeleton">
+      <!-- JS 动态生成 6 个骨架卡片 -->
+    </div>
+
+    <!-- ===== 卡片网格（JS 渲染，初始隐藏） ===== -->
+    <div class="tea-grid hidden" id="tea-grid">
+      <!-- JS 动态生成卡片 -->
+    </div>
+
+    <!-- ===== 空状态（默认隐藏，JS 控制显示） ===== -->
+    <div class="empty-state hidden" id="empty-state">
+      <div class="empty-state__icon">🫖</div>
+      <h3 class="empty-state__title">暂无符合条件的茶品</h3>
+      <p class="empty-state__desc">试试调整筛选条件，或者清除全部筛选看看</p>
+      <button class="btn btn--secondary" id="empty-clear">清除全部筛选</button>
+
+      <!-- 空状态下推荐 3 款热门 -->
+      <div class="empty-state__suggest" id="empty-suggest">
+        <!-- JS 渲染 3 款热门 -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ===== 页脚 ===== -->
+  <footer class="footer">
+    <div class="container">
+      <h4 class="footer__brand">茶·图鉴</h4>
+      <p class="footer__desc">六大茶类 · 结构化知识库 · 让每一款茶都有据可循</p>
+      <p class="footer__copy">© 2026 茶·图鉴 · 原型演示 · 数据仅供参考</p>
+    </div>
+  </footer>
+
+  <!-- ===== 脚本加载顺序 ===== -->
+  <script src="../js/mock/teas.js"></script>
+  <script src="../js/common.js"></script>
+  <script src="index.js"></script>
+</body>
+</html>
