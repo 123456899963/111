@@ -22,7 +22,9 @@
     seasons: [],
     keyword: '',
     sort: 'newest',
+    page: 1,
   };
+  const PAGE_SIZE = 9;
 
   /* ---------- DOM 就绪 ---------- */
   document.addEventListener('DOMContentLoaded', () => {
@@ -77,6 +79,8 @@
       state.sort = sort;
       document.getElementById('sort-select').value = sort;
     }
+    const page = params.get('page');
+    if (page) state.page = Math.max(1, Number(page));
   }
 
   /* ---------- 骨架屏 ---------- */
@@ -211,8 +215,26 @@
   }
 
   function renderAll() {
+    state.page = 1;
     renderSelectedTags();
     renderCards();
+    syncUrl();
+  }
+
+  /* ---------- URL 同步（刷新不丢筛选） ---------- */
+  function syncUrl() {
+    const params = new URLSearchParams();
+    if (state.categories.length) state.categories.forEach(c => params.append('category', c));
+    if (state.origins.length)    state.origins.forEach(o => params.append('origin', o));
+    if (state.seasons.length)    state.seasons.forEach(s => params.append('season', s));
+    if (state.keyword)           params.set('q', state.keyword);
+    if (state.sort !== 'newest') params.set('sort', state.sort);
+    if (state.page > 1)          params.set('page', state.page);
+    const qs = params.toString();
+    const newUrl = qs ? `${location.pathname}?${qs}` : location.pathname;
+    if (window.history && history.replaceState) {
+      history.replaceState(null, '', newUrl);
+    }
   }
 
   /* ---------- 卡片渲染 ---------- */
@@ -241,6 +263,7 @@
     const grid = document.getElementById('tea-grid');
     const empty = document.getElementById('empty-state');
     const skeleton = document.getElementById('tea-skeleton');
+    const pagination = document.getElementById('pagination');
     const countEl = document.getElementById('result-count');
     const list = getFilteredAndSortedTeas();
 
@@ -253,14 +276,21 @@
       grid.innerHTML = '';
       grid.classList.add('hidden');
       empty.classList.remove('hidden');
+      pagination.classList.add('hidden');
       renderEmptySuggest();
       return;
     }
 
-    grid.classList.remove('hidden');
     empty.classList.add('hidden');
 
-    grid.innerHTML = list.map(tea => {
+    // 分页切片
+    const totalPages = Math.ceil(list.length / PAGE_SIZE);
+    if (state.page > totalPages) state.page = totalPages;
+    const start = (state.page - 1) * PAGE_SIZE;
+    const pageList = list.slice(start, start + PAGE_SIZE);
+
+    grid.classList.remove('hidden');
+    grid.innerHTML = pageList.map(tea => {
       const catColor = CATEGORIES.find(c => c.key === tea.category)?.color || '#8B7355';
       const catName = CATEGORIES.find(c => c.key === tea.category)?.name || '';
       const tagStyle = `background:${catColor};color:${tea.category === 'white' ? 'var(--primary-dark)' : '#fff'};`;
@@ -292,57 +322,81 @@
       `;
     }).join('');
 
-    // 收藏 icon 点击（P1 修复：真实 toggle）
+    // 收藏 icon 点击（toggle 后整卡重渲染，简洁可靠）
     grid.querySelectorAll('[data-fav]').forEach(el => {
       el.style.cursor = 'pointer';
       el.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation(); // 不触发卡片跳转
         const teaId = Number(el.dataset.fav);
-        const isNew = toggleFavorite(teaId);
-        // 即时更新 UI
         const tea = window.TEA_MOCK.getTeaById(teaId);
-        const countSpan = el.querySelector('.card-tea__fav-count');
-        if (isNew) {
-          el.classList.add('card-tea__fav--active');
-          el.innerHTML = favSvgActive(tea);
-          showToast('已加入我的清单 ❤️', 'success');
-        } else {
-          el.classList.remove('card-tea__fav--active');
-          el.innerHTML = favSvgInactive(tea);
-          showToast('已取消收藏', 'info');
-        }
-        el.querySelector('.card-tea__fav-count')?.remove();
-        // 重新更新 count span（上面 innerHTML 覆盖了它，重新设）
-        const newCount = tea.favoriteCount + (isNew ? 1 : 0) - (isNew ? 0 : 1);
-        el.innerHTML = (isNew
-          ? '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>'
-          : '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>') + `<span class="card-tea__fav-count">${Math.max(tea.favoriteCount, (isFavorited(teaId) ? tea.favoriteCount + 1 : tea.favoriteCount)).toLocaleString()}</span>`;
+        const isNew = toggleFavorite(teaId);
+        showToast(isNew ? `已收藏「${tea.name}」❤️` : `已取消收藏「${tea.name}」`, isNew ? 'success' : 'info');
+        // 重渲染（状态变化会反映到 SVG + 收藏图标）
+        renderCards();
       });
     });
 
-    // 卡片点击（P4 修复：跳占位详情页，带 teaId 和当前筛选状态）
+    // 卡片点击 → 跳详情页
     grid.querySelectorAll('.card-tea').forEach(card => {
       card.addEventListener('click', (e) => {
-        // 如果点的是收藏 icon，不触发卡片跳转
         if (e.target.closest('[data-fav]')) return;
         e.preventDefault();
         const teaId = card.dataset.teaId;
-        const tea = window.TEA_MOCK.getTeaById(teaId);
-        const params = new URLSearchParams({ teaId: String(teaId) });
-        if (state.categories.length) state.categories.forEach(c => params.append('category', c));
-        if (state.keyword) params.set('q', state.keyword);
-        // 跳到当前茶品的详情页（第二批实现，但链接有效，不会断链）
-        showToast(`即将打开「${tea.name}」详情页（第二批实现）`, 'info');
+        window.location.href = `../teas/detail.html?id=${teaId}`;
       });
     });
+
+    // 分页
+    renderPagination(list.length);
   }
 
-  function favSvgActive(tea) {
-    return '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>';
-  }
-  function favSvgInactive(tea) {
-    return '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>';
+  /* ---------- 分页渲染 ---------- */
+  function renderPagination(totalCount) {
+    const pagination = document.getElementById('pagination');
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+    if (totalPages <= 1) {
+      pagination.classList.add('hidden');
+      return;
+    }
+
+    pagination.classList.remove('hidden');
+    const cur = state.page;
+
+    // 计算页码按钮：当前页 ± 2 + 首末页
+    const pages = new Set([1, totalPages, cur - 1, cur, cur + 1]);
+    const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+
+    let html = '';
+
+    // 上一页
+    html += `<button class="pagination__btn" data-page="${cur - 1}" ${cur === 1 ? 'disabled' : ''}>‹</button>`;
+
+    let lastShown = 0;
+    sorted.forEach(p => {
+      if (p - lastShown > 1) html += `<span class="pagination__ellipsis">…</span>`;
+      const active = p === cur ? 'pagination__btn--active' : '';
+      html += `<button class="pagination__btn ${active}" data-page="${p}">${p}</button>`;
+      lastShown = p;
+    });
+
+    // 下一页
+    html += `<button class="pagination__btn" data-page="${cur + 1}" ${cur === totalPages ? 'disabled' : ''}>›</button>`;
+
+    pagination.innerHTML = html;
+
+    // 绑定点击
+    pagination.querySelectorAll('[data-page]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const p = Number(btn.dataset.page);
+        if (p < 1 || p > totalPages) return;
+        state.page = p;
+        renderCards();
+        syncUrl();
+        window.scrollTo({ top: 200, behavior: 'smooth' });
+      });
+    });
   }
 
   /* ---------- 空状态推荐 ---------- */
@@ -364,14 +418,10 @@
     }).join('');
 
     wrap.querySelectorAll('.card-hot').forEach(card => {
-      card.addEventListener('click', () => {
+      card.addEventListener('click', (e) => {
+        e.preventDefault();
         const teaId = card.dataset.suggestId;
-        const tea = window.TEA_MOCK.getTeaById(teaId);
-        clearAllFilters();
-        state.categories = [tea.category];
-        renderCategoryChips();
-        renderSelectedTags();
-        renderCards();
+        window.location.href = `detail.html?id=${teaId}`;
       });
     });
   }
@@ -390,6 +440,7 @@
     renderSelectedTags();
     renderCards();
     renderBreadcrumbArea();
+    syncUrl();
   }
 
 })();

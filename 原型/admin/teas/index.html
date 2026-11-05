@@ -1,0 +1,100 @@
+﻿﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>茶品管理 — 茶·图鉴管理员</title>
+  <link rel="stylesheet" href="../../css/style.css?v=3">
+</head>
+<body>
+
+  <div id="admin-layout"></div>
+  <div id="toast-root"></div>
+
+  <script src="../../js/mock/teas.js?v=3"></script>
+  <script src="../../js/admin.js?v=3"></script>
+  <script>
+    if (!TEA_ADMIN.requireAuth()) { document.body.style.display = 'none'; }
+
+    TEA_ADMIN.renderLayout('teas');
+
+    const content = document.getElementById('admin-content');
+
+    function renderTable() {
+      const teas = TEA_ADMIN.getAdminTeas();
+      let catFilter = document.getElementById('cat-filter')?.value || '';
+      let statusFilter = document.getElementById('status-filter')?.value || '';
+
+      let filtered = teas;
+      if (catFilter) filtered = filtered.filter(t => t.category === catFilter);
+      if (statusFilter) filtered = filtered.filter(t => (statusFilter === 'published' ? t.status !== 'offline' : t.status === 'offline'));
+
+      content.innerHTML = `
+        <section class="admin-panel">
+          <div class="admin-panel__header">
+            <h3 class="admin-panel__title">全部茶品 (${filtered.length})</h3>
+            <a href="new.html" class="btn btn--primary btn--sm">+ 新增茶品</a>
+          </div>
+
+          <div class="admin-filter-row">
+            <select id="cat-filter" class="admin-filter-select">
+              <option value="">全部类别</option>
+              ${window.TEA_MOCK.CATEGORIES.map(c => `<option value="${c.key}">${c.name}</option>`).join('')}
+            </select>
+            <select id="status-filter" class="admin-filter-select">
+              <option value="">全部状态</option>
+              <option value="published">已上架</option>
+              <option value="offline">已下架</option>
+            </select>
+          </div>
+
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>ID</th><th>图片</th><th>名称</th><th>类别</th><th>产地</th><th>季节</th><th>收藏</th><th>状态</th><th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.map(t => {
+                const cat = window.TEA_MOCK.CATEGORIES.find(c => c.key === t.category);
+                return `
+                  <tr>
+                    <td>#${t.id}</td>
+                    <td><img src="${t.imageUrl}" class="admin-tea-thumb" onerror="this.style.background='var(--bg-muted)';this.src=''"></td>
+                    <td><strong>${t.name}</strong></td>
+                    <td><span class="badge" style="background:${cat?.color};color:${t.category === 'white' ? 'var(--primary-dark)' : '#fff'}">${cat?.name}</span></td>
+                    <td>${t.origin}</td>
+                    <td>${t.season}</td>
+                    <td>${t.favoriteCount.toLocaleString()}</td>
+                    <td><span class="badge ${t.status === 'offline' ? 'badge--muted' : 'badge--success'}">${t.status === 'offline' ? '已下架' : '已上架'}</span></td>
+                    <td class="admin-actions">
+                      <a href="edit.html?id=${t.id}" class="btn btn--ghost btn--sm">编辑</a>
+                      <button class="btn btn--ghost btn--sm btn--toggle" data-id="${t.id}">${t.status === 'offline' ? '上架' : '下架'}</button>
+                    </td>
+                  </tr>
+                `;
+              }).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:40px;">暂无数据</td></tr>`}
+            </tbody>
+          </table>
+        </section>
+      `;
+
+      // 绑定筛选
+      document.getElementById('cat-filter').addEventListener('change', renderTable);
+      document.getElementById('status-filter').addEventListener('change', renderTable);
+
+      // 绑定上下架
+      content.querySelectorAll('.btn--toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = Number(btn.dataset.id);
+          const updated = TEA_ADMIN.toggleStatus(id);
+          TEA_ADMIN.toast(`已${updated.status === 'offline' ? '下架' : '上架'}「${updated.name}」`, 'success');
+          renderTable();
+        });
+      });
+    }
+
+    renderTable();
+  </script>
+</body>
+</html>

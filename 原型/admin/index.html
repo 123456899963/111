@@ -1,0 +1,87 @@
+﻿﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据概览 — 茶·图鉴管理员</title>
+  <link rel="stylesheet" href="../css/style.css?v=3">
+</head>
+<body>
+
+  <div id="admin-layout"></div>
+  <div id="toast-root"></div>
+
+  <script src="../js/mock/teas.js?v=3"></script>
+  <script src="../js/admin.js?v=3"></script>
+  <script>
+    if (!TEA_ADMIN.requireAuth()) { document.body.style.display = 'none'; }
+
+    TEA_ADMIN.renderLayout('dashboard');
+
+    const content = document.getElementById('admin-content');
+    const stats = TEA_ADMIN.getStats();
+
+    content.innerHTML = `
+      <!-- 统计卡片 -->
+      <div class="admin-stats">
+        <div class="admin-stat-card">
+          <div class="admin-stat-card__label">茶品总数</div>
+          <div class="admin-stat-card__value">${stats.total}</div>
+        </div>
+        <div class="admin-stat-card admin-stat-card--success">
+          <div class="admin-stat-card__label">已上架</div>
+          <div class="admin-stat-card__value">${stats.published}</div>
+        </div>
+        <div class="admin-stat-card admin-stat-card--warning">
+          <div class="admin-stat-card__label">已下架</div>
+          <div class="admin-stat-card__value">${stats.offline}</div>
+        </div>
+      </div>
+
+      <!-- 六大茶类分布 -->
+      <section class="admin-panel">
+        <div class="admin-panel__header">
+          <h3 class="admin-panel__title">六大茶类分布</h3>
+        </div>
+        <div class="admin-cat-bars">
+          ${stats.byCategory.map(c => `
+            <div class="admin-cat-bar">
+              <div class="admin-cat-bar__label">${c.name}</div>
+              <div class="admin-cat-bar__track">
+                <div class="admin-cat-bar__fill" style="width:${stats.total ? (c.count / stats.total * 100) : 0}%;background:${c.color}"></div>
+              </div>
+              <div class="admin-cat-bar__count">${c.count} 款</div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+
+      <!-- 最近新增/编辑 -->
+      <section class="admin-panel">
+        <div class="admin-panel__header">
+          <h3 class="admin-panel__title">最近 5 款茶品</h3>
+          <a href="teas/index.html" class="admin-panel__action">查看全部 →</a>
+        </div>
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>ID</th><th>名称</th><th>类别</th><th>产地</th><th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${stats.recent.map(t => `
+              <tr>
+                <td>#${t.id}</td>
+                <td>${t.name}</td>
+                <td>${window.TEA_MOCK.CATEGORIES.find(c => c.key === t.category)?.name || ''}</td>
+                <td>${t.origin}</td>
+                <td><span class="badge ${t.status === 'offline' ? 'badge--muted' : 'badge--success'}">${t.status === 'offline' ? '已下架' : '已上架'}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </section>
+    `;
+  </script>
+</body>
+</html>

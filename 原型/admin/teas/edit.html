@@ -1,0 +1,182 @@
+﻿﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>编辑茶品 — 茶·图鉴管理员</title>
+  <link rel="stylesheet" href="../../css/style.css?v=3">
+</head>
+<body>
+
+  <div id="admin-layout"></div>
+  <div id="toast-root"></div>
+
+  <script src="../../js/mock/teas.js?v=3"></script>
+  <script src="../../js/admin.js?v=3"></script>
+  <script>
+    if (!TEA_ADMIN.requireAuth()) { document.body.style.display = 'none'; }
+
+    TEA_ADMIN.renderLayout('teas');
+
+    const params = new URLSearchParams(location.search);
+    const id = Number(params.get('id'));
+    const tea = TEA_ADMIN.getAdminTeaById(id);
+    if (!tea) { TEA_ADMIN.toast('茶品不存在', 'error'); setTimeout(() => location.href = 'index.html', 800); }
+
+    const content = document.getElementById('admin-content');
+    const cats = window.TEA_MOCK.CATEGORIES;
+    const seasons = window.TEA_MOCK.SEASONS;
+    const tips = tea.tips || {};
+
+    content.innerHTML = `
+      <section class="admin-panel">
+        <div class="admin-panel__header">
+          <h3 class="admin-panel__title">编辑：${tea.name}</h3>
+          <a href="index.html" class="btn btn--ghost btn--sm">← 返回列表</a>
+        </div>
+
+        <form id="tea-form" class="admin-tea-form">
+          <div class="admin-form-section">
+            <h4 class="admin-form-section__title">基本信息</h4>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">茶品名称 *</label>
+                <input type="text" class="form-input" name="name" required value="${tea.name}">
+              </div>
+              <div class="form-group">
+                <label class="form-label">六大茶类 *</label>
+                <select class="form-input" name="category" required>
+                  ${cats.map(c => `<option value="${c.key}" ${c.key === tea.category ? 'selected' : ''}>${c.name}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">产地 *</label>
+                <input type="text" class="form-input" name="origin" required value="${tea.origin}">
+              </div>
+              <div class="form-group">
+                <label class="form-label">采摘季节</label>
+                <select class="form-input" name="season">
+                  ${seasons.map(s => `<option value="${s}" ${s === tea.season ? 'selected' : ''}>${s}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">主图 URL</label>
+                <input type="text" class="form-input" name="imageUrl" value="${tea.imageUrl || ''}">
+              </div>
+              <div class="form-group">
+                <label class="form-label">收藏数</label>
+                <input type="number" class="form-input" name="favoriteCount" value="${tea.favoriteCount}" min="0">
+              </div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">上架状态</label>
+                <select class="form-input" name="status">
+                  <option value="published" ${tea.status !== 'offline' ? 'selected' : ''}>已上架</option>
+                  <option value="offline" ${tea.status === 'offline' ? 'selected' : ''}>已下架</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-form-section">
+            <h4 class="admin-form-section__title">品鉴特征</h4>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">外形描述</label>
+                <textarea class="form-textarea" name="shape" rows="2">${tea.shape || ''}</textarea>
+              </div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">汤色描述</label>
+                <textarea class="form-textarea" name="soup" rows="2">${tea.soup || ''}</textarea>
+              </div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">香气描述</label>
+                <textarea class="form-textarea" name="aroma" rows="2">${tea.aroma || ''}</textarea>
+              </div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">滋味描述</label>
+                <textarea class="form-textarea" name="taste" rows="2">${tea.taste || ''}</textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-form-section">
+            <h4 class="admin-form-section__title">冲泡参考</h4>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">水温 (℃)</label>
+                <input type="number" class="form-input" name="waterTemp" value="${tea.waterTemp}" min="0" max="100">
+              </div>
+              <div class="form-group">
+                <label class="form-label">投茶量 (g)</label>
+                <input type="number" class="form-input" name="teaAmount" value="${tea.teaAmount}" min="0" step="0.5">
+              </div>
+              <div class="form-group">
+                <label class="form-label">浸泡时间 (秒)</label>
+                <input type="number" class="form-input" name="brewTime" value="${tea.brewTime}" min="0">
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-form-section">
+            <h4 class="admin-form-section__title">小贴士（可留空）</h4>
+            <div class="form-group">
+              <label class="form-label">历史文化</label>
+              <textarea class="form-textarea" name="history" rows="2">${tips.history || ''}</textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">适合人群</label>
+              <textarea class="form-textarea" name="suitable" rows="2">${tips.suitable || ''}</textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">常见误区</label>
+              <textarea class="form-textarea" name="misconception" rows="2">${tips.misconception || ''}</textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">官方备注</label>
+              <textarea class="form-textarea" name="officialNote" rows="2">${tips.officialNote || ''}</textarea>
+            </div>
+          </div>
+
+          <div class="admin-form-actions">
+            <button type="submit" class="btn btn--primary">保存修改</button>
+            <a href="index.html" class="btn btn--ghost">取消</a>
+          </div>
+        </form>
+      </section>
+    `;
+
+    document.getElementById('tea-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const raw = Object.fromEntries(new FormData(e.target));
+      const patch = {
+        name: raw.name, category: raw.category, origin: raw.origin, season: raw.season,
+        imageUrl: raw.imageUrl, favoriteCount: Number(raw.favoriteCount) || 0,
+        waterTemp: Number(raw.waterTemp), teaAmount: Number(raw.teaAmount), brewTime: Number(raw.brewTime),
+        shape: raw.shape, soup: raw.soup, aroma: raw.aroma, taste: raw.taste,
+        status: raw.status,
+        tips: {},
+      };
+      ['history','suitable','misconception','officialNote'].forEach(k => { if (raw[k]) patch.tips[k] = raw[k]; });
+      if (!patch.name || !patch.category || !patch.origin) {
+        TEA_ADMIN.toast('请填写名称、类别、产地', 'error');
+        return;
+      }
+      const updated = TEA_ADMIN.updateTea(id, patch);
+      TEA_ADMIN.toast(`已保存「${updated.name}」`, 'success');
+      setTimeout(() => location.href = 'index.html', 800);
+    });
+  </script>
+</body>
+</html>

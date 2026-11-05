@@ -1,0 +1,176 @@
+﻿﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新增茶品 — 茶·图鉴管理员</title>
+  <link rel="stylesheet" href="../../css/style.css?v=3">
+</head>
+<body>
+
+  <div id="admin-layout"></div>
+  <div id="toast-root"></div>
+
+  <script src="../../js/mock/teas.js?v=3"></script>
+  <script src="../../js/admin.js?v=3"></script>
+  <script>
+    if (!TEA_ADMIN.requireAuth()) { document.body.style.display = 'none'; }
+
+    TEA_ADMIN.renderLayout('teas');
+
+    const content = document.getElementById('admin-content');
+    const cats = window.TEA_MOCK.CATEGORIES;
+    const origins = window.TEA_MOCK.ORIGINS;
+    const seasons = window.TEA_MOCK.SEASONS;
+
+    content.innerHTML = `
+      <section class="admin-panel">
+        <div class="admin-panel__header">
+          <h3 class="admin-panel__title">新增茶品</h3>
+          <a href="index.html" class="btn btn--ghost btn--sm">← 返回列表</a>
+        </div>
+
+        <form id="tea-form" class="admin-tea-form">
+          <div class="admin-form-section">
+            <h4 class="admin-form-section__title">基本信息</h4>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">茶品名称 *</label>
+                <input type="text" class="form-input" name="name" required placeholder="如：西湖龙井">
+              </div>
+              <div class="form-group">
+                <label class="form-label">六大茶类 *</label>
+                <select class="form-input" name="category" required>
+                  <option value="">请选择</option>
+                  ${cats.map(c => `<option value="${c.key}">${c.name}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">产地 *</label>
+                <input type="text" class="form-input" name="origin" required placeholder="如：浙江 杭州 西湖狮峰">
+              </div>
+              <div class="form-group">
+                <label class="form-label">采摘季节</label>
+                <select class="form-input" name="season">
+                  ${seasons.map(s => `<option value="${s}">${s}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">主图 URL</label>
+                <input type="text" class="form-input" name="imageUrl" placeholder="Unsplash CDN 链接">
+              </div>
+              <div class="form-group">
+                <label class="form-label">收藏数</label>
+                <input type="number" class="form-input" name="favoriteCount" value="0" min="0">
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-form-section">
+            <h4 class="admin-form-section__title">品鉴特征</h4>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">外形描述</label>
+                <textarea class="form-textarea" name="shape" rows="2"></textarea>
+              </div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">汤色描述</label>
+                <textarea class="form-textarea" name="soup" rows="2"></textarea>
+              </div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">香气描述</label>
+                <textarea class="form-textarea" name="aroma" rows="2"></textarea>
+              </div>
+            </div>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">滋味描述</label>
+                <textarea class="form-textarea" name="taste" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-form-section">
+            <h4 class="admin-form-section__title">冲泡参考</h4>
+            <div class="admin-form-row">
+              <div class="form-group">
+                <label class="form-label">水温 (℃)</label>
+                <input type="number" class="form-input" name="waterTemp" value="90" min="0" max="100">
+              </div>
+              <div class="form-group">
+                <label class="form-label">投茶量 (g)</label>
+                <input type="number" class="form-input" name="teaAmount" value="3" min="0" step="0.5">
+              </div>
+              <div class="form-group">
+                <label class="form-label">浸泡时间 (秒)</label>
+                <input type="number" class="form-input" name="brewTime" value="90" min="0">
+              </div>
+            </div>
+          </div>
+
+          <div class="admin-form-section">
+            <h4 class="admin-form-section__title">小贴士（可留空）</h4>
+            <div class="form-group">
+              <label class="form-label">历史文化</label>
+              <textarea class="form-textarea" name="history" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">适合人群</label>
+              <textarea class="form-textarea" name="suitable" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">常见误区</label>
+              <textarea class="form-textarea" name="misconception" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">官方备注</label>
+              <textarea class="form-textarea" name="officialNote" rows="2"></textarea>
+            </div>
+          </div>
+
+          <div class="admin-form-actions">
+            <button type="submit" class="btn btn--primary">保存并上架</button>
+            <a href="index.html" class="btn btn--ghost">取消</a>
+          </div>
+        </form>
+      </section>
+    `;
+
+    // 保存
+    document.getElementById('tea-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      // 数值化
+      data.favoriteCount = Number(data.favoriteCount) || 0;
+      data.waterTemp = Number(data.waterTemp) || 90;
+      data.teaAmount = Number(data.teaAmount) || 3;
+      data.brewTime = Number(data.brewTime) || 90;
+      // 必选校验
+      if (!data.name || !data.category || !data.origin) {
+        TEA_ADMIN.toast('请填写名称、类别、产地', 'error');
+        return;
+      }
+      // 小贴士对象
+      data.tips = {
+        history: data.history, suitable: data.suitable,
+        misconception: data.misconception, officialNote: data.officialNote,
+      };
+      // 清掉 tips 里空值
+      Object.keys(data.tips).forEach(k => { if (!data.tips[k]) delete data.tips[k]; });
+      // 清掉顶层空 tips 字段（FormData 会把它们平铺到顶层）
+      ['history','suitable','misconception','officialNote'].forEach(k => delete data[k]);
+      TEA_ADMIN.createTea(data);
+      TEA_ADMIN.toast(`已新增「${data.name}」`, 'success');
+      setTimeout(() => location.href = 'index.html', 800);
+    });
+  </script>
+</body>
+</html>

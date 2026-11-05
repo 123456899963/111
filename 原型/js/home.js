@@ -8,7 +8,8 @@
   'use strict';
 
   const { CATEGORIES, getCategoriesWithCount, getHotTeas, getRandomTea, searchTeas } = window.TEA_MOCK;
-  const { getIcon, renderNav, initHomeNavScroll, renderFavBtn, openLoginModal } = window.TEA_COMMON;
+  const { getIcon, renderNav, initHomeNavScroll, renderFavBtn, openLoginModal, requireLogin,
+          toggleFavorite, isFavorited, showToast } = window.TEA_COMMON;
 
   /* ---------- DOM 就绪后全部初始化 ---------- */
   document.addEventListener('DOMContentLoaded', () => {
@@ -60,16 +61,22 @@
 
     track.innerHTML = hot.map(tea => {
       const tagStyle = `background:${getCategoryColor(tea.category)};color:${tea.category === 'white' ? 'var(--primary-dark)' : '#fff'};`;
+      const faved = isFavorited(tea.id);
+      const favIcon = faved
+        ? '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>'
+        : '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>';
+      const favClass = faved ? 'card-hot__fav-btn card-hot__fav-btn--active' : 'card-hot__fav-btn';
       return `
         <a href="#" class="card-hot" data-tea-id="${tea.id}">
           <img class="card-hot__img" src="${tea.imageUrl}" alt="${tea.name}" loading="lazy" onerror="this.style.background='var(--bg-muted)';this.src=''">
+          <button class="${favClass}" data-fav="${tea.id}" title="加入清单">${favIcon}</button>
           <div class="card-hot__body">
             <h4 class="card-hot__name">${tea.name}</h4>
             <p class="card-hot__origin">${tea.origin.split(' ')[0]}</p>
             <div class="card-hot__meta">
               <span class="card-hot__tag" style="${tagStyle}">${getCategoryName(tea.category)}</span>
               <span class="card-hot__fav">
-                ${getIcon('heart', 12)} ${tea.favoriteCount.toLocaleString()}
+                ♡ ${tea.favoriteCount.toLocaleString()}
               </span>
             </div>
           </div>
@@ -77,13 +84,32 @@
       `;
     }).join('');
 
-    // 热门卡点击 → 跳转列表页带筛选（详情页第二批做）
+    // 收藏按钮（阻止卡片跳转）
+    track.querySelectorAll('[data-fav]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const teaId = Number(btn.dataset.fav);
+        const tea = window.TEA_MOCK.getTeaById(teaId);
+        if (!requireLogin()) {
+          openLoginModal();
+          showToast('登录后才能收藏哦～', 'info');
+          return;
+        }
+        const isNew = toggleFavorite(teaId);
+        showToast(isNew ? `已收藏「${tea.name}」❤️` : `已取消收藏「${tea.name}」`, isNew ? 'success' : 'info');
+        // 立即刷新热门卡 UI（收藏状态变化）
+        renderHotList();
+      });
+    });
+
+    // 热门卡点击 → 跳转详情页
     track.querySelectorAll('.card-hot').forEach(card => {
       card.addEventListener('click', (e) => {
+        if (e.target.closest('[data-fav]')) return; // 点收藏按钮不触发
         e.preventDefault();
         const teaId = card.dataset.teaId;
-        const tea = window.TEA_MOCK.getTeaById(teaId);
-        window.location.href = `teas/index.html?category=${tea.category}`;
+        window.location.href = `teas/detail.html?id=${teaId}`;
       });
     });
   }
@@ -123,15 +149,21 @@
 
     const catColor = getCategoryColor(tea.category);
     const tagStyle = `background:${catColor};color:${tea.category === 'white' ? 'var(--primary-dark)' : '#fff'};`;
+    const faved = isFavorited(tea.id);
+    const favIcon = faved
+      ? '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>';
+    const favClass = faved ? 'card-random__fav card-random__fav--active' : 'card-random__fav';
 
     card.innerHTML = `
       <img class="card-random__img" src="${tea.imageUrl}" alt="${tea.name}" onerror="this.style.background='var(--bg-muted)';this.src=''">
+      <button class="${favClass}" data-fav="${tea.id}" title="加入清单">${favIcon}</button>
       <div class="card-random__body">
         <h3 class="card-random__name">${tea.name}</h3>
         <div class="card-random__tags">
           <span class="card-tea__tag" style="${tagStyle}">${getCategoryName(tea.category)}</span>
           <span class="card-hot__fav" style="color:var(--text-muted)">
-            ${getIcon('heart', 12)} ${tea.favoriteCount.toLocaleString()}
+            ♡ ${tea.favoriteCount.toLocaleString()}
           </span>
         </div>
         <div class="card-random__brew">
@@ -141,6 +173,22 @@
         </div>
       </div>
     `;
+
+    // 收藏按钮
+    card.querySelector('[data-fav]').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const teaId = Number(e.currentTarget.dataset.fav);
+      const t = window.TEA_MOCK.getTeaById(teaId);
+      if (!requireLogin()) {
+        openLoginModal();
+        showToast('登录后才能收藏哦～', 'info');
+        return;
+      }
+      const isNew = toggleFavorite(teaId);
+      showToast(isNew ? `已收藏「${t.name}」❤️` : `已取消收藏`, isNew ? 'success' : 'info');
+      renderRandomCard();
+    });
   }
 
   function bindRandomShuffle() {
@@ -240,10 +288,9 @@
 
   function onCardPlaceholder(e) {
     e.preventDefault();
-    // 第二批做详情页，先跳列表页
-    const params = new URLSearchParams();
-    params.set('category', window.TEA_MOCK.getTeaById(currentRandomId).category);
-    window.location.href = `teas/index.html?${params.toString()}`;
+    if (e.target.closest('[data-fav]')) return;
+    if (!currentRandomId) return;
+    window.location.href = `teas/detail.html?id=${currentRandomId}`;
   }
 
 })();

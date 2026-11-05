@@ -487,6 +487,14 @@
     });
   }
 
+  // 获取同类推荐（排除当前茶，按收藏数排序取前 N）
+  function getRelatedTeas(tea, limit = 4) {
+    if (!tea) return [];
+    return TEAS.filter(t => t.category === tea.category && t.id !== tea.id)
+      .sort((a, b) => b.favoriteCount - a.favoriteCount)
+      .slice(0, limit);
+  }
+
   // ---------- 挂载到全局 ----------
   window.TEA_MOCK = {
     TEAS,
@@ -502,5 +510,6 @@
     getRandomTea,
     searchTeas,
     filterTeas,
+    getRelatedTeas,
   };
 })();

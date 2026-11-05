@@ -1,0 +1,58 @@
+﻿﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>品茶清单 · 茶·图鉴</title>
+  <link rel="stylesheet" href="../../css/style.css?v=3">
+</head>
+<body>
+
+  <div id="nav-placeholder"></div>
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <main class="container page-main container--tight">
+
+    <!-- 面包屑 -->
+    <div id="breadcrumb"></div>
+
+    <!-- 分享清单不存在 -->
+    <div id="share-error" class="hidden text-center" style="padding:80px 24px;">
+      <div style="font-size:56px;margin-bottom:16px;">🫖</div>
+      <h2 style="font-size:24px;font-weight:600;color:var(--text-primary);margin:0 0 8px;">这个清单暂时找不到了</h2>
+      <p style="color:var(--text-muted);font-size:var(--text-small);margin:0 0 24px;">它可能已过期或链接有误</p>
+      <button class="btn btn--primary" onclick="location.href='../../index.html'">回首页</button>
+    </div>
+
+    <!-- 主内容 -->
+    <div id="fav-content" class="hidden">
+
+      <header class="fav-header">
+        <h1 class="fav-header__title">TA 的品茶清单<span class="fav-header__readonly-tag">只读分享</span></h1>
+        <p class="fav-header__desc">共 <strong id="stat-total" style="color:var(--primary-dark);"></strong> 款收藏</p>
+      </header>
+
+      <div class="fav-toolbar">
+        <button class="btn btn--primary" id="btn-collect-all">❤️ 一键收藏全部</button>
+      </div>
+
+      <div id="fav-list" class="fav-list fav-list--readonly"></div>
+
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand">茶·图鉴</div>
+      <div class="footer__desc">六大茶类结构化知识库 · 一杯茶的千种风味</div>
+      <div class="footer__copy">© 2026 茶·图鉴. All rights reserved.</div>
+    </div>
+  </footer>
+
+  <script src="../../js/mock/teas.js?v=3"></script>
+  <script src="../../js/common.js?v=3"></script>
+  <script src="../../js/share.js?v=3"></script>
+</body>
+</html>

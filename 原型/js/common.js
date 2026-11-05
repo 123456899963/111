@@ -158,7 +158,9 @@
     // 绑定关闭
     const backdrop = document.getElementById('login-backdrop');
     const closeBtn = document.getElementById('modal-close');
+    const modalEl = backdrop.querySelector('.modal');
     backdrop.addEventListener('click', closeLoginModal);
+    modalEl.addEventListener('click', (e) => e.stopPropagation()); // 关键：阻止内部点击冒泡到 backdrop
     closeBtn.addEventListener('click', closeLoginModal);
     document.addEventListener('keydown', onEscClose);
 
@@ -187,6 +189,7 @@
       showToast(`欢迎回来，${username}`, 'success');
       closeLoginModal();
       updateNavAuthState();
+      document.dispatchEvent(new CustomEvent('tea:login'));
     });
 
     // 注册表单
@@ -214,6 +217,7 @@
       showToast(`注册成功，欢迎 ${u}！`, 'success');
       closeLoginModal();
       updateNavAuthState();
+      document.dispatchEvent(new CustomEvent('tea:login'));
     });
   }
 
@@ -402,6 +406,12 @@
     return `<nav class="breadcrumb">${parts.join('')}</nav>`;
   }
 
+  /* ---------- 登录守卫 ---------- */
+  // 返回 true 表示已登录；返回 false 表示未登录（调用方自行处理弹窗）
+  function requireLogin() {
+    return !!getCurrentUser();
+  }
+
   /* ---------- 挂载导出 ---------- */
   window.TEA_COMMON = {
     ICONS, getIcon,
@@ -411,6 +421,7 @@
     openLoginModal, closeLoginModal,
     renderNav, updateNavAuthState, initHomeNavScroll,
     renderFavBtn, renderBreadcrumb,
+    requireLogin,
   };
 
 })();

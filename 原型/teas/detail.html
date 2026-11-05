@@ -1,0 +1,220 @@
+﻿﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>茶品详情 · 茶·图鉴</title>
+  <link rel="stylesheet" href="../css/style.css?v=3">
+</head>
+<body>
+
+  <!-- 导航栏占位 -->
+  <div id="nav-placeholder"></div>
+
+  <!-- 模态框根（登录模态框由 common.js 注入） -->
+  <div id="modal-root"></div>
+
+  <!-- Toast 根 -->
+  <div id="toast-root"></div>
+
+  <!-- 主内容区 -->
+  <main class="container page-main">
+
+    <!-- 面包屑 -->
+    <div id="breadcrumb" class="mb-24"></div>
+
+    <!-- ========== 详情页主体（骨架屏初始显示） ========== -->
+    <div id="detail-skeleton" class="detail-skeleton">
+      <div class="detail-skeleton__image skeleton"></div>
+      <div class="detail-skeleton__right">
+        <div class="skeleton skeleton skeleton__line skeleton__line--title"></div>
+        <div class="skeleton skeleton__line"></div>
+        <div class="skeleton skeleton__line" style="width:40%"></div>
+      </div>
+    </div>
+
+    <!-- ========== 真实详情内容（初始隐藏） ========== -->
+    <article id="detail-content" class="hidden">
+
+      <!-- 头部：主图 + 基本信息 -->
+      <section class="detail-header">
+        <div class="detail-header__image-wrap">
+          <img id="detail-image" class="detail-header__image" alt="" onerror="this.style.background='var(--bg-muted)';this.src=''">
+          <div id="detail-category-tag" class="detail-header__category-tag" style="cursor:pointer" title="点击查看全部{name}"></div>
+        </div>
+        <div class="detail-header__info">
+          <div class="detail-header__meta-top">
+            <span class="detail-header__season" id="detail-season"></span>
+            <span class="detail-header__favorite" id="detail-favorite-inline"></span>
+          </div>
+          <h1 class="detail-header__name" id="detail-name"></h1>
+          <p class="detail-header__origin" id="detail-origin"></p>
+
+          <!-- 冲泡参考卡片 -->
+          <div class="brew-card">
+            <h3 class="brew-card__title">冲泡参考</h3>
+            <div class="brew-card__grid">
+              <div class="brew-card__item">
+                <span class="brew-card__icon">🌡️</span>
+                <span class="brew-card__label">水温</span>
+                <span class="brew-card__value" id="detail-watertemp"></span>
+              </div>
+              <div class="brew-card__item">
+                <span class="brew-card__icon">🫖</span>
+                <span class="brew-card__label">投茶量</span>
+                <span class="brew-card__value" id="detail-teaamount"></span>
+              </div>
+              <div class="brew-card__item">
+                <span class="brew-card__icon">⏱️</span>
+                <span class="brew-card__label">浸泡时间</span>
+                <span class="brew-card__value" id="detail-brewtime"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 行动按钮栏 -->
+          <div class="detail-header__actions">
+            <button class="btn btn--primary" id="btn-favorite">
+              <span id="btn-favorite-icon"></span>
+              <span id="btn-favorite-text">加入我的清单</span>
+            </button>
+            <button class="btn btn--secondary" id="btn-note">
+              ✏️ 写品鉴笔记
+            </button>
+            <button class="btn btn--ghost" id="btn-share">
+              ↗️ 分享清单
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 四大感官 ========== -->
+      <section class="detail-section">
+        <h2 class="detail-section__title">品鉴特征</h2>
+        <div class="detail-senses">
+          <div class="sense-card">
+            <div class="sense-card__icon">🫛</div>
+            <h4 class="sense-card__label">外形</h4>
+            <p class="sense-card__text" id="detail-shape"></p>
+          </div>
+          <div class="sense-card">
+            <div class="sense-card__icon">🍶</div>
+            <h4 class="sense-card__label">汤色</h4>
+            <p class="sense-card__text" id="detail-soup"></p>
+          </div>
+          <div class="sense-card">
+            <div class="sense-card__icon">🌿</div>
+            <h4 class="sense-card__label">香气</h4>
+            <p class="sense-card__text" id="detail-aroma"></p>
+          </div>
+          <div class="sense-card">
+            <div class="sense-card__icon">👅</div>
+            <h4 class="sense-card__label">滋味</h4>
+            <p class="sense-card__text" id="detail-taste"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 小贴士区（4 块，JS 判断空则隐藏） ========== -->
+      <section id="detail-tips-section" class="detail-section hidden">
+        <h2 class="detail-section__title">茶小知识</h2>
+        <div class="detail-tips">
+          <div class="tip-card hidden" id="tip-history">
+            <div class="tip-card__icon">📜</div>
+            <div class="tip-card__body">
+              <h4 class="tip-card__title">历史文化</h4>
+              <p class="tip-card__text"></p>
+            </div>
+          </div>
+          <div class="tip-card hidden" id="tip-suitable">
+            <div class="tip-card__icon">👥</div>
+            <div class="tip-card__body">
+              <h4 class="tip-card__title">适合人群</h4>
+              <p class="tip-card__text"></p>
+            </div>
+          </div>
+          <div class="tip-card hidden" id="tip-misconception">
+            <div class="tip-card__icon">⚠️</div>
+            <div class="tip-card__body">
+              <h4 class="tip-card__title">常见误区</h4>
+              <p class="tip-card__text"></p>
+            </div>
+          </div>
+          <div class="tip-card hidden" id="tip-official">
+            <div class="tip-card__icon">✨</div>
+            <div class="tip-card__body">
+              <h4 class="tip-card__title">官方备注</h4>
+              <p class="tip-card__text"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 同类推荐 ========== -->
+      <section class="detail-section">
+        <h2 class="detail-section__title">同属一类 · 你可能也喜欢</h2>
+        <div class="tea-grid" id="detail-related">
+          <!-- JS 动态生成 -->
+        </div>
+      </section>
+
+    </article>
+
+    <!-- ========== 茶品不存在/错误提示 ========== -->
+    <div id="detail-error" class="hidden text-center mt-12">
+      <div style="font-size:64px;">🫖</div>
+      <h2 class="detail-section__title">这款茶暂时找不到了</h2>
+      <p style="color:var(--text-muted);margin-bottom:16px;">它可能已下架，或者页面链接有误</p>
+      <button class="btn btn--secondary" onclick="location.href='detail.html?id=1'">看看西湖龙井</button>
+      <button class="btn btn--ghost" onclick="location.href='../index.html'" style="margin-left:8px;">回首页</button>
+    </div>
+
+  </main>
+
+  <!-- 页脚 -->
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand">茶·图鉴</div>
+      <div class="footer__desc">六大茶类结构化知识库 · 一杯茶的千种风味</div>
+      <div class="footer__copy">© 2026 茶·图鉴. All rights reserved.</div>
+    </div>
+  </footer>
+
+  <!-- ========== 笔记弹窗（原生 Dialog 替代） ========== -->
+  <div id="note-modal" class="modal hidden">
+    <div class="modal__backdrop"></div>
+    <div class="modal__dialog">
+      <h3 class="modal__title">✏️ 品鉴笔记</h3>
+      <div class="modal__body">
+        <p style="color:var(--text-muted);font-size:var(--text-caption);margin-bottom:8px;">为「<span id="note-tea-name"></span>」写点什么吧</p>
+        <textarea id="note-content" class="form-textarea" placeholder="香气怎么样？口感？什么场景喝的？"></textarea>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--ghost" id="note-cancel">取消</button>
+        <button class="btn btn--primary" id="note-save">保存笔记</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 分享弹窗 ========== -->
+  <div id="share-modal" class="modal hidden">
+    <div class="modal__backdrop"></div>
+    <div class="modal__dialog">
+      <h3 class="modal__title">↗️ 分享清单</h3>
+      <div class="modal__body">
+        <p style="color:var(--text-muted);font-size:var(--text-caption);margin-bottom:16px;">登录后可以创建自己的品茶清单，把这个链接发给朋友</p>
+        <input type="text" class="form-input" id="share-link" readonly placeholder="请先登录">
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--ghost" id="share-cancel">关闭</button>
+        <button class="btn btn--primary" id="share-copy">复制链接</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 脚本 ========== -->
+  <script src="../js/mock/teas.js?v=3"></script>
+  <script src="../js/common.js?v=3"></script>
+  <script src="../js/detail.js?v=3"></script>
+</body>
+</html>
