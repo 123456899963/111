@@ -21,7 +21,7 @@
 | M2 | 首页 | `/api/v1/teas` | `GET /hot`（热门推荐）、`GET /random`（随机发现）、`GET /categories`（六大茶类计数） | `/` · HomeView | `teas` |
 | M3 | 茶品详情页 | `/api/v1/teas` | `GET /{tea_id}`（详情 + 小贴士） | `/teas/:id` · TeaDetailView | `teas` + `tea_tips` |
 | M4 | 注册登录 | `/api/v1/auth` | `POST /register`、`POST /login`、`POST /logout`、`GET /me` | 登录模态框（HomeView/MyListView/TeaDetailView 触发）、`/admin/login` · AdminLogin | `users` |
-| M5 | 收藏清单 + 品鉴笔记 + 分享链接 | `/api/v1/favorites` + `/api/v1/lists` + `/api/v1/shares` | 见 §4 完整端点表 | `/my` · MyListView、`/c/:shareId` · ShareView | `favorite_items` + `share_tokens` + `users`（外键）+ `teas`（外键） |
+| M5 | 收藏清单 + 品鉴笔记 + 分享链接 | `/api/v1/favorites` + `/api/v1/lists` + `/api/v1/shares` | 见 §4 完整端点表 | `/my` · MyListView、`/c/:shareId` · ShareView | `collection_lists` + `favorite_items` + `share_tokens` + `users`（外键）+ `teas`（外键） |
 | M6 | 管理员后台（数据维护） | `/api/v1/admin` | 见 §4 完整端点表 | `/admin` · AdminLayout + 子路由（Dashboard / Teas / TeaEdit） | `teas` + `tea_tips` + `users`（角色） |
 
 ### 1.2 模块依赖图（graph LR）
@@ -41,6 +41,7 @@ graph LR
         TEA["teas<br/>+ tea_tips"]
         USER["users"]
         FAVT["favorite_items"]
+        LISTT["collection_lists"]
         SHART["share_tokens"]
     end
 
@@ -51,8 +52,10 @@ graph LR
     FAV -->|需要校验茶品存在| TEA
     FAV -->|需要当前用户| USER
     LSTS --> FAVT
+    LSTS --> LISTT
     LSTS -->|需要当前用户| USER
     SHARE --> FAVT
+    SHARE --> LISTT
     SHARE --> TEA
     SHARE -->|校验撤销令牌| SHART
     SHARE -->|需要当前用户| USER
@@ -74,6 +77,7 @@ graph LR
     style TEA fill:#E65100,stroke:#BF360C,color:#fff
     style USER fill:#E65100,stroke:#BF360C,color:#fff
     style FAVT fill:#E65100,stroke:#BF360C,color:#fff
+    style LISTT fill:#E65100,stroke:#BF360C,color:#fff
     style SHART fill:#E65100,stroke:#BF360C,color:#fff
 ```
 
@@ -167,7 +171,7 @@ graph LR
 
 | 端点 | 方法 | 路径 | 入参 | 出参 | 角色 |
 |---|---|---|---|---|---|
-| 生成分享链接 | POST | `/api/v1/shares/generate` | `{ title?: string }`（可选清单标题，默认"我的品茶清单"） | `{ token: string, url: string }`（token 为短码如 `k7X9m2`，url 为 `/c/{token}`） | 清单所有者 |
+| 生成分享链接 | POST | `/api/v1/shares/generate` | 无（标题取 `collection_lists.title`；已有生效令牌则复用） | `{ token: string, url: string }`（token 为短码如 `k7X9m2`，url 为 `/c/{token}`） | 清单所有者 |
 | 撤销分享 | POST | `/api/v1/shares/revoke/{token}` | path `token` | `{ code: 0 }` | 清单所有者 |
 | 查看公开分享清单 | GET | `/api/v1/shares/{token}` | path `token`（**无需 Cookie 鉴权**） | `{ title, items: ListItem[], revoked: boolean }` | 游客 / 用户 / 管理员（只读） |
 | 一键收藏全部 | POST | `/api/v1/shares/{token}/copy` | path `token` + Cookie 携带当前用户 | `{ added: number, skipped: number }`（已收藏的跳过） | 登录用户 / 管理员（**不含清单所有者自己**） |
@@ -176,16 +180,16 @@ graph LR
 
 | 规则 | 落点 |
 |---|---|
-| 默认清单自动创建 | 用户首次调用 `/api/v1/lists` 时，`favorites_service.get_or_create_default_list()` 检查 `favorite_items` 表中该用户是否有记录，无则返回空列表 + 默认标题"我的收藏" |
+| 默认清单自动创建 | 用户首次调用 `/api/v1/lists` 时，`favorites_service.get_or_create_default_list()` 在 `collection_lists` 中按 `user_id` 查找，无则创建标题"我的收藏"（`UNIQUE(user_id)` 兜底并发，唯一冲突按"已存在"处理） |
 | 收藏唯一性 | `favorite_items` 表唯一约束 `(user_id, tea_id)`，Service 层调用 Repository 前先查是否已存在，避免 409 冲突 |
 | 收藏后更新 `teas.favorite_count` | Repository 层事务内 `UPDATE teas SET favorite_count = favorite_count ± 1 WHERE id = ?` |
 | 清单中茶品下架 → 灰显占位 | Repository 层 JOIN 查 `teas.is_active`，返回的 ListItem 加 `is_available` 字段 |
 | 分享令牌生成 | `secrets.token_urlsafe(5)` 生成 8 字符短码，查重直到唯一 |
 | 分享撤销不可逆 | `UPDATE share_tokens SET is_active = false, revoked_at = NOW() WHERE token = ?` |
-| 一键收藏全部跳过已存在 | `INSERT IGNORE favorite_items` 或先 SELECT 差集再 INSERT |
-| 一键收藏排除清单所有者 | Service 层检查 `share_tokens.user_id != current_user.id` |
+| 一键收藏全部跳过已存在 | 先 SELECT 已收藏 `tea_id` 集合 → 求差集 → 批量 INSERT，返回 `added` / `skipped`；唯一索引 `(user_id, tea_id)` 兜底并发（不用 `INSERT IGNORE`，避免吞掉外键等其他错误） |
+| 一键收藏排除清单所有者 | Service 层检查 `share_tokens.list_id → collection_lists.user_id != current_user.id` |
 
-**涉及数据表**：`favorite_items` + `share_tokens` + `teas`（外键 + favorite_count 递增/递减）+ `users`（外键）
+**涉及数据表**：`collection_lists`（清单标题/归属）+ `favorite_items` + `share_tokens`（挂 `list_id`）+ `teas`（外键 + favorite_count 递增/递减）+ `users`（外键）
 
 ---
 
@@ -387,7 +391,10 @@ sequenceDiagram
     Service->>Repo: share_repo.get_by_token(db, token)
     Repo->>MySQL: SELECT * FROM share_tokens WHERE token="k7X9m2" AND is_active=1
     MySQL-->>Repo: row
-    Service->>Repo: favorite_repo.list_by_user(db, share_token.user_id)
+    Service->>Repo: list_repo.get_by_id(db, share_token.list_id)
+    Repo->>MySQL: SELECT * FROM collection_lists WHERE id=?
+    MySQL-->>Repo: row（取清单标题与所有者 user_id）
+    Service->>Repo: favorite_repo.list_by_user(db, list.user_id)
     Repo->>MySQL: SELECT * FROM favorite_items WHERE user_id=?
     MySQL-->>Repo: rows[]
     Service->>Repo: tea_repo.get_multi(db, tea_ids[])
@@ -395,7 +402,7 @@ sequenceDiagram
     MySQL-->>Repo: rows[]
     Service->>Service: 拼装公开清单 JSON（不含私有字段如笔记内容）
     Service-->>Router: ShareViewResponse
-    Router-->>Axios: {code:0, data:{title:"我的品茶清单", items:[...]}}
+    Router-->>Axios: {code:0, data:{title:"我的收藏", items:[...]}}
     Axios-->>Guest: 渲染只读清单
     end
 

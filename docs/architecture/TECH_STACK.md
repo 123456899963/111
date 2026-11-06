@@ -229,7 +229,7 @@ FastAPI 本体是轻量框架，不自带 ORM、迁移、数据库驱动、密�
 | 数据库迁移 | Alembic | SQLAlchemy 官方配套；命令固定 | 手写 SQL 脚本（**不推荐**，易漂移） |
 | MySQL 驱动 | PyMySQL（纯 Python） | Windows 安装零障碍，`pip install pymysql` 即可 | mysqlclient（需编译环境，Windows 易踩坑） |
 | 密码哈希 | `bcrypt` 库直接使用 | PRD 4.3 指定 bcrypt；避开 passlib 与 bcrypt 4.x 的已知兼容问题 | passlib（需锁旧版本） |
-| 会话管理 | HttpOnly Cookie + 服务端 session 表（或 itsdangerous 签名 Cookie） | 契合 FR-4.3 的 30 天 Cookie 要求，实现简单 | JWT（无状态但撤销麻烦，MVP 无必要） |
+| 会话管理 | HttpOnly Cookie + itsdangerous 签名令牌（**不建服务端 session 表**，见 [DATA_MODEL.md](DATA_MODEL.md) §1） | 契合 FR-4.3 的 30 天 Cookie 要求，实现简单 | JWT（无状态但撤销麻烦，MVP 无必要） |
 | 文件上传 | FastAPI `UploadFile`（需 `python-multipart`） | 官方标准做法 | — |
 | API 测试 | pytest + httpx（FastAPI TestClient） | 见 §4.6 | — |
 | 代码规范 | Ruff（lint + format 合一） | 轻量、一个工具替代 flake8/black/isort | — |
