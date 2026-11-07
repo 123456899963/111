@@ -95,7 +95,7 @@
 
 | 工具 | 学生常见困惑 | 建议 |
 |---|---|---|
-| npm / pnpm | 依赖版本、`node_modules`、`package-lock.json` | 团队统一用 pnpm（更快、严格），但先让全员装好 Node.js ≥ 20 |
+| npm | 依赖版本、`node_modules`、`package-lock.json` | 统一使用 npm（仓库已有 `package-lock.json`，不引入第二套 lockfile）；Node.js ≥ 20 |
 | Python 虚拟环境 | venv vs conda vs poetry 混淆 | **强制统一用 venv + pip**，文档写入"第一节课先配好 `python -m venv .venv` 和 `pip install -r requirements.txt`" |
 | Git | rebase vs merge 混淆、commit message 不规范 | 用最简单的方式：`git checkout -b feature/xxx` → `git add .` → `git commit -m "feat: xxx"` → `git push` → 合并时用 GitHub/Gitee PR |
 

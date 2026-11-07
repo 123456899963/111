@@ -11,6 +11,12 @@
 </template>
 
 <style scoped>
-.page-home { padding: 64px 16px; text-align: center; }
-.teaser { margin-top: 24px; color: var(--color-text-muted); }
+.page-home {
+  padding: 64px 16px;
+  text-align: center;
+}
+.teaser {
+  margin-top: 24px;
+  color: var(--color-text-muted);
+}
 </style>

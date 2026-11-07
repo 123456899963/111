@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.core.response import UsernameExists, BadCredentials
+from app.core.response import BadCredentials, UsernameExists
 from app.core.security import hash_password, verify_password
 from app.models.user import User
 

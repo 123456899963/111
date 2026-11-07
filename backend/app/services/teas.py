@@ -1,5 +1,5 @@
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func, text
 
 from app.core.response import TeaNotFound, TeaOffShelf
 from app.models.tea import Tea
@@ -8,7 +8,7 @@ from app.models.tea import Tea
 def list_teas(db: Session, params: dict) -> dict:
     """
     茶品列表 + 筛选 + 排序 + 分页（FR-1.1 ~ FR-1.6）
-    
+
     筛选维度：茶类 / 产地 / 采摘季节（三个维度 AND，同维度多选 OR）
     排序：最新上架 / 收藏最多
     """
@@ -86,10 +86,7 @@ def categories(db: Session) -> list[dict]:
     )
     category_names = ["green", "white", "yellow", "red", "oolong", "dark"]
     count_map = dict(result)
-    return [
-        {"category": cat, "count": count_map.get(cat, 0)}
-        for cat in category_names
-    ]
+    return [{"category": cat, "count": count_map.get(cat, 0)} for cat in category_names]
 
 
 def origins(db: Session) -> list[dict]:

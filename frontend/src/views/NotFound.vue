@@ -12,5 +12,8 @@ const router = useRouter()
 </template>
 
 <style scoped>
-.page-404 { padding: 96px 16px; text-align: center; }
+.page-404 {
+  padding: 96px 16px;
+  text-align: center;
+}
 </style>

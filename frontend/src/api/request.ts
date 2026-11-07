@@ -3,9 +3,9 @@ import { ElMessage } from 'element-plus'
 
 // 创建 axios 实例 —— 统一配置 + 拦截器
 const request = axios.create({
-  baseURL: '/api/v1',       // 开发期经 Vite proxy 到 FastAPI；生产经 Nginx 同域反代
+  baseURL: '/api/v1', // 开发期经 Vite proxy 到 FastAPI；生产经 Nginx 同域反代
   timeout: 10000,
-  withCredentials: true,    // 关键：Cookie 会话（PRD FR-4.3）
+  withCredentials: true, // 关键：Cookie 会话（PRD FR-4.3）
 })
 
 // —— 响应拦截器：统一错误处理 ——

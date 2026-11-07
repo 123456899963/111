@@ -14,7 +14,7 @@
 1. **每个开发任务交付前追加一条**，无论大小（A/B/C 类都要），A 类可精简为 4 行。
 2. **只写真实执行结果**：命令、通过/失败/跳过数量必须与实际一致；未运行的测试写「未运行」，**禁止写"已通过"**。
 3. 接口、数据库、安全变更必须在条目中显式写出**已同步的文档与迁移文件**；没有同步不得标记验收通过。
-4. 重要技术决策同时产出 [ADR](../docs/development/ADR/README.md)，build-log 只留一行引用，不重复论证过程。
+4. 重要技术决策同时产出 [ADR](../docs/development/ADR/README.md)，build-log 只留一行引用，不重复论证过程；C 类决策的 ADR 必须在编码前完成"提议"版本。
 5. 不记录密码、Cookie 值、密钥、完整堆栈、`.env` 内容。
 6. 遗留问题必须可执行（写清"谁在什么条件下补什么"），不写"后续优化"这类空话。
 
@@ -23,7 +23,7 @@
 ```markdown
 ## YYYY-MM-DD｜<任务名>
 
-- 任务卡 / 分级：A / B / C（C 类注明"用户确认于 <日期/方式>"）
+- 任务编号 / 分级：TASK-YYYYMMDD-xx / A / B / C（C 类注明"用户确认于 <日期/方式>"）
 - 需求来源：<PRD §x / API 端点 / S-xx / 用例 ID / PAGE_SPECS>
 - 主要变更：
   - `<文件>`：<要点>
@@ -33,10 +33,11 @@
 
   | 命令 | 范围 | 结果 | 说明 |
   |---|---|---|---|
-  | `pytest backend/tests -k "AUTH-01"` | AUTH-01 | 1 passed | —— |
-  | `pnpm vitest run src/utils/filter.spec.ts` | 前端筛选 | 未运行 | 本节无前端改动 |
+  | `cd backend; pytest -q -k "AUTH-01"` | AUTH-01 | 1 passed | —— |
+  | `npm run test:run -- src/utils/filter.spec.ts` | 前端筛选 | 未运行 | 本节无前端改动 |
 
 - 验收结论：通过 / 有条件通过（写明遗留）/ 不通过
+- 基线例外：<本次触及的 AGENTS §3.1 遗留 / 无>
 - 遗留问题：
 - 回滚方式：
 - 关联 ADR：<ADR-XXXX / 无>
@@ -55,6 +56,50 @@
 ---
 
 ## 4. 记录
+
+## 2026-11-07｜规范化落地：自动化闸门与现状基线
+
+- 任务编号 / 分级：TASK-20261107-NORMS / C（修改 CI 关键流程与项目规范；用户于 2026-11-07 以"全部优化一下"确认）
+- 需求来源：用户对 AI 项目规范有效性审计后的整改要求
+- 主要变更：
+  - `AGENTS.md`：新增 §0 速览（命令/路由表/五条红线）、§3.1 现状基线；补全 C 类清单与用户豁免；新增文档冲突优先级；更新 §13 待办
+  - `docs/development/DEVELOPMENT_GUIDE.md` v1.2：A/B 唯一边界、npm 命令、CI/构建类 C 项、用户豁免、C 类前置 ADR、测试与 CI 现状
+  - `harness/TASK_TEMPLATE.md`：新增任务编号、边界确认、用户确认记录、基线例外；修正 `tea_type`→`category` 与 npm 命令
+  - `harness/build-log.md`：模板补任务编号/基线例外；明确 ADR 时点
+  - `docs/development/ADR/README.md` + `ADR-0002-enforce-norms-with-automation.md`：自动化闸门决策（基线 + CI + 渐进清理）
+  - `.github/workflows/ci.yml`：替换 Next.js 模板，改为后端 lint/format/test、前端 lint/format/typecheck/test、文档与记录守卫三个作业
+  - `.github/pull_request_template.md`：任务卡、C 类确认、测试证据、文档同步清单
+  - `scripts/check_links.py` / `check_constants.py` / `check_layers.py` / `check_frontend.py` / `check_records.py` / `check_secrets.py` / `check_all.py`：可执行规范检查
+  - `frontend/`：新增 lint/format/typecheck/test 脚本与 ESLint、Prettier、Vitest 配置；移除 `toast.ts` 未使用 import；Prettier 统一 `src/` 格式
+  - `backend/`：新增 `pyproject.toml`、`tests/test_health.py`；Ruff 自动修复 21 项并格式化 14 个文件
+  - `docs/architecture/TECH_STACK.md`：包管理器统一为 npm
+  - `specs/*`：标注为历史草稿，非权威
+- 契约 / 数据 / 安全影响：无（未改端点、字段、表结构、S 项）
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `python scripts/check_all.py` | 链接/常量/分层/UI/记录/密钥 | 全部 OK | 链接 189 条；常量 29/60/32/7；2 项分层与 3 项 Element Plus 为基线遗留 |
+  | `cd backend; python -m ruff check app tests` | 后端 lint | All checks passed | 自动修复 21 项 |
+  | `cd backend; python -m ruff format --check app tests` | 后端格式 | 27 files already formatted | 首次基线格式化 14 个文件 |
+  | `cd backend; python -m pytest -q` | 健康检查 | 1 passed, 2 warnings | 仅验证应用可启动；TEST_PLAN 未落地 |
+  | `cd frontend; npm run lint` | ESLint | 通过 | 基线文件已豁免 |
+  | `cd frontend; npm run format:check` | Prettier | 通过 | 覆盖 `src/**` |
+  | `cd frontend; npm run typecheck` | vue-tsc | 通过 | —— |
+  | `cd frontend; npm run test:run` | Vitest | 0 tests, exit 0 | `--passWithNoTests`；尚无纯函数用例 |
+  | `cd frontend; npm run build` | 生产构建 | 通过 | 仅有 chunk >500kB 警告 |
+  | `npm ci --dry-run --prefix frontend` | lockfile 同步 | 通过 | —— |
+  | `python -c "import yaml; ..."` | CI YAML 语法 | 通过 | —— |
+
+- 验收结论：有条件通过（TEST_PLAN 未落地；CI 尚未在 GitHub Actions 实跑）
+- 基线例外：Element Plus 3 个文件、Service 直连查询 2 个文件；本次只登记，未新增违规
+- 遗留问题：
+  - TEST_PLAN 60 条用例待落地；前端 Vitest 尚无用例
+  - CI 配置已完成本地静态检查，但尚未在 GitHub Actions 实跑
+  - `npm ci` 尚未在干净环境验证（本地使用 `npm install`）
+  - 历史遗留清理：repositories 下沉、`auth_deps.py`、异常处理器注册、Element Plus 前台替换
+- 回滚方式：revert 本提交；脚本与 CI 为新增文件，不影响运行时
+- 关联 ADR：ADR-0002（本次为规范机制建设，ADR 与实施同批完成；后续 C 类按新规前置）
 
 ## 2026-11-07｜建立开发知识沉淀机制
 

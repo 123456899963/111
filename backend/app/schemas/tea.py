@@ -1,5 +1,6 @@
-from pydantic import BaseModel, ConfigDict
 from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict
 
 
 class TeaResponse(BaseModel):
@@ -57,6 +58,7 @@ class TeaListResponse(BaseModel):
 
 class TeaCreateRequest(BaseModel):
     """管理员新增茶品表单（MVP 必填字段）"""
+
     name: str
     category: str
     origin: str

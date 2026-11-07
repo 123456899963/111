@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -13,7 +13,7 @@ def list_teas(
     category: str | None = None,
     origin: str | None = None,
     season: str | None = None,
-    sort: str = "newest",       # newest | favorite
+    sort: str = "newest",  # newest | favorite
     keyword: str | None = None,
     page: int = 1,
     page_size: int = 12,

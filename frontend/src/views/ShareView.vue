@@ -12,5 +12,9 @@ const shareId = route.params.shareId
 </template>
 
 <style scoped>
-.page { max-width: 960px; margin: 0 auto; padding: 32px 16px; }
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 16px;
+}
 </style>

@@ -1,11 +1,12 @@
 """安全工具：密码哈希、会话签名、管理员权限校验"""
+
 import bcrypt
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.core.config import settings
 
-
 # --- 密码哈希 ---
+
 
 def hash_password(password: str) -> str:
     """明文密码 → bcrypt 哈希（PRD 4.3 指定 bcrypt）"""

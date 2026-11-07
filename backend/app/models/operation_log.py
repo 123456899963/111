@@ -14,9 +14,12 @@ class OperationLog(Base):
     - target_id 为弱引用（不建外键）：删茶不应抹掉历史日志
     - action 用 VARCHAR 而非 ENUM：日志可扩展动作，历史不受新枚举约束
     """
+
     __tablename__ = "operation_logs"
 
-    id: Mapped[int] = mapped_column(MySQLInteger(unsigned=True), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True), primary_key=True, autoincrement=True
+    )
     user_id: Mapped[int | None] = mapped_column(
         MySQLInteger(unsigned=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

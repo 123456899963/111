@@ -75,7 +75,7 @@ export interface TeaListItem {
 }
 
 export interface TeaListParams {
-  category?: string       // 支持逗号多选
+  category?: string // 支持逗号多选
   origin?: string
   season?: string
   sort?: 'newest' | 'favorite'

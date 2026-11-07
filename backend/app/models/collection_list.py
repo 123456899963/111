@@ -13,9 +13,12 @@ class CollectionList(Base):
     MVP 一人一清单：UNIQUE(user_id) 固化；
     可见性不落列，由 share_tokens.is_active 派生。
     """
+
     __tablename__ = "collection_lists"
 
-    id: Mapped[int] = mapped_column(MySQLInteger(unsigned=True), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True), primary_key=True, autoincrement=True
+    )
     user_id: Mapped[int] = mapped_column(
         MySQLInteger(unsigned=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -31,6 +34,4 @@ class CollectionList(Base):
         server_default=text("CURRENT_TIMESTAMP"),
     )
 
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uk_list_user"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", name="uk_list_user"),)

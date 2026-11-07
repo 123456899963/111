@@ -22,9 +22,12 @@ class FavoriteItem(Base):
     MVP 单清单下用 user_id 代理清单归属，不额外挂 list_id；
     S9 多清单时再补列并回填（见 DATA_MODEL §10）。
     """
+
     __tablename__ = "favorite_items"
 
-    id: Mapped[int] = mapped_column(MySQLInteger(unsigned=True), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True), primary_key=True, autoincrement=True
+    )
     user_id: Mapped[int] = mapped_column(
         MySQLInteger(unsigned=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -50,16 +53,23 @@ class ShareToken(Base):
     - token 使用 utf8mb4_bin（大小写敏感），避免 k7X9m2 / K7X9M2 被视为同一令牌
     - 撤销为软失效，行永久保留；撤销后不可复活，再次分享必须新建 token
     """
+
     __tablename__ = "share_tokens"
 
-    id: Mapped[int] = mapped_column(MySQLInteger(unsigned=True), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True), primary_key=True, autoincrement=True
+    )
     list_id: Mapped[int] = mapped_column(
-        MySQLInteger(unsigned=True), ForeignKey("collection_lists.id", ondelete="CASCADE"), nullable=False
+        MySQLInteger(unsigned=True),
+        ForeignKey("collection_lists.id", ondelete="CASCADE"),
+        nullable=False,
     )
     token: Mapped[str] = mapped_column(
         String(16, collation="utf8mb4_bin"), unique=True, nullable=False
     )
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("1"))
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("1")
+    )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")

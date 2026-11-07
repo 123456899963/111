@@ -13,7 +13,12 @@ const routes: RouteRecordRaw[] = [
   { path: '/', name: 'home', component: HomeView, meta: { title: '茶·图鉴' } },
   { path: '/teas', name: 'tea-list', component: TeaListView, meta: { title: '茶品列表' } },
   { path: '/teas/:id', name: 'tea-detail', component: TeaDetailView, meta: { title: '茶品详情' } },
-  { path: '/my', name: 'my-list', component: MyListView, meta: { title: '我的收藏', requiresAuth: true } },
+  {
+    path: '/my',
+    name: 'my-list',
+    component: MyListView,
+    meta: { title: '我的收藏', requiresAuth: true },
+  },
   { path: '/c/:shareId', name: 'share', component: ShareView, meta: { title: '分享清单' } },
 
   // —— 管理员后台（动态 import，按需加载）——
@@ -28,10 +33,30 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/admin/AdminLayout.vue'),
     meta: { requiresAdmin: true },
     children: [
-      { path: '', name: 'admin-dashboard', component: () => import('@/views/admin/AdminDashboard.vue'), meta: { title: '数据概览' } },
-      { path: 'teas', name: 'admin-teas', component: () => import('@/views/admin/AdminTeas.vue'), meta: { title: '茶品管理' } },
-      { path: 'teas/new', name: 'admin-tea-new', component: () => import('@/views/admin/AdminTeaEdit.vue'), meta: { title: '新增茶品' } },
-      { path: 'teas/:id/edit', name: 'admin-tea-edit', component: () => import('@/views/admin/AdminTeaEdit.vue'), meta: { title: '编辑茶品' } },
+      {
+        path: '',
+        name: 'admin-dashboard',
+        component: () => import('@/views/admin/AdminDashboard.vue'),
+        meta: { title: '数据概览' },
+      },
+      {
+        path: 'teas',
+        name: 'admin-teas',
+        component: () => import('@/views/admin/AdminTeas.vue'),
+        meta: { title: '茶品管理' },
+      },
+      {
+        path: 'teas/new',
+        name: 'admin-tea-new',
+        component: () => import('@/views/admin/AdminTeaEdit.vue'),
+        meta: { title: '新增茶品' },
+      },
+      {
+        path: 'teas/:id/edit',
+        name: 'admin-tea-edit',
+        component: () => import('@/views/admin/AdminTeaEdit.vue'),
+        meta: { title: '编辑茶品' },
+      },
     ],
   },
 

@@ -22,8 +22,24 @@
 </template>
 
 <style scoped>
-.admin-layout { display: flex; min-height: 100svh; }
-.admin-sidebar { width: 240px; border-right: 1px solid var(--color-border); background: var(--color-bg-surface); }
-.admin-brand { padding: 24px 20px; display: flex; flex-direction: column; gap: 4px; }
-.admin-main { flex: 1; padding: 24px 32px; background: var(--color-bg-page); }
+.admin-layout {
+  display: flex;
+  min-height: 100svh;
+}
+.admin-sidebar {
+  width: 240px;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+}
+.admin-brand {
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admin-main {
+  flex: 1;
+  padding: 24px 32px;
+  background: var(--color-bg-page);
+}
 </style>

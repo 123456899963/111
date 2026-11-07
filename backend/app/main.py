@@ -1,12 +1,12 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 
 from app.core.config import settings
-from app.core.database import Base, engine
-from app.routers import auth, teas, favorites, lists, shares, admin
-
+from app.core.database import Base, engine  # noqa: F401 —— 开发期建表开关使用
+from app.routers import admin, auth, favorites, lists, shares, teas
 
 # 初始化数据库表（开发期用，生产环境走 Alembic 迁移）
 # Base.metadata.create_all(bind=engine)

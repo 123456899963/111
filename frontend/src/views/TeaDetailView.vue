@@ -12,5 +12,9 @@ const teaId = route.params.id
 </template>
 
 <style scoped>
-.page { max-width: 1200px; margin: 0 auto; padding: 32px 16px; }
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 16px;
+}
 </style>

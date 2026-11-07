@@ -9,9 +9,12 @@ from app.core.database import Base
 
 class User(Base):
     """用户账号与角色（PRD §3.1 / §4.3）"""
+
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(MySQLInteger(unsigned=True), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True), primary_key=True, autoincrement=True
+    )
     username: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(

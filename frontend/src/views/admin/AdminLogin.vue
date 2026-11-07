@@ -12,6 +12,14 @@
 </template>
 
 <style scoped>
-.admin-login { padding: 120px 16px; text-align: center; background: var(--color-bg-page); min-height: 100svh; }
-.login-card { max-width: 400px; margin: 0 auto; }
+.admin-login {
+  padding: 120px 16px;
+  text-align: center;
+  background: var(--color-bg-page);
+  min-height: 100svh;
+}
+.login-card {
+  max-width: 400px;
+  margin: 0 auto;
+}
 </style>

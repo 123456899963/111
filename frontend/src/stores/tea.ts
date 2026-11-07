@@ -45,5 +45,16 @@ export const useTeaStore = defineStore('tea', () => {
     random.value = res.data
   }
 
-  return { list, total, current, hotList, random, loading, fetchList, fetchDetail, fetchHot, fetchRandom }
+  return {
+    list,
+    total,
+    current,
+    hotList,
+    random,
+    loading,
+    fetchList,
+    fetchDetail,
+    fetchHot,
+    fetchRandom,
+  }
 })

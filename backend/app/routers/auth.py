@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.response import ok
-from app.core.security import create_session_token, verify_password, hash_password
-from app.schemas.auth import RegisterRequest, LoginRequest
+from app.core.security import create_session_token
+from app.schemas.auth import LoginRequest, RegisterRequest
 from app.services import auth as auth_service
 
 router = APIRouter()

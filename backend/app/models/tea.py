@@ -19,9 +19,12 @@ from app.core.database import Base
 
 class Tea(Base):
     """茶品图鉴卡片（PRD §4.1）"""
+
     __tablename__ = "teas"
 
-    id: Mapped[int] = mapped_column(MySQLInteger(unsigned=True), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True), primary_key=True, autoincrement=True
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     category: Mapped[str] = mapped_column(
         Enum("green", "white", "yellow", "red", "oolong", "dark", name="tea_category"),
@@ -49,14 +52,16 @@ class Tea(Base):
     # 冲泡参考（DECIMAL 避免浮点近似导致的展示误差）
     water_temp: Mapped[float | None] = mapped_column(Numeric(4, 1), nullable=True)  # 摄氏度
     tea_amount: Mapped[float | None] = mapped_column(Numeric(4, 1), nullable=True)  # 克
-    brew_time: Mapped[float | None] = mapped_column(Numeric(4, 1), nullable=True)   # 秒
+    brew_time: Mapped[float | None] = mapped_column(Numeric(4, 1), nullable=True)  # 秒
 
     # 主图
     main_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # 状态
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    favorite_count: Mapped[int] = mapped_column(MySQLInteger(unsigned=True), nullable=False, default=0)
+    favorite_count: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True), nullable=False, default=0
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
@@ -81,16 +86,22 @@ class Tea(Base):
 
 class TeaTips(Base):
     """官方小贴士（PRD §4.1 小贴士区）"""
+
     __tablename__ = "tea_tips"
 
-    id: Mapped[int] = mapped_column(MySQLInteger(unsigned=True), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True), primary_key=True, autoincrement=True
+    )
     tea_id: Mapped[int] = mapped_column(
-        MySQLInteger(unsigned=True), ForeignKey("teas.id", ondelete="CASCADE"), unique=True, nullable=False
+        MySQLInteger(unsigned=True),
+        ForeignKey("teas.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
     )
 
-    history: Mapped[str | None] = mapped_column(Text, nullable=True)        # 历史典故
-    suitable: Mapped[str | None] = mapped_column(Text, nullable=True)       # 适合人群
-    misconception: Mapped[str | None] = mapped_column(Text, nullable=True)   # 冲泡误区
+    history: Mapped[str | None] = mapped_column(Text, nullable=True)  # 历史典故
+    suitable: Mapped[str | None] = mapped_column(Text, nullable=True)  # 适合人群
+    misconception: Mapped[str | None] = mapped_column(Text, nullable=True)  # 冲泡误区
     official_note: Mapped[str | None] = mapped_column(Text, nullable=True)  # 品鉴笔记（官方）
 
     tea: Mapped[Tea] = relationship(back_populates="tips")
