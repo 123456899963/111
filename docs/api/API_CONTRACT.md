@@ -180,7 +180,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | `fermentation` | `不发酵` / `微发酵` / `半发酵` / `全发酵` / `后发酵` | 同值 |
 | `role` | `user` / `admin` | 注册用户 / 管理员 |
 | `sort` | `newest`（默认）/ `favorite` | 最新上架 / 收藏最多 |
-| `share token` | 8 位 URL-safe 字符（`A-Z a-z 0-9 - _`），**大小写敏感** | 如 `k7X9m2` |
+| `share token` | 8 位 URL-safe 字符（`A-Z a-z 0-9 - _`），**大小写敏感** | 如 `k7X9m2Qa` |
 
 - `price_range` 在 PRD 中仅说明“5 档”，文案与边界未定稿，因此 API 保持 **字符串（≤32 字符）**，不在契约中硬编码档位；应用层校验，不建 ENUM。
 - 枚举值非法一律 `40000`，不做静默丢弃。
@@ -1063,7 +1063,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 
 | 字段 | 类型 | 必填 | 约束 |
 |---|---|---|---|
-| `content` | string / null | 是 | 可为 `null`；`TEXT` 存储，MVP 不设硬性字数上限；纯空白归一化为 `null` |
+| `content` | string / null | 是 | 可为 `null`；上限 **20,000 字符**（超出返回 `40000`；对齐 SECURITY S-19/S-24，并为 MySQL `TEXT` 容量留出安全余量）；纯空白归一化为 `null` |
 
 - **请求示例**：
 
@@ -1091,7 +1091,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 
 | HTTP | code | 触发 |
 |---|---|---|
-| 400 | 40000 | `content` 字段缺失或类型非 string/null |
+| 400 | 40000 | `content` 字段缺失、类型非 string/null，或超过 20,000 字符 |
 | 401 | 40100 | 未登录/会话过期 |
 | 404 | 40430 | 该茶品不在当前用户收藏中（未收藏无法写笔记） |
 
@@ -1831,3 +1831,4 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | **v1.0** | 2026-11-06 | 首版 API 契约：统一 `/api/v1` 前缀、`{code,message,data}` 响应、PageSize 默认 12、HttpOnly Cookie 会话、ISO8601 UTC、图片上传与静态访问、收藏计数缓存语义；覆盖 29 个 MVP 业务接口 |
+| **v1.1** | 2026-11-07 | 全局一致性修订：① §4.4.3 品鉴笔记 `content` 增加 20,000 字符上限（对齐 SECURITY S-19/S-24、TEST_PLAN TC-NOTE-04）；② §1.8 分享短码示例更正为 8 位 `k7X9m2Qa` |
