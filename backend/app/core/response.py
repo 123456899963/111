@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from fastapi import Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 
@@ -41,9 +43,17 @@ def register_exception_handlers(app):
     """注册全局异常处理器"""
 
     @app.exception_handler(TeaGuideError)
-    async def handle_business_error(request, exc: TeaGuideError):
+    async def handle_business_error(request: Request, exc: TeaGuideError):
         http_status = exc.code // 100  # 40400 → 404, 40100 → 401
         return JSONResponse(
             status_code=min(http_status, 599),
             content={"code": exc.code, "message": exc.message, "data": None},
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def handle_validation_error(request: Request, exc: RequestValidationError):
+        # FastAPI 422 统一重映射为 400/40000（API_CONTRACT §1.6）
+        return JSONResponse(
+            status_code=400,
+            content={"code": 40000, "message": "参数校验失败", "data": None},
         )

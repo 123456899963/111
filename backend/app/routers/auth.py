@@ -1,54 +1,105 @@
-from fastapi import APIRouter, Depends, Response
+"""认证路由：注册、登录、退出、当前用户、用户名可用性
+
+对齐 API_CONTRACT §4.1：
+- 成功响应 data 为 User（id/username/role/created_at）
+- 注册/登录成功 Set-Cookie: tea_session（30 天，HttpOnly，SameSite=Lax）
+- 不使用 Token / Authorization 头（API_CONTRACT §1.5）
+"""
+
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
+from app.core.auth_deps import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.response import ok
 from app.core.security import create_session_token
-from app.schemas.auth import LoginRequest, RegisterRequest
+from app.repositories import user_repo
+from app.schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    UsernameAvailabilityResponse,
+    UserResponse,
+)
 from app.services import auth as auth_service
 
 router = APIRouter()
 
+# Cookie 通用属性（API_CONTRACT §1.5 / SECURITY S-07）
+_COOKIE_MAX_AGE = settings.SESSION_EXPIRE_DAYS * 86400
+_COOKIE_KWARGS = dict(
+    key="tea_session",
+    max_age=_COOKIE_MAX_AGE,
+    httponly=True,
+    samesite="lax",
+    path="/",
+    # 生产 HTTPS 下启用 Secure；本地 HTTP 开发关闭
+    secure=not settings.DEBUG,
+)
+
+
+def _set_session_cookie(response: Response, user_id: int) -> None:
+    token = create_session_token(user_id)
+    response.set_cookie(value=token, **_COOKIE_KWARGS)
+
+
+def _user_to_dict(user) -> dict:
+    """User ORM → 契约 User 字典（显式字段，永不返回 password_hash）。"""
+    return UserResponse.model_validate(user).model_dump(mode="json")
+
+
+@router.get("/username-availability")
+def username_availability(
+    username: str = Query(..., min_length=3, max_length=20),
+    db: Session = Depends(get_db),
+):
+    """用户名可用性查询（API_CONTRACT §4.1.1）。游客可调用。"""
+    import re
+
+    trimmed = username.strip()
+    # 服务端正则兜底（Query 只卡长度）
+    if not re.match(r"^[A-Za-z0-9\u4e00-\u9fa5]{3,20}$", trimmed):
+        from app.core.response import ValidationError
+
+        raise ValidationError
+    existing = user_repo.get_by_username(db, trimmed)
+    return ok(
+        UsernameAvailabilityResponse(username=trimmed, available=existing is None).model_dump()
+    )
+
 
 @router.post("/register")
 def register(req: RegisterRequest, response: Response, db: Session = Depends(get_db)):
-    """用户注册 → 自动登录 → 设置 Cookie 会话"""
-    user = auth_service.register(db, req.username, req.password)
-    token = create_session_token(user.id)
-    response.set_cookie(
-        key="tea_session",
-        value=token,
-        max_age=30 * 86400,
-        httponly=True,
-        samesite="lax",
-    )
-    return ok({"user_id": user.id, "username": user.username})
+    """注册 → 自动登录 → Set-Cookie（PRD FR-4.1 / API_CONTRACT §4.1.2）。"""
+    username = req.username.strip()
+    user = auth_service.register(db, username, req.password)
+    _set_session_cookie(response, user.id)
+    return ok(_user_to_dict(user))
 
 
 @router.post("/login")
 def login(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
-    """用户登录 → 设置 Cookie 会话"""
-    user = auth_service.login(db, req.username, req.password)
-    token = create_session_token(user.id)
-    response.set_cookie(
-        key="tea_session",
-        value=token,
-        max_age=30 * 86400,
-        httponly=True,
-        samesite="lax",
-    )
-    return ok({"user_id": user.id, "username": user.username})
+    """登录 → Set-Cookie（API_CONTRACT §4.1.3）。"""
+    username = req.username.strip()
+    user = auth_service.login(db, username, req.password)
+    _set_session_cookie(response, user.id)
+    return ok(_user_to_dict(user))
 
 
 @router.post("/logout")
 def logout(response: Response):
-    """退出登录 → 清除 Cookie"""
-    response.delete_cookie(key="tea_session")
+    """退出登录 → 清除 Cookie（API_CONTRACT §4.1.4）。幂等，未登录也返回成功。"""
+    response.delete_cookie(
+        key="tea_session",
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=not settings.DEBUG,
+    )
     return ok()
 
 
 @router.get("/me")
-def me(user_id: int | None = None):
-    """获取当前登录用户信息（由依赖注入提供 user_id）"""
-    # TODO: 通过 FastAPI Depends 注入当前用户
-    return ok({"user_id": user_id})
+def me(current_user=Depends(get_current_user)):
+    """当前用户信息（API_CONTRACT §4.1.5）。需登录。"""
+    return ok(_user_to_dict(current_user))

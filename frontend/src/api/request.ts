@@ -1,12 +1,16 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import router from '@/router'
 
 // 创建 axios 实例 —— 统一配置 + 拦截器
 const request = axios.create({
   baseURL: '/api/v1', // 开发期经 Vite proxy 到 FastAPI；生产经 Nginx 同域反代
   timeout: 10000,
-  withCredentials: true, // 关键：Cookie 会话（PRD FR-4.3）
+  withCredentials: true, // 关键：Cookie 会话（PRD FR-4.3 / API_CONTRACT §1.5）
 })
+
+// 不需要登录的路径（401 时不强制跳转，避免登录页自身死循环）
+const PUBLIC_PATHS = ['/auth/login', '/auth/register', '/auth/username-availability']
 
 // —— 响应拦截器：统一错误处理 ——
 request.interceptors.response.use(
@@ -21,12 +25,19 @@ request.interceptors.response.use(
     return body
   },
   (err) => {
-    // HTTP 层错误
     const status = err.response?.status
-    const msg = err.response?.data?.message || err.message
+    const body = err.response?.data
+    const msg = body?.message || err.message
+
     if (status === 401) {
-      ElMessage.warning('登录已过期，请重新登录')
-      // TODO: 触发 Pinia user store 登出 + 弹登录面板
+      // 会话过期或未登录：非公开接口才跳转登录页
+      const url: string = err.config?.url || ''
+      const isPublic = PUBLIC_PATHS.some((p) => url.endsWith(p))
+      if (!isPublic) {
+        const redirect = encodeURIComponent(window.location.pathname + window.location.search)
+        ElMessage.warning('登录已过期，请重新登录')
+        router.push({ path: '/login', query: { redirect } })
+      }
     } else {
       ElMessage.error(msg || '网络异常')
     }

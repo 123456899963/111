@@ -5,12 +5,24 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.core.config import settings
 
+# bcrypt cost 对齐 SECURITY S-01 / DATA_MODEL §9 种子数据注释（cost=10）
+_BCRYPT_ROUNDS = 10
+
+# 登录等时比对用的固定哑哈希（SECURITY S-04）：对不存在的用户也执行一次 bcrypt 校验，
+# 避免响应时间差暴露账号是否存在。
+DUMMY_HASH = bcrypt.hashpw(
+    b"dummy-password-for-constant-time", bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)
+).decode("utf-8")
+
+
 # --- 密码哈希 ---
 
 
 def hash_password(password: str) -> str:
-    """明文密码 → bcrypt 哈希（PRD 4.3 指定 bcrypt）"""
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    """明文密码 → bcrypt 哈希（cost=10，对齐 SECURITY S-01）"""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)).decode(
+        "utf-8"
+    )
 
 
 def verify_password(password: str, hashed: str) -> bool:
