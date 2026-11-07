@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import Base, engine  # noqa: F401 —— 开发期建表开关使用
+from app.core.response import ok, register_exception_handlers
 from app.routers import admin, auth, favorites, lists, shares, teas
 
 # 初始化数据库表（开发期用，生产环境走 Alembic 迁移）
@@ -28,6 +29,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # 注册全局异常处理器（业务异常 → 统一响应体，HTTP status = code // 100）
+    register_exception_handlers(app)
+
     # 注册路由
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
     app.include_router(teas.router, prefix="/api/v1/teas", tags=["茶品"])
@@ -43,7 +47,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/v1/health")
     def health():
-        return {"status": "ok"}
+        return ok({"status": "ok"})
 
     return app
 

@@ -57,6 +57,38 @@
 
 ## 4. 记录
 
+## 2026-11-08｜前后端基础工程核对与补齐
+
+- 任务编号 / 分级：TASK-20261108-01 / A
+- 需求来源：开发计划第一个任务（搭建前后端基础工程）；AGENTS.md §5/§7（统一响应体）、§13 已知待办（`register_exception_handlers` 未注册，安全 P0）
+- 现状核对（7 项）：接口前缀 `/api/v1`、`request.ts` 的 `withCredentials: true`、npm lockfile 均已合规，跳过；`repositories/` 层本次不建——健康检查不查库，按 §3.1 基线待 teas/auth 端点触达查询时再下沉
+- 主要变更：
+  - `backend/app/main.py`：注册 `register_exception_handlers(app)`；`/api/v1/health` 改为统一响应体 `ok({"status": "ok"})`
+  - `backend/tests/test_health.py`：断言同步为 `{code: 0, message: "ok", data: {status: "ok"}}`
+  - `backend/.env.example`：新增（数据库 / SECRET_KEY / 管理员账号等参数示例）
+  - `backend/.env`：由示例复制生成（开发默认值，.gitignore 已覆盖，不进 Git）
+- 契约 / 数据 / 安全影响：健康检查不在 API_CONTRACT 29 个业务端点内，契约文档无需变更；安全影响为正面修复（业务异常不再退化为 500）
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `python -m ruff check app tests` | 后端静态检查 | All checks passed | —— |
+  | `python -m pytest -q` | 健康检查用例 | 1 passed（2 条 deprecation 警告，为依赖既有行为） | —— |
+  | `npm run build` | 前端 typecheck + 构建 | 成功（vue-tsc + vite build 通过；chunk >500kB 警告为既有体积提示） | —— |
+  | `Invoke-WebRequest http://127.0.0.1:8000/api/v1/health` | 后端直连 | 200，`{"code":0,"message":"ok","data":{"status":"ok"}}` | —— |
+  | `Invoke-WebRequest http://localhost:5173/api/v1/health` | 经 Vite 代理前后端通信 | 200，同上统一响应体 | 5173 监听在 `[::1]`，需用 localhost 访问 |
+  | `Invoke-WebRequest http://localhost:5173/` | 前端首页 | 200 | —— |
+  | `npm run test:run` / `npm run lint` | 前端测试 / lint | 未运行 | 本次无前端代码改动 |
+
+- 验收结论：通过（前后端均在本机运行，健康检查经代理返回统一响应体）
+- 基线例外：无新增；`request.ts` 引用 ElMessage 属 §3.1 既有遗留，本任务未触达
+- 遗留问题：
+  - MySQL 建库与 `init.sql` 种子数据为下一任务（T0-02a），本次健康检查不依赖数据库
+  - `config.py` 使用 class-based Config（Pydantic V2 弃用警告），触达配置项时再迁移为 `ConfigDict`
+  - SECRET_KEY / 管理员密码为默认值，上线前必须轮换（AGENTS §13）
+- 回滚方式：还原 `main.py`、`test_health.py`，删除 `.env` / `.env.example`
+- 关联 ADR：无
+
 ## 2026-11-07｜生成 MVP 开发计划
 
 - 任务编号 / 分级：TASK-20261107-PLAN / B（纯文档产出，未触碰业务规则、契约、表结构与安全项）
