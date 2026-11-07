@@ -128,9 +128,25 @@ d:\项目二\
 | [DESIGN_SYSTEM.md](docs/design/DESIGN_SYSTEM.md) / [PAGE_SPECS.md](docs/design/PAGE_SPECS.md) | 视觉与页面规范 |
 | [TEST_PLAN.md](docs/testing/TEST_PLAN.md) | 测试用例唯一依据 |
 | [DEVELOPMENT_GUIDE.md](docs/development/DEVELOPMENT_GUIDE.md) | 开发流程、任务分级与各阶段产出（SDD） |
+| [ADR/](docs/development/ADR/README.md) | 重要架构与技术决策的原因、备选方案与最终选择 |
+| [build-log.md](harness/build-log.md) | 每次开发任务的变更、测试证据与遗留问题 |
 
 - 修改代码导致行为变化时，必须同步更新对应文档；文档间出现不一致时停下来核对，以各文档"权威版本"章节为准
 - 重要设计决策必须在对应文档的"变更记录/修订记录"中留痕
+
+### 10.1 开发知识沉淀机制（三层记录）
+
+| 层 | 回答的问题 | 载体 | 何时写 |
+|---|---|---|---|
+| 权威文档 | **是什么**（规则唯一依据） | `docs/` 下各权威文档 | 行为变化时**必须**同步 |
+| ADR | **为什么**（原因 + 备选方案 + 最终选择） | [docs/development/ADR/](docs/development/ADR/README.md) | 重要架构/技术决策（见该目录 §2 触发条件） |
+| build-log | **做了什么、测了什么、还剩什么** | [harness/build-log.md](harness/build-log.md) | **每个开发任务交付前必写一条** |
+
+- **不是每次改一行代码都要写文档**：无设计取舍的小改动只在 build-log 留一行；判定口诀是"为什么能在现有权威文档里找到吗？能找到 → build-log，找不到 → ADR"
+- **决策必须可追溯**：ADR 至少写清背景、2 个以上备选方案、最终选择理由、影响与需同步文档；已采纳的 ADR 不改写结论，变化时新建 ADR 并标注取代关系
+- **接口与数据库变化必须同步文档**：改端点/字段/错误码 → [API_CONTRACT.md](docs/api/API_CONTRACT.md) + [openapi.yaml](docs/api/openapi.yaml) + 前端 `types/` + [TEST_PLAN.md](docs/testing/TEST_PLAN.md)；改表/索引/ENUM → [DATA_MODEL.md](docs/architecture/DATA_MODEL.md) + [init.sql](database/init.sql) + Alembic 迁移
+- **反复出现的错误必须转化为防护**：同类错误第二次出现时，登记到 build-log「问题复发台账」，并至少落实一项：补自动化测试（标注用例 ID）、补校验规则、补规范条款；连续三次无防护视为流程缺陷
+- **只记录真实结果**：未运行的测试写「未运行」，不得写"已通过"；失败、跳过、未覆盖必须如实标注
 
 ## 11. AI 行为要求（红线）
 
@@ -139,9 +155,10 @@ d:\项目二\
 3. **重大修改先出方案**：涉及架构分层、数据库结构、安全控制（S-01–S-32）、权限判断的改动，先给出方案说明，经确认后方可实施。
 4. **改完必测**：完成任务后执行与改动相关的测试（后端 pytest / 前端 Vitest），测试未通过不得声称完成。
 5. **不得虚报测试结果**：未实际运行的测试不得写成"已通过"；失败、跳过、未覆盖要如实说明。
-6. **决策留痕**：重要设计决策（含用户确认的取舍）记录到对应文档的变更记录中。
+6. **决策留痕**：重要设计决策（含用户确认的取舍）记录到对应文档的变更记录中；属于架构/技术决策的同时写 ADR。
 7. **范围自律**：第二阶段（S1–S17）与暂不实现项（X1–X13）不主动开发；只做被要求的改动，不顺手"优化"无关代码。
 8. **不泄露敏感信息**：日志、响应、提交信息中不得出现密码明文、Cookie 值、密钥；`.env` 不进 Git。
+9. **交付必留痕**：每个任务结束前回填 [harness/build-log.md](harness/build-log.md)，写明变更、测试证据与遗留问题；接口/数据库变更须同时更新对应文档，否则不得声称完成。
 
 ### 11.1 按任务风险决定是否先询问
 
@@ -189,6 +206,8 @@ d:\项目二\
 - 测试必须实跑并如实记录；未运行的测试不得写"已通过"；高优先级用例失败即阻断交付
 - 除权威文档修订外不额外创建临时 Markdown；方案需正式评审时才落盘 `docs/development/plans/`
 - **接到新任务先填任务卡**：[harness/TASK_TEMPLATE.md](harness/TASK_TEMPLATE.md)（含 12 项必填字段与填写示例），填完并经分级闸门判定后才可编码
+- **交付前回填 build-log**：[harness/build-log.md](harness/build-log.md)（变更 + 测试证据 + 遗留问题）；涉及技术决策时同步新增 [ADR](docs/development/ADR/README.md)
+- **接口/数据库变更强制同步**：API 变更改 `docs/api/` 两份文件，数据库变更改 `DATA_MODEL.md` + `init.sql` + Alembic；未同步不得标记完成
 
 ## 13. 当前已知待办（进入开发前须知）
 
