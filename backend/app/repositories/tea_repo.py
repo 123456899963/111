@@ -10,6 +10,11 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.tea import Tea
 
 
+def _escape_like(value: str) -> str:
+    """转义 LIKE 通配符，避免用户输入 % / _ 被解释为模式。"""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def list_teas(
     db: Session,
     *,
@@ -32,8 +37,13 @@ def list_teas(
     if seasons:
         query = query.filter(Tea.season.in_(seasons))
     if keyword:
-        kw = f"%{keyword}%"
-        query = query.filter(or_(Tea.name.like(kw), Tea.origin.like(kw)))
+        kw = f"%{_escape_like(keyword)}%"
+        query = query.filter(
+            or_(
+                Tea.name.like(kw, escape="\\"),
+                Tea.origin.like(kw, escape="\\"),
+            )
+        )
 
     # 排序必须带稳定次级键 id DESC（API_CONTRACT §1.6）
     if sort == "favorite":

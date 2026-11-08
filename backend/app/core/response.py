@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DataError
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,18 @@ def register_exception_handlers(app):
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(request: Request, exc: RequestValidationError):
         # FastAPI 422 统一重映射为 400/40000（API_CONTRACT §1.6）
+        return JSONResponse(
+            status_code=400,
+            content={"code": 40000, "message": "参数校验失败", "data": None},
+        )
+
+    @app.exception_handler(DataError)
+    async def handle_data_error(request: Request, exc: DataError):
+        # 字段超出数据库列容量等数据异常应视为参数问题，返回 400 而非 500；
+        # 只记录路径与异常类型，避免把超长参数/ SQL 写入日志。
+        logger.warning(
+            "数据写入异常: %s %s (%s)", request.method, request.url.path, type(exc).__name__
+        )
         return JSONResponse(
             status_code=400,
             content={"code": 40000, "message": "参数校验失败", "data": None},

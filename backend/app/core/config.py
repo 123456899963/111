@@ -29,10 +29,13 @@ class Settings(BaseSettings):
     # === 文件 ===
     UPLOAD_DIR: Path = Path("uploads")
     MAX_UPLOAD_SIZE_MB: int = 5
+    # 请求体上限（对齐 TEST_PLAN DEF-02 的网关 6MB 限制）
+    MAX_REQUEST_BODY_MB: int = 6
 
     # === 管理员初始账号 ===
     ADMIN_USERNAME: str = "admin"
-    ADMIN_PASSWORD: str = "admin123"
+    # 不在代码中内置默认密码（SECURITY S-31）；开发/测试由 .env 注入
+    ADMIN_PASSWORD: str = ""
 
     @property
     def DATABASE_URL(self) -> str:

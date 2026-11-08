@@ -51,11 +51,48 @@
 
 | 编号 | 现象 | 首次 / 再次出现 | 根因 | 已落实的防护 | 状态 |
 |---|---|---|---|---|---|
-| —— | 暂无登记 | —— | —— | —— | —— |
+| R-01 | 篡改 Cookie 末位仅把 `A` 换 `B`，服务端仍接受，测试误判为通过/失败 | 2026-11-08（首次） | base64url 签名末位含未参与解码的低位，同高位字符互换后字节相同 | AUTH-07 改为翻转 base64url 索引高位（`index ^ 32`），断言仍为 401/40100，未放宽 | 已关闭 |
 
 ---
 
 ## 4. 记录
+
+## 2026-11-08｜G5 测试缺陷修复（D-01 ~ D-05）
+
+- 任务编号 / 分级：TASK-20261108-G5FIX / **B**（未改 API 契约、表结构、权限/认证机制与安全控制口径；D-04 默认密码置空为向既有 SECURITY S-31 对齐，属实现向文档对齐）
+- 需求来源：`docs/testing/TEST_REPORT.md` 缺陷清单；TEST_PLAN TC-AUTH-07 / TC-LIST-05 / TC-DEF-02 / TC-DEF-04；SECURITY S-21 / S-26 / S-31
+- 主要变更：
+  - `backend/app/core/security.py`：`max_age_days <= 0` 显式立即过期，修复 0 回落 30 天与 itsdangerous 同秒 `age=0` 不过期两处根因。
+  - `backend/app/repositories/tea_repo.py` / `admin_repo.py`：新增 `_escape_like()`，转义 `\`/`%`/`_` 并显式 `escape="\\"`，修复搜索通配符返回全表。
+  - `backend/app/main.py`：新增 6MB Content-Length 中间件（先注册，CORS 后注册为最外层），超限返回 413/41300。
+  - `backend/app/core/response.py`：新增 `DataError → 400/40000`，仅记录方法/路径/异常类型，不写参数与 SQL。
+  - `backend/app/core/config.py`：`ADMIN_PASSWORD` 默认置空（S-31），新增 `MAX_REQUEST_BODY_MB=6`。
+  - `backend/.env.example`：清空 `ADMIN_PASSWORD` 并补充轮换命令；`backend/.env` 与 `database/init.sql` 的开发/演练种子保持不变。
+  - 新增 `backend/app/scripts/rotate_admin_password.py` + `__init__.py`：bcrypt cost=10，复用 `user_repo`，输出不含明文。
+  - `backend/tests/test_g5_system.py`：新增 DEF-02、DEF-04 两条回归，强化 AUTH-07（0/-1 过期、末位高位翻转篡改），共 23 条。
+  - `docs/testing/TEST_REPORT.md`：更新统计、逐条结果、缺陷修复记录与命令输出。
+- 契约 / 数据 / 安全影响：无 API 契约/表结构/迁移变更；未修改 SECURITY 规则；S-26 错误响应仍不泄露堆栈/SQL；S-31 通过默认密码清空 + 轮换脚本补齐。
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `python -m ruff format --check app tests` | 后端格式 | 55 files already formatted | 修复后复跑 |
+  | `python -m ruff check app tests` | 后端 lint | All checks passed | 修复后复跑 |
+  | `pytest -q <AUTH-07/LIST-05/DEF-02/DEF-04>` | 四条初测失败/未执行 | 4 passed | 失败用例全绿 |
+  | `pytest -q <§7.1 门禁 9 条>` | 安全门禁 | 9 passed, 10 warnings in 6.86s | 含 DEF-04 真实轮换与恢复 |
+  | `python -m pytest -q` | 后端全量 | 105 passed, 484 warnings in 17.25s | 0 skip |
+  | `npm run lint / format:check / typecheck / test:run / build` | 前端质量门禁 | 全部通过；30 tests passed；build 12.21s | 主 chunk >500 kB 告警非失败 |
+  | `python scripts/check_all.py` | 静态检查 | 全部通过 | 205 链接；29/60/32/7；153 文件无敏感信息 |
+  | GitHub Actions CI | CI | 未运行 | 未在远端实跑，不标记通过 |
+
+- 验收结论：**通过**（60/60 用例、32/32 高优先级；D-01～D-05 关闭；CI 未运行已如实标注）
+- 基线例外：无新增；前台 Element Plus 仍为既有 3 项基线
+- 遗留问题：
+  - 生产 Nginx `client_max_body_size` 需配置为 6m 并复测 413（部署项，非代码范围）。
+  - CI 需在 GitHub Actions 实跑后回填结果；未运行前不宣称通过。
+  - `ADMIN_PASSWORD` 默认值为空需同步部署文档，避免新环境缺省注入导致无管理员。
+- 回滚方式：`git revert` 本提交；代码回滚不影响数据库已存密码；如已在环境执行轮换，用原密码重新执行脚本恢复。
+- 关联 ADR：无（均为既有规则内的缺陷修复，未产生架构级决策）
 
 ## 2026-11-08｜阶段 5（G5）系统测试
 

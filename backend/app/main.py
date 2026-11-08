@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
@@ -19,6 +20,23 @@ def create_app() -> FastAPI:
         description="六大茶类结构化知识库平台 — MVP 后端",
         version="0.1.0",
     )
+
+    # 请求体上限：先注册，后注册的 CORS 作为最外层，保证 413 响应也带跨域头。
+    # 对齐 TEST_PLAN DEF-02 / S-20：网关 6MB，应用层兜底，避免超大请求触发 500。
+    @app.middleware("http")
+    async def limit_request_body(request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                size = int(content_length)
+            except ValueError:
+                size = 0
+            if size > settings.MAX_REQUEST_BODY_MB * 1024 * 1024:
+                return JSONResponse(
+                    status_code=413,
+                    content={"code": 41300, "message": "请求体过大", "data": None},
+                )
+        return await call_next(request)
 
     # CORS 配置（开发期兜底；生产经 Nginx 同域反代后跨域消失）
     app.add_middleware(

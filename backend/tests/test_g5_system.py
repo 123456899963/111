@@ -7,7 +7,10 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
+import subprocess
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -335,8 +338,10 @@ def test_tc_auth_07_tampered_foreign_and_expired_session():
     finally:
         db.close()
     try:
-        # 篡改最后一个字符
-        tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+        # 篡改最后一个字符。itsdangerous 签名末位 base64 字符含 2 个未使用位，
+        # A/B/C/D 之间互换可能解码为相同字节；翻转高位确保解码结果必然不同。
+        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+        tampered = token[:-1] + alphabet[alphabet.index(token[-1]) ^ 32]
         c1 = TestClient(app)
         c1.cookies.set("tea_session", tampered)
         r1 = c1.get("/api/v1/auth/me")
@@ -349,8 +354,9 @@ def test_tc_auth_07_tampered_foreign_and_expired_session():
         r2 = c2.get("/api/v1/auth/me")
         assert r2.status_code == 401 and r2.json()["code"] == 40100
 
-        # 过期分支：max_age_days=0
+        # 过期分支：0 与负数都必须立即过期，不能回落默认 30 天
         assert verify_session_token(token, max_age_days=0) is None
+        assert verify_session_token(token, max_age_days=-1) is None
         assert verify_session_token(token) == uid
     finally:
         _cleanup_user(username)
@@ -532,9 +538,15 @@ def test_tc_list_01_pagination_with_13_plus_active_teas():
 
 def test_tc_list_05_wildcards_are_escaped():
     total = TestClient(app).get("/api/v1/teas").json()["data"]["total"]
-    for keyword in ("%", "_"):
+    for keyword in ("%", "_", "\\"):
         data = TestClient(app).get("/api/v1/teas", params={"keyword": keyword}).json()["data"]
         assert data["total"] < total, keyword
+
+    admin = _admin_client()
+    admin_total = admin.get("/api/v1/admin/teas").json()["data"]["total"]
+    for keyword in ("%", "_"):
+        admin_data = admin.get("/api/v1/admin/teas", params={"keyword": keyword}).json()["data"]
+        assert admin_data["total"] < admin_total, keyword
 
 
 def test_tc_list_06_keyword_length_boundaries():
@@ -823,6 +835,91 @@ def test_tc_share_08_copy_added_skipped_total():
         _cleanup_user(copier_name)
         for tea_id in teas + [off_tea]:
             _delete_tea(tea_id)
+
+
+# ===== TC-DEF-02：超大请求体不得 500 =====
+
+
+def test_tc_def_02_oversize_body_is_rejected_without_500():
+    admin = _admin_client()
+    db = SessionLocal()
+    try:
+        before = db.query(Tea).count()
+    finally:
+        db.close()
+
+    # ① 超过应用层 6MB 上限：中间件直接 413，不进入 ORM
+    huge = _payload()
+    huge["shape_desc"] = "x" * (10 * 1024 * 1024)
+    resp = admin.post("/api/v1/admin/teas", json=huge)
+    assert resp.status_code == 413, resp.text[:160]
+    assert resp.json()["code"] == 41300
+
+    # ② 未超 6MB、但超过 TEXT 列容量：DataError 映射为 400，不得 500
+    big = _payload(name=f"超长描述{_uid()}")
+    big["shape_desc"] = "x" * 70000
+    resp2 = admin.post("/api/v1/admin/teas", json=big)
+    assert resp2.status_code == 400, resp2.text[:160]
+    assert resp2.json()["code"] == 40000
+
+    db = SessionLocal()
+    try:
+        assert db.query(Tea).count() == before
+    finally:
+        db.close()
+
+
+# ===== TC-DEF-04：管理员密码轮换 =====
+
+
+def _rotate_admin(password: str) -> subprocess.CompletedProcess:
+    backend_dir = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["NEW_ADMIN_PASSWORD"] = password
+    env["ADMIN_USERNAME"] = settings.ADMIN_USERNAME
+    return subprocess.run(
+        [sys.executable, "-m", "app.scripts.rotate_admin_password"],
+        cwd=backend_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
+def test_tc_def_04_admin_password_rotation():
+    original = settings.ADMIN_PASSWORD
+    assert original, "测试环境必须通过 .env 注入 ADMIN_PASSWORD"
+    new_password = "Str0ng!Admin#2026"
+    try:
+        result = _rotate_admin(new_password)
+        assert result.returncode == 0, result.stderr
+        output = result.stdout + result.stderr
+        assert new_password not in output
+
+        old = TestClient(app).post(
+            "/api/v1/auth/login",
+            json={"username": settings.ADMIN_USERNAME, "password": original},
+        )
+        assert old.status_code == 401 and old.json()["code"] == 40110
+
+        fresh = _login(settings.ADMIN_USERNAME, new_password)
+        assert fresh.get("/api/v1/auth/me").json()["data"]["role"] == "admin"
+
+        db = SessionLocal()
+        try:
+            admin = user_repo.get_by_username(db, settings.ADMIN_USERNAME)
+            assert admin.password_hash.startswith("$2b$10$")
+            assert admin.password_hash != original
+        finally:
+            db.close()
+
+        backend_dir = Path(__file__).resolve().parents[1]
+        assert "admin123" not in (backend_dir / "app/core/config.py").read_text("utf-8")
+        assert "admin123" not in (backend_dir / ".env.example").read_text("utf-8")
+    finally:
+        restored = _rotate_admin(original)
+        assert restored.returncode == 0, restored.stderr
 
 
 # ===== TC-E2E-01：MVP 端到端闭环 =====
