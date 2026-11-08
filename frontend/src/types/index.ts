@@ -212,3 +212,95 @@ export interface ShareToken {
   token: string
   title: string
 }
+
+// ===== 管理员后台（API_CONTRACT §4.6） =====
+/** 后台列表条目：含下架茶品与 is_active */
+export interface AdminTeaListItem {
+  id: number
+  name: string
+  category: TeaCategory
+  origin: string
+  season?: string | null
+  main_image_url?: string | null
+  is_active: boolean
+  favorite_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminTeaListData {
+  items: AdminTeaListItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface AdminTeaListParams {
+  category?: string
+  keyword?: string
+  is_active?: boolean
+  sort?: TeaSort
+  page?: number
+  page_size?: number
+}
+
+/** 茶品主体字段（新增/编辑共用；不含 id/is_active/favorite_count） */
+export interface AdminTeaPayload {
+  name: string
+  category: TeaCategory
+  origin: string
+  season: string | null
+  fermentation: string | null
+  price_range: string | null
+  representative_variety: string | null
+  shape_desc: string
+  soup_desc: string
+  aroma_desc: string
+  taste_desc: string
+  water_temp: number
+  tea_amount: number
+  brew_time: number
+  main_image_url: string
+}
+
+export interface AdminTeaCreatePayload extends AdminTeaPayload {
+  tips_history: string | null
+  tips_suitable: string | null
+  tips_misconception: string | null
+  tips_official_note: string | null
+}
+
+export interface AdminTipsPayload {
+  tips_history?: string | null
+  tips_suitable?: string | null
+  tips_misconception?: string | null
+  tips_official_note?: string | null
+}
+
+export interface AdminTipsData {
+  tea_id: number
+  tips_history: string | null
+  tips_suitable: string | null
+  tips_misconception: string | null
+  tips_official_note: string | null
+}
+
+export interface AdminToggleData {
+  id: number
+  is_active: boolean
+  updated_at: string
+}
+
+export interface AdminStatsData {
+  total_count: number
+  active_count: number
+  inactive_count: number
+  category_distribution: CategoryCount[]
+}
+
+export interface AdminUploadData {
+  url: string
+  original_filename: string
+  size: number
+  content_type: string
+}

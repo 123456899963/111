@@ -40,10 +40,10 @@ def create_app() -> FastAPI:
     app.include_router(shares.router, prefix="/api/v1/shares", tags=["分享"])
     app.include_router(admin.router, prefix="/api/v1/admin", tags=["管理员"])
 
-    # 静态挂载 uploads 目录（图片存储）
-    uploads_dir = Path("uploads")
-    uploads_dir.mkdir(exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+    # 静态挂载 uploads 目录（图片存储；目录与上传服务保持一致）
+    uploads_dir = Path(settings.UPLOAD_DIR)
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
     @app.get("/api/v1/health")
     def health():

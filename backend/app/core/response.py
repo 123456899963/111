@@ -38,6 +38,9 @@ FavoriteNotFound = TeaGuideError(40430, "该茶品不在当前用户收藏中")
 UsernameExists = TeaGuideError(40910, "用户名已存在")
 BadCredentials = TeaGuideError(40110, "用户名或密码错误")
 ValidationError = TeaGuideError(40000, "参数校验失败")
+FileTooLarge = TeaGuideError(41300, "文件超过 5 MB")
+UnsupportedMedia = TeaGuideError(41500, "仅支持 JPEG/PNG/WebP 图片")
+InternalError = TeaGuideError(50000, "服务器内部错误")
 
 
 def register_exception_handlers(app):

@@ -33,7 +33,10 @@ request.interceptors.response.use(
       // 会话过期或未登录：非公开接口才跳转登录页
       const url: string = err.config?.url || ''
       const isPublic = PUBLIC_PATHS.some((p) => url.endsWith(p))
-      if (!isPublic) {
+      if (url.startsWith('/admin')) {
+        ElMessage.warning('管理员会话已过期，请重新登录')
+        router.push({ name: 'admin-login' })
+      } else if (!isPublic) {
         const redirect = encodeURIComponent(window.location.pathname + window.location.search)
         ElMessage.warning('登录已过期，请重新登录')
         router.push({ path: '/login', query: { redirect } })

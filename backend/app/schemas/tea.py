@@ -6,13 +6,26 @@
 """
 
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, field_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 CATEGORY_VALUES = ("green", "white", "yellow", "red", "oolong", "dark")
 SEASON_VALUES = ("明前", "雨前", "春茶", "夏茶", "秋茶", "冬茶")
+FERMENTATION_VALUES = ("不发酵", "微发酵", "半发酵", "全发酵", "后发酵")
 SORT_VALUES = ("newest", "favorite")
+
+CategoryValue = Literal["green", "white", "yellow", "red", "oolong", "dark"]
+SeasonValue = Literal["明前", "雨前", "春茶", "夏茶", "秋茶", "冬茶"]
+FermentationValue = Literal["不发酵", "微发酵", "半发酵", "全发酵", "后发酵"]
 
 
 def _iso_z(v: datetime) -> str:
@@ -112,32 +125,114 @@ class OriginCount(BaseModel):
     count: int
 
 
-class TeaCreateRequest(BaseModel):
-    """管理员新增茶品表单（MVP 必填字段）—— T4 阶段实现时补全校验"""
+def _normalize_optional_text(value: Any) -> Any:
+    """选填文本：trim 后空串归一化为 None（API_CONTRACT §4.6.3）。"""
+    if value is None or not isinstance(value, str):
+        return value
+    return value.strip() or None
 
-    name: str
-    category: str
-    origin: str
 
-    # 选填
-    season: str | None = None
-    fermentation: str | None = None
-    price_range: str | None = None
-    representative_variety: str | None = None
+def _normalize_required_text(value: Any, field: str) -> Any:
+    """必填文本：trim 后必须非空。"""
+    if not isinstance(value, str):
+        return value
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field} 不能为空")
+    return normalized
 
-    shape_desc: str = ""
-    soup_desc: str = ""
-    aroma_desc: str = ""
-    taste_desc: str = ""
 
-    water_temp: float | None = None
-    tea_amount: float | None = None
-    brew_time: float | None = None
+def _one_decimal(value: Any) -> Any:
+    """数值最多 1 位小数，且不超过目标精度。"""
+    if value is None:
+        return None
+    try:
+        decimal_value = Decimal(str(value))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError("数值格式非法") from exc
+    if decimal_value.as_tuple().exponent < -1:
+        raise ValueError("数值最多保留 1 位小数")
+    return float(decimal_value)
 
-    main_image_url: str | None = None
 
-    # 小贴士（选填）
+class TeaBaseRequest(BaseModel):
+    """管理员茶品主体字段（新增/编辑共用，extra=forbid 防批量赋值 S-20）。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., max_length=100)
+    category: CategoryValue
+    origin: str = Field(..., max_length=200)
+    season: SeasonValue | None = None
+    fermentation: FermentationValue | None = None
+    price_range: str | None = Field(None, max_length=32)
+    representative_variety: str | None = Field(None, max_length=100)
+
+    shape_desc: str
+    soup_desc: str
+    aroma_desc: str
+    taste_desc: str
+
+    water_temp: float = Field(..., ge=70.0, le=100.0)
+    tea_amount: float = Field(..., gt=0, le=999.9)
+    brew_time: float = Field(..., gt=0, le=999.9)
+
+    main_image_url: str = Field(..., max_length=500)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _validate_name(cls, value: Any) -> Any:
+        return _normalize_required_text(value, "name")
+
+    @field_validator("origin", mode="before")
+    @classmethod
+    def _validate_origin(cls, value: Any) -> Any:
+        return _normalize_required_text(value, "origin")
+
+    @field_validator("shape_desc", "soup_desc", "aroma_desc", "taste_desc", mode="before")
+    @classmethod
+    def _validate_required_desc(cls, value: Any) -> Any:
+        return _normalize_required_text(value, "感官描述")
+
+    @field_validator(
+        "season", "fermentation", "price_range", "representative_variety", mode="before"
+    )
+    @classmethod
+    def _validate_optional_text(cls, value: Any) -> Any:
+        return _normalize_optional_text(value)
+
+    @field_validator("water_temp", "tea_amount", "brew_time", mode="before")
+    @classmethod
+    def _validate_number(cls, value: Any) -> Any:
+        return _one_decimal(value)
+
+    @field_validator("main_image_url")
+    @classmethod
+    def _validate_image_url(cls, value: str) -> str:
+        if not (
+            value.startswith("http://")
+            or value.startswith("https://")
+            or value.startswith("/uploads/")
+        ):
+            raise ValueError("main_image_url 必须为 http(s):// 或 /uploads/ 路径")
+        return value
+
+
+class TeaCreateRequest(TeaBaseRequest):
+    """管理员新增茶品（API_CONTRACT §4.6.3）。"""
+
     tips_history: str | None = None
     tips_suitable: str | None = None
     tips_misconception: str | None = None
     tips_official_note: str | None = None
+
+    @field_validator(
+        "tips_history", "tips_suitable", "tips_misconception", "tips_official_note", mode="before"
+    )
+    @classmethod
+    def _validate_tips(cls, value: Any) -> Any:
+        return _normalize_optional_text(value)
+
+
+class TeaUpdateRequest(TeaBaseRequest):
+    """管理员编辑茶品（API_CONTRACT §4.6.4）：PUT 全量替换，不接受 tips_*。"""
