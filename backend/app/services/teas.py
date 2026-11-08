@@ -21,18 +21,12 @@ from app.schemas.tea import (
     TeaListItem,
     TeaListResponse,
 )
+from app.services._common import split_csv
 
 MAX_KEYWORD_LEN = 50
 DEFAULT_PAGE_SIZE = 12
 MAX_PAGE_SIZE = 50
 MAX_HOT_LIMIT = 20
-
-
-def _split_csv(raw: str | None) -> list[str]:
-    """逗号分隔多值解析，去空白与空项。"""
-    if not raw:
-        return []
-    return [part.strip() for part in raw.split(",") if part.strip()]
 
 
 def _validate_enum(values: list[str], allowed: tuple[str, ...], field: str) -> None:
@@ -53,12 +47,12 @@ def list_teas(
     page_size: int,
 ) -> TeaListResponse:
     """茶品列表 + 筛选 + 排序 + 分页（FR-1.1 ~ FR-1.6）"""
-    categories = _split_csv(category)
+    categories = split_csv(category)
     _validate_enum(categories, CATEGORY_VALUES, "category")
 
-    provinces = _split_csv(origin)
+    provinces = split_csv(origin)
 
-    seasons = _split_csv(season)
+    seasons = split_csv(season)
     _validate_enum(seasons, SEASON_VALUES, "season")
 
     if sort not in SORT_VALUES:

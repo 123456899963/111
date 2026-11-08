@@ -1,22 +1,26 @@
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     # === 基础 ===
     APP_NAME: str = "茶·图鉴 API"
-    DEBUG: bool = True
+    # 默认关闭调试，避免未配置 .env 时把 SQL 与堆栈写入日志（SECURITY S-30）
+    DEBUG: bool = False
 
     # === 数据库 ===
     MYSQL_HOST: str = "localhost"
     MYSQL_PORT: int = 3306
     MYSQL_USER: str = "root"
-    MYSQL_PASSWORD: str = "root"
+    # 不内置默认密码；由 .env 或环境变量注入
+    MYSQL_PASSWORD: str = ""
     MYSQL_DATABASE: str = "tea_guide"
 
     # === 会话 ===
-    SECRET_KEY: str = "change-me-in-production-please-use-a-long-random-string"
+    # 不内置默认密钥；必须注入随机值，否则拒绝启动（SECURITY S-31）
+    SECRET_KEY: str = ""
     SESSION_EXPIRE_DAYS: int = 30  # PRD FR-4.3：30 天 Cookie 会话
 
     # === CORS ===
@@ -36,6 +40,16 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str = "admin"
     # 不在代码中内置默认密码（SECURITY S-31）；开发/测试由 .env 注入
     ADMIN_PASSWORD: str = ""
+
+    @model_validator(mode="after")
+    def _validate_secret_key(self) -> "Settings":
+        """缺少签名密钥时直接拒绝启动，避免用可预测密钥签发会话。
+
+        生成方式：python -c "import secrets; print(secrets.token_urlsafe(48))"
+        """
+        if not self.SECRET_KEY.strip():
+            raise ValueError("SECRET_KEY 未配置：请在 .env 或环境变量中注入随机密钥")
+        return self
 
     @property
     def DATABASE_URL(self) -> str:

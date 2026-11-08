@@ -10,10 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "backend" / "app"
 
 # 已知遗留：这些文件允许暂时直连查询，但不得新增到其他文件。
-KNOWN_DEBT = {
-    "services/teas.py",
-    "services/auth.py",
-}
+# 历史遗留已清理完毕，当前为空集合；如再次出现需在评审中登记并限期修复。
+KNOWN_DEBT: set[str] = set()
 
 
 class QueryVisitor(ast.NodeVisitor):

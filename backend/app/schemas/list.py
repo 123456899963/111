@@ -4,9 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, field_serializer
 
-
-def _iso_z(v: datetime) -> str:
-    return v.strftime("%Y-%m-%dT%H:%M:%SZ")
+from app.schemas._common import iso_z
 
 
 class ShareBrief(BaseModel):
@@ -18,7 +16,7 @@ class ShareBrief(BaseModel):
 
     @field_serializer("created_at")
     def serialize_created_at(self, v: datetime) -> str:
-        return _iso_z(v)
+        return iso_z(v)
 
 
 class ListItem(BaseModel):
@@ -37,7 +35,7 @@ class ListItem(BaseModel):
 
     @field_serializer("favorited_at")
     def serialize_favorited_at(self, v: datetime) -> str:
-        return _iso_z(v)
+        return iso_z(v)
 
 
 class ListData(BaseModel):
@@ -53,7 +51,7 @@ class ListData(BaseModel):
 
     @field_serializer("created_at", "updated_at")
     def serialize_datetime(self, v: datetime) -> str:
-        return _iso_z(v)
+        return iso_z(v)
 
 
 class TitleUpdateRequest(BaseModel):
@@ -69,7 +67,7 @@ class TitleUpdateData(BaseModel):
 
     @field_serializer("updated_at")
     def serialize_updated_at(self, v: datetime) -> str:
-        return _iso_z(v)
+        return iso_z(v)
 
 
 class NoteUpdateRequest(BaseModel):

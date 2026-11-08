@@ -122,6 +122,13 @@ def test_list_filter_origin_province_prefix():
     assert any(t["name"] == "西湖龙井" for t in items)
 
 
+def test_list_filter_origin_wildcard_is_escaped():
+    # "%" 应按字面量处理，不能退化为全表匹配（origin 通配符转义回归）
+    resp = client.get("/api/v1/teas", params={"origin": "%"})
+    assert resp.status_code == 200
+    assert resp.json()["data"]["items"] == []
+
+
 def test_list_filter_season():
     resp = client.get("/api/v1/teas", params={"season": "明前"})
     items = resp.json()["data"]["items"]

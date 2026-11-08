@@ -10,7 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_serializer, field_validator
 
-from app.schemas.tea import _iso_z, _normalize_optional_text
+from app.schemas._common import iso_z
+from app.schemas.tea import _normalize_optional_text
 
 
 class AdminTeaListItem(BaseModel):
@@ -31,7 +32,7 @@ class AdminTeaListItem(BaseModel):
 
     @field_serializer("created_at", "updated_at")
     def serialize_datetime(self, value: datetime) -> str:
-        return _iso_z(value)
+        return iso_z(value)
 
 
 class AdminTeaListResponse(BaseModel):
@@ -74,7 +75,7 @@ class ToggleResponse(BaseModel):
 
     @field_serializer("updated_at")
     def serialize_datetime(self, value: datetime) -> str:
-        return _iso_z(value)
+        return iso_z(value)
 
 
 class CategoryDistribution(BaseModel):

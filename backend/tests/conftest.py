@@ -19,6 +19,12 @@ def _use_test_database() -> None:
     # 上传目录同样隔离，避免测试的清理逻辑误删开发环境的真实图片
     os.environ["UPLOAD_DIR"] = str(Path(tempfile.gettempdir()) / "tea_guide_test_uploads")
 
+    # 测试固定使用 http://testserver，必须保持 DEBUG=true，
+    # 否则会话 Cookie 带 Secure 标记不会被回传，全部鉴权用例会 401。
+    os.environ.setdefault("DEBUG", "true")
+    # 测试环境注入专用签名密钥（生产环境禁止使用）
+    os.environ.setdefault("SECRET_KEY", "test-only-secret-key-not-for-production")
+
     test_url = os.environ.get("DATABASE_URL_TEST")
     if test_url:
         from sqlalchemy.engine import make_url

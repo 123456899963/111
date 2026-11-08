@@ -98,11 +98,11 @@ d:\项目二\
 
 | 遗留 | 现状 | 处理规则 |
 |---|---|---|
-| Element Plus 被前台使用 | [main.ts](frontend/src/main.ts) 全局注册；`api/request.ts`、`stores/toast.ts` 直接引用 | 不新增；触达相关逻辑时改为 CSS 变量/自研组件 |
-| Service 直连查询 | `services/auth.py`、`services/teas.py` 仍 `db.query` | 不新增；触达该查询时下沉到 `repositories/` |
-| Router/Service 返回 ORM | 部分端点直接返回 ORM 对象 | 不新增；触达该端点时补 Schema 转换 |
-| 业务端点未实现 | `routers/admin.py` 等仍是占位函数 | 按 API_CONTRACT 逐步补齐，不得假实现 |
-| 测试未覆盖 TEST_PLAN | 仅健康检查，60 条用例尚未落地 | 按 TEST_PLAN 逐步补，不得声称已覆盖 |
+| Element Plus 前台使用（已修复） | 前台 `AppToast` 自研；`main.ts` 仅在 `/admin` 路由按需加载 Element Plus | 前台禁止再引入；后台保持按需加载 |
+| Service 直连查询（已修复） | 查询已全部下沉到 `repositories/`；`check_layers.py` 基线为空 | 保持五层边界，禁止回流 |
+| Router/Service 返回 ORM（已修复） | 端点统一经 Schema 序列化后返回 | 保持统一响应体，禁止直接返回 ORM |
+| 业务端点未实现（已修复） | 29 个业务端点已按 API_CONTRACT 实现 | 新增端点必须同步契约与测试 |
+| 测试未覆盖 TEST_PLAN（已修复） | TEST_PLAN 60 条用例已落地，后端全量 106 条测试通过 | 新增业务代码必须同步补测 |
 | 例外登记 | 运行 `python scripts/check_layers.py` / `check_frontend.py` 查看最新列表 | 修复后同步更新脚本基线 |
 
 ## 4. 前端开发规范
@@ -263,11 +263,11 @@ B 类输出技术方案后即可编码；C 类必须等用户明确答复。
 
 ## 13. 当前已知待办
 
-- [ ] `backend/app/repositories/` 目录待创建，`services/auth.py`、`services/teas.py` 的查询需下沉
-- [ ] `core/auth_deps.py`（`get_current_user` / `get_admin_user`）待创建 —— 安全 P0
-- [ ] `main.py` 未注册 `register_exception_handlers`，业务异常会退化为 500 —— 安全 P0
-- [ ] `SECRET_KEY` 默认值、`DEBUG=True`、种子管理员密码 `admin123` 上线前必须轮换 —— 安全 P0
-- [ ] bcrypt 实际为默认 cost=12，与文档 cost=10 不一致，实现阶段需统一（SECURITY S-01）
-- [ ] `routers/admin.py` 等占位端点需按 API_CONTRACT 补齐，不得保留空实现
-- [ ] TEST_PLAN 60 条用例待落地；当前仅健康检查
-- [ ] §3.1 基线遗留需在触达任务中逐步清理
+- [x] `backend/app/repositories/` 已创建，`services/auth.py`、`services/teas.py` 的查询已下沉
+- [x] `core/auth_deps.py`（`get_current_user` / `get_admin_user`）已创建 —— 安全 P0
+- [x] `main.py` 已注册 `register_exception_handlers`，业务异常统一映射 —— 安全 P0
+- [x] `SECRET_KEY` / `DEBUG` 代码默认值已收紧（2026-11-09，缺失 `SECRET_KEY` 拒绝启动）；生产部署仍需注入随机密钥与种子管理员密码 —— 安全 P0
+- [x] bcrypt 已统一为 `cost=10`（`_BCRYPT_ROUNDS`，对齐 SECURITY S-01）
+- [x] `routers/admin.py` 等端点已按 API_CONTRACT 补齐
+- [x] TEST_PLAN 60 条用例已落地；后端全量 106 条测试通过
+- [x] §3.1 基线遗留已在 2026-11-09 审查中清理（五层 / 前台 UI 遗留均为 0）

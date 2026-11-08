@@ -4,9 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_serializer
 
-
-def _iso_z(v: datetime) -> str:
-    return v.strftime("%Y-%m-%dT%H:%M:%SZ")
+from app.schemas._common import iso_z
 
 
 class ShareGenerateData(BaseModel):
@@ -17,7 +15,7 @@ class ShareGenerateData(BaseModel):
 
     @field_serializer("created_at")
     def serialize_created_at(self, v: datetime) -> str:
-        return _iso_z(v)
+        return iso_z(v)
 
 
 class ShareRevokeData(BaseModel):
@@ -27,7 +25,7 @@ class ShareRevokeData(BaseModel):
 
     @field_serializer("revoked_at")
     def serialize_revoked_at(self, v: datetime) -> str:
-        return _iso_z(v)
+        return iso_z(v)
 
 
 class ShareViewItem(BaseModel):
@@ -54,7 +52,7 @@ class ShareViewData(BaseModel):
 
     @field_serializer("created_at")
     def serialize_created_at(self, v: datetime) -> str:
-        return _iso_z(v)
+        return iso_z(v)
 
 
 class CopyResult(BaseModel):

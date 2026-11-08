@@ -8,11 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.operation_log import OperationLog
 from app.models.tea import Tea, TeaTips
-
-
-def _escape_like(value: str) -> str:
-    """转义 LIKE 通配符，避免用户输入 % / _ 被解释为模式。"""
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+from app.repositories._common import escape_like
 
 
 def list_teas(
@@ -33,7 +29,7 @@ def list_teas(
     if is_active is not None:
         query = query.filter(Tea.is_active.is_(is_active))
     if keyword:
-        pattern = f"%{_escape_like(keyword)}%"
+        pattern = f"%{escape_like(keyword)}%"
         query = query.filter(
             or_(
                 Tea.name.like(pattern, escape="\\"),

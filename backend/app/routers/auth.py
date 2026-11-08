@@ -6,16 +6,19 @@
 - 不使用 Token / Authorization 头（API_CONTRACT §1.5）
 """
 
+import re
+
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.response import ok
+from app.core.response import ValidationError, ok
 from app.core.security import create_session_token
 from app.repositories import user_repo
 from app.schemas.auth import (
+    USERNAME_PATTERN,
     LoginRequest,
     RegisterRequest,
     UsernameAvailabilityResponse,
@@ -54,13 +57,9 @@ def username_availability(
     db: Session = Depends(get_db),
 ):
     """用户名可用性查询（API_CONTRACT §4.1.1）。游客可调用。"""
-    import re
-
     trimmed = username.strip()
-    # 服务端正则兜底（Query 只卡长度）
-    if not re.match(r"^[A-Za-z0-9\u4e00-\u9fa5]{3,20}$", trimmed):
-        from app.core.response import ValidationError
-
+    # 服务端正则兜底（Query 只卡长度），复用 Schema 中的同一条规则
+    if not re.match(USERNAME_PATTERN, trimmed):
         raise ValidationError
     existing = user_repo.get_by_username(db, trimmed)
     return ok(

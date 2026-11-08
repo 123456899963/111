@@ -11,12 +11,8 @@ SRC = ROOT / "frontend" / "src"
 ELEMENT_RE = re.compile(r"(from\s+['\"]element-plus['\"]|require\(['\"]element-plus['\"]\))")
 HEX_RE = re.compile(r"#[0-9a-fA-F]{3,6}\b")
 
-# 基线遗留：全局注册/前台直接使用 Element Plus（后续任务触达时修复）。
-ELEMENT_ALLOWED = {
-    "main.ts",
-    "api/request.ts",
-    "stores/toast.ts",
-}
+# 基线遗留：已清理完毕；前台任何文件（含全局注册）都不得引用 Element Plus。
+ELEMENT_ALLOWED: set[str] = set()
 ELEMENT_ALLOWED_DIRS = {"views/admin"}
 # 设计 Token 文件允许定义 HEX；其他文件只能引用 CSS 变量。
 HEX_ALLOWED = {"style.css"}

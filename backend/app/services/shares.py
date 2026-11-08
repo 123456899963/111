@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.response import (
+    InternalError,
     ShareAlreadyRevoked,
     ShareNotFound,
     UserForbidden,
@@ -81,7 +82,7 @@ def generate(db: Session, user_id: int) -> ShareGenerateData:
                     is_new=False,
                 )
 
-    raise RuntimeError("分享令牌生成失败")
+    raise InternalError
 
 
 def revoke(db: Session, *, user_id: int, token: str) -> ShareRevokeData:

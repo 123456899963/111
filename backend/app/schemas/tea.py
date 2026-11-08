@@ -18,6 +18,8 @@ from pydantic import (
     model_validator,
 )
 
+from app.schemas._common import iso_z
+
 CATEGORY_VALUES = ("green", "white", "yellow", "red", "oolong", "dark")
 SEASON_VALUES = ("明前", "雨前", "春茶", "夏茶", "秋茶", "冬茶")
 FERMENTATION_VALUES = ("不发酵", "微发酵", "半发酵", "全发酵", "后发酵")
@@ -26,11 +28,6 @@ SORT_VALUES = ("newest", "favorite")
 CategoryValue = Literal["green", "white", "yellow", "red", "oolong", "dark"]
 SeasonValue = Literal["明前", "雨前", "春茶", "夏茶", "秋茶", "冬茶"]
 FermentationValue = Literal["不发酵", "微发酵", "半发酵", "全发酵", "后发酵"]
-
-
-def _iso_z(v: datetime) -> str:
-    """naive UTC DATETIME → 'YYYY-MM-DDTHH:mm:ssZ'"""
-    return v.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class TeaListItem(BaseModel):
@@ -108,7 +105,7 @@ class TeaDetail(BaseModel):
 
     @field_serializer("created_at", "updated_at")
     def serialize_datetime(self, v: datetime) -> str:
-        return _iso_z(v)
+        return iso_z(v)
 
 
 class CategoryCount(BaseModel):

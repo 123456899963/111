@@ -57,6 +57,52 @@
 
 ## 4. 记录
 
+## 2026-11-09｜全项目代码审查问题修复（S-1/S-2/G-1~G-6/O-1~O-3）
+
+- 任务编号 / 分级：REVIEW-20261109 / B（无契约变更；涉及安全默认值与前台依赖调整）
+- 需求来源：用户全项目代码审查报告的 10 个检查维度
+- 主要变更：
+  - `backend/app/core/config.py`：`DEBUG` 默认改为 `False`；`SECRET_KEY`/`MYSQL_PASSWORD` 取消弱默认值；新增启动校验，缺失 `SECRET_KEY` 拒绝启动（S-31）
+  - `backend/alembic.ini`：移除 `root:root` 明文，改为占位值（实际连接仍由 `env.py` 注入）
+  - `backend/app/repositories/tea_repo.py`：`origin` 筛选补 LIKE 通配符转义；`get_by_id` 增加 `with_tips` 参数
+  - `backend/app/core/security.py`：`SESSION_EXPIRE_DAYS <= 0` 时显式判定立即过期（覆盖配置值分支）
+  - `backend/app/routers/auth.py`：内联 import 上移，复用 `USERNAME_PATTERN`
+  - `backend/app/services/favorites.py`：收藏查询跳过 `tea_tips` 联表
+  - `backend/app/services/shares.py`：令牌重试耗尽改抛 `InternalError`，保持统一响应体
+  - 新增 `repositories/_common.py`、`services/_common.py`、`schemas/_common.py`，消除 `escape_like`/`split_csv`/`iso_z` 重复定义
+  - `frontend/src/stores/toast.ts` + `components/AppToast.vue`：自研 Toast 替代 `ElMessage`
+  - `frontend/src/api/request.ts`：错误提示改用 Toast Store
+  - `frontend/src/main.ts`：Element Plus 改为仅在 `/admin` 路由动态加载
+  - `frontend/src/views/NotFound.vue`：`el-button` 改自研按钮
+  - `frontend/src/types/index.ts`：新增 `ApiEnvelope<T>` 并统一 5 个 api 模块；删除未使用 `ShareToken`
+  - 删除 `components/HelloWorld.vue`、`assets/{hero.png,vite.svg,vue.svg}`、`favorite_repo.count_by_user`
+  - `scripts/check_layers.py` / `scripts/check_frontend.py`：清空历史遗留基线
+  - `backend/tests/test_teas.py`：新增 origin 通配符转义回归用例
+  - `backend/tests/conftest.py`：测试环境注入 `DEBUG`/`SECRET_KEY`
+  - `AGENTS.md` §3.1：Element Plus 条目更新为已修复
+- 契约 / 数据 / 安全影响：无端点、字段、表结构变更；SECURITY S-30/S-31 的代码兜底加强（默认值收紧 + 启动校验），未同步修改安全控制条目
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `cd backend; python -m ruff check app tests` | 后端风格 | 通过 | —— |
+  | `cd backend; python -m ruff format --check app tests` | 后端格式 | 通过 | —— |
+  | `cd backend; python -m pytest -q` | 后端全量 | 106 passed | 含新增 origin 转义用例 |
+  | `cd frontend; npm run lint` | 前端 ESLint | 通过 | —— |
+  | `cd frontend; npm run typecheck` | 前端类型 | 通过 | —— |
+  | `cd frontend; npm run test:run` | 前端单测 | 30 passed | 纯函数用例 |
+  | `cd frontend; npm run format:check` | 前端格式 | 通过 | —— |
+  | `cd frontend; npm run build` | 生产构建 | 通过 | Element Plus 已拆分为 admin 异步 chunk |
+  | `python scripts/check_all.py` | 全量静态检查 | 全部通过 | 五层 0 遗留、前台 UI 0 遗留 |
+
+- 验收结论：通过
+- 基线例外：无（AGENTS §3.1 Element Plus 遗留已清理）
+- 遗留问题：
+  - O-4 `ORDER BY RAND()` 未调整：当前茶品量级（<1000）下成本可接受，改为随机偏移会引入额外 count/offset 查询与分布偏差，待数据量增长后再评估
+  - O-5 初始 Alembic 迁移未生成：当前建表仍以 `database/init.sql` 为准，正式上线前需在空库生成 baseline migration 并对现有环境 `alembic stamp`
+- 回滚方式：`git revert` 本次提交
+- 关联 ADR：无
+
 ## 2026-11-08｜G5 测试缺陷修复（D-01 ~ D-05）
 
 - 任务编号 / 分级：TASK-20261108-G5FIX / **B**（未改 API 契约、表结构、权限/认证机制与安全控制口径；D-04 默认密码置空为向既有 SECURITY S-31 对齐，属实现向文档对齐）

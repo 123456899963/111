@@ -1,6 +1,6 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
 import router from '@/router'
+import { useToastStore } from '@/stores/toast'
 
 // 创建 axios 实例 —— 统一配置 + 拦截器
 const request = axios.create({
@@ -19,7 +19,7 @@ request.interceptors.response.use(
     const body = res.data
     if (body && typeof body.code === 'number' && body.code !== 0) {
       // 业务错误（后端 code != 0）
-      ElMessage.error(body.message || '请求失败')
+      useToastStore().error(body.message || '请求失败')
       return Promise.reject(new Error(body.message))
     }
     return body
@@ -28,21 +28,22 @@ request.interceptors.response.use(
     const status = err.response?.status
     const body = err.response?.data
     const msg = body?.message || err.message
+    const toast = useToastStore()
 
     if (status === 401) {
       // 会话过期或未登录：非公开接口才跳转登录页
       const url: string = err.config?.url || ''
       const isPublic = PUBLIC_PATHS.some((p) => url.endsWith(p))
       if (url.startsWith('/admin')) {
-        ElMessage.warning('管理员会话已过期，请重新登录')
+        toast.warn('管理员会话已过期，请重新登录')
         router.push({ name: 'admin-login' })
       } else if (!isPublic) {
         const redirect = encodeURIComponent(window.location.pathname + window.location.search)
-        ElMessage.warning('登录已过期，请重新登录')
+        toast.warn('登录已过期，请重新登录')
         router.push({ path: '/login', query: { redirect } })
       }
     } else {
-      ElMessage.error(msg || '网络异常')
+      toast.error(msg || '网络异常')
     }
     return Promise.reject(err)
   },

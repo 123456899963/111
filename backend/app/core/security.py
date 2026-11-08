@@ -44,11 +44,11 @@ def verify_session_token(token: str, max_age_days: int | None = None) -> int | N
     """解析 Cookie 令牌，返回 user_id；过期或无效返回 None"""
     # 0/负数是 TEST_PLAN §2 约定的“立即过期”模拟值：
     # itsdangerous 只比较 age > max_age，同秒签发的令牌 age=0 不会过期，
-    # 因此在调用库之前显式判定，避免过期分支失效。
-    if max_age_days is not None and max_age_days <= 0:
+    # 因此在使用库之前显式判定（配置值与显式传参同等处理）。
+    days = settings.SESSION_EXPIRE_DAYS if max_age_days is None else max_age_days
+    if days <= 0:
         return None
     try:
-        days = settings.SESSION_EXPIRE_DAYS if max_age_days is None else max_age_days
         max_age = days * 86400
         data = _serializer.loads(token, max_age=max_age)
         return data.get("uid")

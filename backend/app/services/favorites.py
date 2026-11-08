@@ -24,7 +24,8 @@ def _state(tea: Tea, is_favorited: bool) -> FavoriteState:
 
 
 def _get_tea_or_404(db: Session, tea_id: int) -> Tea:
-    tea = tea_repo.get_by_id(db, tea_id)
+    # 收藏状态只需 is_active / favorite_count，无需加载 tea_tips
+    tea = tea_repo.get_by_id(db, tea_id, with_tips=False)
     if not tea:
         raise TeaNotFound
     return tea

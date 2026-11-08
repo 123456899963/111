@@ -5,11 +5,15 @@
  */
 
 // ===== 通用 =====
-export interface ApiResponse<T = unknown> {
+/** 后端统一响应体（成功/失败共用） */
+export interface ApiEnvelope<T> {
   code: number
   message: string
-  data: T | null
+  data: T
 }
+
+/** 数据可为空的响应（如 logout） */
+export type ApiResponse<T = unknown> = ApiEnvelope<T | null>
 
 export interface PaginationParams {
   page?: number
@@ -205,12 +209,6 @@ export interface CopyResult {
   added: number
   skipped: number
   total: number
-}
-
-// ===== 分享（旧类型，保留兼容） =====
-export interface ShareToken {
-  token: string
-  title: string
 }
 
 // ===== 管理员后台（API_CONTRACT §4.6） =====

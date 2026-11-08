@@ -8,11 +8,7 @@ from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.tea import Tea
-
-
-def _escape_like(value: str) -> str:
-    """转义 LIKE 通配符，避免用户输入 % / _ 被解释为模式。"""
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+from app.repositories._common import escape_like
 
 
 def list_teas(
@@ -32,12 +28,15 @@ def list_teas(
     if categories:
         query = query.filter(Tea.category.in_(categories))
     if provinces:
-        # 省级前缀匹配（API_CONTRACT §4.2.1：如 "浙江%"）
-        query = query.filter(or_(*[Tea.origin.like(f"{p}%") for p in provinces]))
+        # 省级前缀匹配（API_CONTRACT §4.2.1：如 "浙江%"）；
+        # 转义通配符，避免输入 % / _ 使筛选退化为全表
+        query = query.filter(
+            or_(*[Tea.origin.like(f"{escape_like(p)}%", escape="\\") for p in provinces])
+        )
     if seasons:
         query = query.filter(Tea.season.in_(seasons))
     if keyword:
-        kw = f"%{_escape_like(keyword)}%"
+        kw = f"%{escape_like(keyword)}%"
         query = query.filter(
             or_(
                 Tea.name.like(kw, escape="\\"),
@@ -103,9 +102,12 @@ def count_by_province(db: Session) -> list[tuple[str, int]]:
     return [(row.province, row.cnt) for row in rows]
 
 
-def get_by_id(db: Session, tea_id: int) -> Tea | None:
-    """按主键查询（含小贴士，用于详情扁平化）。"""
-    return db.query(Tea).options(joinedload(Tea.tips)).filter(Tea.id == tea_id).first()
+def get_by_id(db: Session, tea_id: int, *, with_tips: bool = True) -> Tea | None:
+    """按主键查询；with_tips=False 时跳过小贴士联表（收藏等无需详情场景）。"""
+    query = db.query(Tea)
+    if with_tips:
+        query = query.options(joinedload(Tea.tips))
+    return query.filter(Tea.id == tea_id).first()
 
 
 def get_by_id_for_update(db: Session, tea_id: int) -> Tea | None:

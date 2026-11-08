@@ -31,6 +31,7 @@ from app.schemas.tea import (
     TeaUpdateRequest,
 )
 from app.services import upload as upload_service
+from app.services._common import split_csv
 
 DEFAULT_PAGE_SIZE = 12
 MAX_PAGE_SIZE = 50
@@ -45,12 +46,6 @@ TIPS_FIELD_TO_COLUMN = {
 }
 
 
-def _split_csv(raw: str | None) -> list[str]:
-    if not raw:
-        return []
-    return [part.strip() for part in raw.split(",") if part.strip()]
-
-
 def list_teas(
     db: Session,
     *,
@@ -62,7 +57,7 @@ def list_teas(
     page_size: int,
 ) -> AdminTeaListResponse:
     """后台茶品列表：包含下架茶品，支持状态筛选与分页（API_CONTRACT §4.6.1）。"""
-    categories = _split_csv(category)
+    categories = split_csv(category)
     invalid = [item for item in categories if item not in CATEGORY_VALUES]
     if invalid:
         raise TeaGuideError(40000, "category 取值非法")

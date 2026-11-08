@@ -4,7 +4,7 @@
 事务边界由 Service 层控制。
 """
 
-from sqlalchemy import case, func, update
+from sqlalchemy import case, update
 from sqlalchemy.orm import Session
 
 from app.models.favorite import FavoriteItem
@@ -53,13 +53,6 @@ def decrement_favorite_count(db: Session, tea_id: int) -> None:
                 else_=0,
             )
         )
-    )
-
-
-def count_by_user(db: Session, user_id: int) -> int:
-    """用户收藏条目总数（含已下架占位）。"""
-    return (
-        db.query(func.count(FavoriteItem.id)).filter(FavoriteItem.user_id == user_id).scalar() or 0
     )
 
 
