@@ -5,9 +5,11 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import CategoryTag from '@/components/CategoryTag.vue'
 import TeaCard from '@/components/TeaCard.vue'
+import FavoriteButton from '@/components/FavoriteButton.vue'
 import { useUserStore } from '@/stores/user'
 import { useToastStore } from '@/stores/toast'
 import { getHotTeas, getTeaDetail, getTeaList } from '@/api/teas'
+import { getFavoriteStatus } from '@/api/favorites'
 import type { Tea, TeaListItem } from '@/types'
 
 const route = useRoute()
@@ -23,6 +25,7 @@ const related = ref<TeaListItem[]>([])
 const fallbackHot = ref<TeaListItem[]>([])
 const errorMessage = ref('')
 const imageFailed = ref(false)
+const favoriteCount = ref(0)
 
 const hasImage = computed(() => !!tea.value?.main_image_url && !imageFailed.value)
 
@@ -53,7 +56,7 @@ const hasBrew = computed(
     (tea.value.water_temp != null || tea.value.tea_amount != null || tea.value.brew_time != null),
 )
 
-const favoriteText = computed(() => (tea.value?.favorite_count ?? 0).toLocaleString('zh-CN'))
+const favoriteText = computed(() => favoriteCount.value.toLocaleString('zh-CN'))
 
 watch(
   () => route.params.id,
@@ -90,6 +93,7 @@ async function load() {
       void loadFallbackHot()
       return
     }
+    favoriteCount.value = res.data.favorite_count
     state.value = 'ready'
     void loadRelated(tea.value.id, tea.value.category)
   } catch (err) {
@@ -131,13 +135,34 @@ async function loadFallbackHot() {
   }
 }
 
-/** 收藏/笔记/分享等写操作属阶段 3：未登录先登录，已登录提示未开放 */
-function onFutureAction() {
+/** 需要登录的操作：未登录先跳转，登录后回到当前页 */
+function requireLogin(): boolean {
   if (!userStore.isLoggedIn) {
-    router.push({ name: 'login', query: { redirect: route.fullPath } })
-    return
+    void router.push({ name: 'login', query: { redirect: route.fullPath } })
+    return false
   }
-  toast.info('该功能将在下一阶段开放')
+  return true
+}
+
+/** 写笔记：必须已收藏，否则后端 40430；前端只做体验提示 */
+async function onNoteAction() {
+  if (!requireLogin() || !tea.value) return
+  try {
+    const res = await getFavoriteStatus(tea.value.id)
+    if (!res.data.is_favorited) {
+      toast.info('请先收藏该茶品，再写品鉴笔记')
+      return
+    }
+    void router.push({ name: 'my-list', query: { note: String(tea.value.id) } })
+  } catch {
+    // 错误提示已由请求拦截器统一处理
+  }
+}
+
+/** 分享入口在我的清单页 */
+function onShareAction() {
+  if (!requireLogin()) return
+  void router.push({ name: 'my-list', query: { share: '1' } })
 }
 
 function retry() {
@@ -181,7 +206,11 @@ function retry() {
               :alt="tea.name"
               @error="imageFailed = true"
             />
-            <div v-else class="detail-header__image detail-header__image--placeholder" aria-hidden="true">
+            <div
+              v-else
+              class="detail-header__image detail-header__image--placeholder"
+              aria-hidden="true"
+            >
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path
                   d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19.2 2.5c1 1.66.6 6-2 9-2 2.4-6.2 3-6.2 3zM2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"
@@ -211,13 +240,16 @@ function retry() {
             </div>
 
             <div class="detail-header__actions">
-              <button type="button" class="btn btn--primary" @click="onFutureAction">
-                ♡ 加入我的清单
-              </button>
-              <button type="button" class="btn btn--secondary" @click="onFutureAction">
+              <FavoriteButton
+                variant="primary"
+                :tea-id="tea.id"
+                :count="favoriteCount"
+                @change="favoriteCount = $event"
+              />
+              <button type="button" class="btn btn--secondary" @click="onNoteAction">
                 ✏️ 写品鉴笔记
               </button>
-              <button type="button" class="btn btn--ghost" @click="onFutureAction">
+              <button type="button" class="btn btn--ghost" @click="onShareAction">
                 ↗️ 分享清单
               </button>
             </div>
@@ -388,7 +420,12 @@ function retry() {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, var(--color-bg-muted) 0%, var(--color-border) 50%, var(--color-bg-muted) 100%);
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-muted) 0%,
+    var(--color-border) 50%,
+    var(--color-bg-muted) 100%
+  );
   animation: skeleton-shimmer 1.5s infinite;
 }
 
@@ -724,7 +761,10 @@ function retry() {
   font-size: var(--text-body);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    color 0.2s;
   white-space: nowrap;
 }
 

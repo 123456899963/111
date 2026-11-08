@@ -121,7 +121,8 @@ const categoryOptions = computed(() => {
 
 const activeFilters = computed(() => listActiveFilters(state))
 const hasAnyFilter = computed(
-  () => !!state.keyword || state.categories.length + state.origins.length + state.seasons.length > 0,
+  () =>
+    !!state.keyword || state.categories.length + state.origins.length + state.seasons.length > 0,
 )
 
 const breadcrumbLabel = computed(() => {
@@ -150,9 +151,7 @@ const pageItems = computed<Array<number | 'ellipsis'>>(() => {
   return items
 })
 
-const resultText = computed(() =>
-  teaStore.loading ? '加载中…' : `共 ${teaStore.total} 款茶`,
-)
+const resultText = computed(() => (teaStore.loading ? '加载中…' : `共 ${teaStore.total} 款茶`))
 
 function goPage(page: number) {
   if (page < 1 || page > totalPages.value || page === teaStore.page) return
@@ -241,9 +240,15 @@ function goPage(page: number) {
           搜索：{{ state.keyword }}
           <button type="button" aria-label="移除关键词" @click="clearKeyword">×</button>
         </span>
-        <span v-for="filter in activeFilters" :key="`${filter.dimension}-${filter.value}`" class="filter-selected__pill">
+        <span
+          v-for="filter in activeFilters"
+          :key="`${filter.dimension}-${filter.value}`"
+          class="filter-selected__pill"
+        >
           {{ filter.label }}
-          <button type="button" :aria-label="`移除${filter.label}`" @click="removeFilter(filter)">×</button>
+          <button type="button" :aria-label="`移除${filter.label}`" @click="removeFilter(filter)">
+            ×
+          </button>
         </span>
         <button v-if="hasAnyFilter" type="button" class="filter-selected__clear" @click="clearAll">
           清除全部
@@ -253,7 +258,12 @@ function goPage(page: number) {
       <!-- 排序栏 -->
       <div class="sort-bar">
         <div class="sort-bar__result">{{ resultText }}</div>
-        <select class="sort-bar__select" :value="state.sort" aria-label="排序方式" @change="onSortChange">
+        <select
+          class="sort-bar__select"
+          :value="state.sort"
+          aria-label="排序方式"
+          @change="onSortChange"
+        >
           <option value="newest">最新上架</option>
           <option value="favorite">收藏最多</option>
         </select>
@@ -266,7 +276,10 @@ function goPage(page: number) {
           <div class="skeleton-card__body">
             <div class="skeleton skeleton-card__line skeleton-card__line--title"></div>
             <div class="skeleton skeleton-card__line" style="width: 60%"></div>
-            <div class="skeleton skeleton-card__line skeleton-card__line--sm" style="width: 40%"></div>
+            <div
+              class="skeleton skeleton-card__line skeleton-card__line--sm"
+              style="width: 40%"
+            ></div>
           </div>
         </div>
       </div>
@@ -638,7 +651,12 @@ function goPage(page: number) {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, var(--color-bg-muted) 0%, var(--color-border) 50%, var(--color-bg-muted) 100%);
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-muted) 0%,
+    var(--color-border) 50%,
+    var(--color-bg-muted) 100%
+  );
   animation: skeleton-shimmer 1.5s infinite;
 }
 
@@ -776,7 +794,10 @@ function goPage(page: number) {
   font-size: var(--text-body);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    color 0.2s;
   white-space: nowrap;
 }
 

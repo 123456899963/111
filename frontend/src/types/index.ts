@@ -113,7 +113,101 @@ export interface TeaListParams {
   page_size?: number
 }
 
+// ===== 收藏 =====
+/** 收藏状态（API_CONTRACT §4.3） */
+export interface FavoriteState {
+  tea_id: number
+  is_favorited: boolean
+  favorite_count: number
+}
+
+// ===== 清单与笔记 =====
+/** 当前生效分享摘要（API_CONTRACT §2.5） */
+export interface ListShareBrief {
+  token: string
+  url: string
+  created_at: string
+}
+
+/** 清单条目（含私有笔记） */
+export interface ListItem {
+  tea_id: number
+  name: string
+  category: TeaCategory
+  origin: string
+  season?: string | null
+  main_image_url?: string | null
+  favorite_count: number
+  is_available: boolean
+  tasting_note?: string | null
+  favorited_at: string
+}
+
+/** 我的默认清单（API_CONTRACT §4.4.1） */
+export interface ListData {
+  id: number
+  title: string
+  tea_count: number
+  created_at: string
+  updated_at: string
+  share?: ListShareBrief | null
+  items: ListItem[]
+}
+
+export interface TitleUpdateData {
+  id: number
+  title: string
+  updated_at: string
+}
+
+export interface NoteUpdateData {
+  tea_id: number
+  tasting_note: string | null
+}
+
 // ===== 分享 =====
+export interface ShareGenerateData {
+  token: string
+  url: string
+  created_at: string
+  is_new: boolean
+}
+
+export interface ShareRevokeData {
+  token: string
+  is_active: boolean
+  revoked_at: string
+}
+
+/** 公开分享条目（绝不含 tasting_note） */
+export interface ShareViewItem {
+  tea_id: number
+  name: string
+  category: TeaCategory
+  origin: string
+  season?: string | null
+  main_image_url?: string | null
+  favorite_count: number
+  is_available: boolean
+}
+
+export interface ShareViewData {
+  token: string
+  title: string
+  tea_count: number
+  created_at: string
+  revoked: boolean
+  is_owner: boolean
+  items: ShareViewItem[]
+}
+
+export interface CopyResult {
+  added: number
+  skipped: number
+  total: number
+}
+
+// ===== 分享（旧类型，保留兼容） =====
 export interface ShareToken {
   token: string
   title: string

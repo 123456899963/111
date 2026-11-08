@@ -36,6 +36,19 @@ def get_current_user(
     return user
 
 
+def get_optional_user(
+    tea_session: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """可选登录态（公开分享页计算 is_owner）：无/无效 Cookie 返回 None。"""
+    if not tea_session:
+        return None
+    user_id = verify_session_token(tea_session)
+    if user_id is None:
+        return None
+    return auth_service.get_by_id(db, user_id)
+
+
 def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """要求当前用户为管理员，否则 40300（SECURITY S-11）。"""
     if current_user.role != "admin":

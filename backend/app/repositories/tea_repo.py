@@ -96,3 +96,17 @@ def count_by_province(db: Session) -> list[tuple[str, int]]:
 def get_by_id(db: Session, tea_id: int) -> Tea | None:
     """按主键查询（含小贴士，用于详情扁平化）。"""
     return db.query(Tea).options(joinedload(Tea.tips)).filter(Tea.id == tea_id).first()
+
+
+def get_by_id_for_update(db: Session, tea_id: int) -> Tea | None:
+    """按主键加排他锁（收藏/取消时串行化计数，避免 FK 共享锁死锁）。"""
+    return db.query(Tea).filter(Tea.id == tea_id).with_for_update().first()
+
+
+def lock_by_ids(db: Session, tea_ids: list[int]) -> None:
+    """按 id 升序批量加锁，统一加锁顺序避免多茶品并发 copy 死锁。"""
+    if not tea_ids:
+        return
+    db.query(Tea.id).filter(Tea.id.in_(sorted(tea_ids))).order_by(
+        Tea.id.asc()
+    ).with_for_update().all()

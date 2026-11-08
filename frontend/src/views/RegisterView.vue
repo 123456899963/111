@@ -26,6 +26,11 @@ const checkingUsername = ref(false)
 const usernameAvailable = ref<boolean | null>(null)
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
+function onPasswordInput() {
+  errors.password = undefined
+  errors.form = undefined
+}
+
 // 用户名 3-20 字符，中文/英文/数字
 const USERNAME_RE = /^[A-Za-z0-9\u4e00-\u9fa5]{3,20}$/
 
@@ -113,7 +118,10 @@ async function onSubmit() {
 }
 
 function goLogin() {
-  router.push({ path: '/login', query: route.query.redirect ? { redirect: route.query.redirect as string } : {} })
+  router.push({
+    path: '/login',
+    query: route.query.redirect ? { redirect: route.query.redirect as string } : {},
+  })
 }
 </script>
 
@@ -138,8 +146,12 @@ function goLogin() {
             @input="onUsernameInput"
           />
           <div v-if="checkingUsername" class="form-hint">检查中…</div>
-          <div v-else-if="errors.username" class="form-hint form-hint--error">{{ errors.username }}</div>
-          <div v-else-if="usernameAvailable === true" class="form-hint form-hint--success">用户名可用</div>
+          <div v-else-if="errors.username" class="form-hint form-hint--error">
+            {{ errors.username }}
+          </div>
+          <div v-else-if="usernameAvailable === true" class="form-hint form-hint--success">
+            用户名可用
+          </div>
         </div>
 
         <div class="form-group">
@@ -152,7 +164,7 @@ function goLogin() {
             :class="{ 'form-input--error': errors.password }"
             placeholder="6-64 字符"
             autocomplete="new-password"
-            @input="errors.password = undefined; errors.form = undefined"
+            @input="onPasswordInput"
           />
           <div v-if="errors.password" class="form-hint form-hint--error">{{ errors.password }}</div>
         </div>
@@ -169,12 +181,18 @@ function goLogin() {
             autocomplete="new-password"
             @input="errors.confirmPassword = undefined"
           />
-          <div v-if="errors.confirmPassword" class="form-hint form-hint--error">{{ errors.confirmPassword }}</div>
+          <div v-if="errors.confirmPassword" class="form-hint form-hint--error">
+            {{ errors.confirmPassword }}
+          </div>
         </div>
 
         <div v-if="errors.form" class="form-error-bar">{{ errors.form }}</div>
 
-        <button type="submit" class="btn btn--primary btn--block" :disabled="submitting || checkingUsername">
+        <button
+          type="submit"
+          class="btn btn--primary btn--block"
+          :disabled="submitting || checkingUsername"
+        >
           {{ submitting ? '注册中…' : '注册并登录' }}
         </button>
       </form>
@@ -256,7 +274,9 @@ function goLogin() {
   border: 1px solid var(--color-border-dark);
   border-radius: var(--radius-sm);
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .form-input:focus {
@@ -300,7 +320,9 @@ function goLogin() {
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.2s, opacity 0.2s;
+  transition:
+    background 0.2s,
+    opacity 0.2s;
 }
 
 .btn--primary {

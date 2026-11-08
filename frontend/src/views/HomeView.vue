@@ -167,7 +167,14 @@ function categoryStyle(category: TeaCategory) {
         <p class="hero__subtitle">完整图鉴，清晰对比，让每一款茶都有迹可循</p>
 
         <div class="hero__search">
-          <svg class="hero__search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <svg
+            class="hero__search-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
           </svg>
@@ -198,7 +205,10 @@ function categoryStyle(category: TeaCategory) {
                   :src="tea.main_image_url"
                   :alt="tea.name"
                 />
-                <span v-else class="hero__search-suggest-item__thumb hero__search-suggest-item__thumb--empty"></span>
+                <span
+                  v-else
+                  class="hero__search-suggest-item__thumb hero__search-suggest-item__thumb--empty"
+                ></span>
                 <span class="hero__search-suggest-item__info">
                   <span class="hero__search-suggest-item__name">{{ tea.name }}</span>
                   <span class="hero__search-suggest-item__origin">{{ tea.origin }}</span>
@@ -246,7 +256,15 @@ function categoryStyle(category: TeaCategory) {
             aria-label="向左滚动"
             @click="scrollHot(-440)"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
               <path d="m15 18-6-6 6-6" />
             </svg>
           </button>
@@ -261,7 +279,15 @@ function categoryStyle(category: TeaCategory) {
             aria-label="向右滚动"
             @click="scrollHot(440)"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
               <path d="m9 18 6-6-6-6" />
             </svg>
           </button>
@@ -296,7 +322,9 @@ function categoryStyle(category: TeaCategory) {
                 <h3 class="card-random__name">{{ randomTea.name }}</h3>
                 <div class="card-random__tags">
                   <CategoryTag :category="randomTea.category" />
-                  <span class="card-random__fav">♡ {{ randomTea.favorite_count.toLocaleString('zh-CN') }}</span>
+                  <span class="card-random__fav"
+                    >♡ {{ randomTea.favorite_count.toLocaleString('zh-CN') }}</span
+                  >
                 </div>
                 <div class="card-random__brew">
                   <span v-if="randomTea.water_temp">🌡️ {{ randomTea.water_temp }}℃</span>
@@ -311,7 +339,9 @@ function categoryStyle(category: TeaCategory) {
 
             <div class="random__desc">
               <h3>🎲 随机发现</h3>
-              <p>不知道喝什么？点下面按钮，让命运为你选一款。每次都不一样，说不定就能遇到你的下一杯心头好。</p>
+              <p>
+                不知道喝什么？点下面按钮，让命运为你选一款。每次都不一样，说不定就能遇到你的下一杯心头好。
+              </p>
               <button
                 type="button"
                 class="random__shuffle-btn"
@@ -319,7 +349,15 @@ function categoryStyle(category: TeaCategory) {
                 :disabled="randomLoading"
                 @click="shuffle"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
                   <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
                   <path d="M21 3v5h-5" />
                   <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
@@ -440,12 +478,16 @@ function categoryStyle(category: TeaCategory) {
   color: var(--color-text-primary);
   box-shadow: var(--shadow-hero);
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .hero__search-input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 0 0 3px rgba(139, 115, 85, 0.12);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.12),
+    0 0 0 3px rgba(139, 115, 85, 0.12);
 }
 
 .hero__search-icon {
@@ -562,7 +604,10 @@ function categoryStyle(category: TeaCategory) {
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
   text-align: center;
-  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s,
+    border-color 0.2s;
   overflow: hidden;
 }
 
@@ -684,7 +729,9 @@ function categoryStyle(category: TeaCategory) {
   align-items: center;
   justify-content: center;
   color: var(--color-text-secondary);
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
   z-index: 5;
 }
 
@@ -721,7 +768,9 @@ function categoryStyle(category: TeaCategory) {
   border-radius: var(--radius-xl);
   overflow: hidden;
   border: 1px solid var(--color-border);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 .card-random:hover {
@@ -827,7 +876,9 @@ function categoryStyle(category: TeaCategory) {
   font-size: var(--text-body);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .random__shuffle-btn:hover:not(:disabled) {

@@ -46,7 +46,15 @@ async function onSubmit() {
 }
 
 function goRegister() {
-  router.push({ path: '/register', query: route.query.redirect ? { redirect: route.query.redirect as string } : {} })
+  router.push({
+    path: '/register',
+    query: route.query.redirect ? { redirect: route.query.redirect as string } : {},
+  })
+}
+
+function onPasswordInput() {
+  errors.password = undefined
+  errors.form = undefined
 }
 </script>
 
@@ -83,7 +91,7 @@ function goRegister() {
             :class="{ 'form-input--error': errors.password }"
             placeholder="请输入密码"
             autocomplete="current-password"
-            @input="errors.password = undefined; errors.form = undefined"
+            @input="onPasswordInput"
           />
           <div v-if="errors.password" class="form-hint form-hint--error">{{ errors.password }}</div>
         </div>
@@ -171,7 +179,9 @@ function goRegister() {
   border: 1px solid var(--color-border-dark);
   border-radius: var(--radius-sm);
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .form-input:focus {
@@ -215,7 +225,9 @@ function goRegister() {
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.2s, opacity 0.2s;
+  transition:
+    background 0.2s,
+    opacity 0.2s;
 }
 
 .btn--primary {
