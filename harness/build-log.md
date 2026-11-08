@@ -57,6 +57,33 @@
 
 ## 4. 记录
 
+## 2026-11-08｜阶段 5（G5）系统测试
+
+- 任务编号 / 分级：TASK-20261108-G5 / 测试任务（不改生产代码）
+- 需求来源：TEST_PLAN v1.0 §5 / §7.1；用户阶段 5 系统测试要求
+- 主要变更：
+  - `backend/tests/test_g5_system.py`：新增 21 条补充用例，函数名携带 TC 编号，补齐认证边界、会话过期/篡改、管理员校验、分页排序、通配符、权限副作用、分享字段、并发与 E2E。
+  - `docs/testing/TEST_REPORT.md`：新增 60 条用例执行记录、缺陷清单、并发与端到端证据、命令输出摘录。
+- 契约 / 数据 / 安全影响：无接口、表结构、安全控制变更；发现 D-01–D-04 四项缺陷，未在本任务修复。
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `cd backend; python -m pytest -q --tb=no` | 后端全量 | 101 passed / 2 failed / 0 skipped | 失败为 TC-AUTH-07、TC-LIST-05，断言未放宽 |
+  | `pytest -q <8 条安全门禁节点>` | TEST_PLAN §7.1 | 8 passed | TC-DEF-04 因脚本缺失未执行 |
+  | `cd frontend; npm run lint / format:check / typecheck / test:run / build` | 前端质量门禁 | 全部通过；30 tests passed | 构建有 chunk >500 kB 告警，非失败 |
+  | `python scripts/check_all.py` | 静态检查 | 全部通过 | 205 链接、29 端点、60 用例、32 安全项、7 表 |
+
+- 验收结论：**不通过**（高优先级 TC-DEF-04 未执行，构成发布阻断；另有 3 条中优先级缺陷）
+- 基线例外：无新增；前台 Element Plus 仍为既有 3 项基线
+- 遗留问题：
+  - D-01 `verify_session_token(max_age_days=0)` 回落 30 天，需按 `is not None` 修复。
+  - D-02 搜索 `%`/`_` 未转义，返回全表，需在 repository 层转义。
+  - D-03 10MB `shape_desc` 返回 500，需补请求体大小限制与字段长度上限。
+  - D-04 `app.scripts.rotate_admin_password` 缺失；`admin123` 仍在 `.env`/`init.sql`，需实现轮换脚本并演练。
+- 回滚方式：删除 `backend/tests/test_g5_system.py` 与 `docs/testing/TEST_REPORT.md` 即可；测试临时数据已清理。
+- 关联 ADR：无
+
 ## 2026-11-08｜审计问题修复：门禁 / 错误处理 / 测试库隔离 / 认证回流
 
 - 任务卡 / 分级：AUDIT-FIX-01 / **B**（未改 API 契约、表结构、认证机制与安全控制）；其中"创建测试库 + 测试配置"为 **C** 类，用户于 2026-11-08 通过选项明确确认
