@@ -226,13 +226,7 @@ onMounted(loadDetail)
       </div>
     </div>
 
-    <el-form
-      ref="formRef"
-      :model="teaForm"
-      :rules="rules"
-      label-width="96px"
-      class="tea-form"
-    >
+    <el-form ref="formRef" :model="teaForm" :rules="rules" label-width="96px" class="tea-form">
       <section class="form-section">
         <h3 class="text-h3 section-title">基本信息</h3>
         <div class="form-grid">
@@ -250,11 +244,20 @@ onMounted(loadDetail)
             </el-select>
           </el-form-item>
           <el-form-item label="产地" prop="origin">
-            <el-input v-model="teaForm.origin" maxlength="200" placeholder="如：浙江 杭州 西湖狮峰" />
+            <el-input
+              v-model="teaForm.origin"
+              maxlength="200"
+              placeholder="如：浙江 杭州 西湖狮峰"
+            />
           </el-form-item>
           <el-form-item label="季节">
             <el-select v-model="teaForm.season" clearable placeholder="可不填" class="full-width">
-              <el-option v-for="season in TEA_SEASONS" :key="season" :label="season" :value="season" />
+              <el-option
+                v-for="season in TEA_SEASONS"
+                :key="season"
+                :label="season"
+                :value="season"
+              />
             </el-select>
           </el-form-item>
           <el-form-item label="发酵程度">
@@ -273,7 +276,11 @@ onMounted(loadDetail)
             </el-select>
           </el-form-item>
           <el-form-item label="价格档位">
-            <el-input v-model="teaForm.price_range" maxlength="32" placeholder="如：100-300元/50g" />
+            <el-input
+              v-model="teaForm.price_range"
+              maxlength="32"
+              placeholder="如：100-300元/50g"
+            />
           </el-form-item>
           <el-form-item label="代表品种">
             <el-input v-model="teaForm.representative_variety" maxlength="100" />

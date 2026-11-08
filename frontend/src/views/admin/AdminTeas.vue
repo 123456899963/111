@@ -95,11 +95,7 @@ onMounted(load)
         />
       </el-select>
 
-      <el-select
-        v-model="filters.status"
-        class="filter-select"
-        @change="handleFilter"
-      >
+      <el-select v-model="filters.status" class="filter-select" @change="handleFilter">
         <el-option label="全部状态" value="all" />
         <el-option label="已上架" value="true" />
         <el-option label="已下架" value="false" />
@@ -120,12 +116,7 @@ onMounted(load)
     <el-table v-loading="loading" :data="items" empty-text="暂无符合条件的茶品">
       <el-table-column label="主图" width="76">
         <template #default="{ row }">
-          <img
-            v-if="row.main_image_url"
-            :src="row.main_image_url"
-            :alt="row.name"
-            class="thumb"
-          />
+          <img v-if="row.main_image_url" :src="row.main_image_url" :alt="row.name" class="thumb" />
           <span v-else class="text-caption text-muted">无图</span>
         </template>
       </el-table-column>
@@ -157,11 +148,7 @@ onMounted(load)
           >
             编辑
           </el-button>
-          <el-button
-            link
-            :type="row.is_active ? 'warning' : 'success'"
-            @click="handleToggle(row)"
-          >
+          <el-button link :type="row.is_active ? 'warning' : 'success'" @click="handleToggle(row)">
             {{ row.is_active ? '下架' : '上架' }}
           </el-button>
         </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppFooter from '@/components/AppFooter.vue'
@@ -10,6 +10,7 @@ import { useUserStore } from '@/stores/user'
 import { useToastStore } from '@/stores/toast'
 import { getHotTeas, getTeaDetail, getTeaList } from '@/api/teas'
 import { getFavoriteStatus } from '@/api/favorites'
+import { clearPendingAction, loadPendingAction, savePendingAction } from '@/utils/pendingAction'
 import type { Tea, TeaListItem } from '@/types'
 
 const route = useRoute()
@@ -63,6 +64,10 @@ watch(
   () => void load(),
   { immediate: true },
 )
+
+onMounted(() => {
+  void replayPendingAction()
+})
 
 function getErrorCode(err: unknown): number | undefined {
   return (err as { response?: { data?: { code?: number } } }).response?.data?.code
@@ -135,33 +140,51 @@ async function loadFallbackHot() {
   }
 }
 
-/** 需要登录的操作：未登录先跳转，登录后回到当前页 */
-function requireLogin(): boolean {
-  if (!userStore.isLoggedIn) {
-    void router.push({ name: 'login', query: { redirect: route.fullPath } })
-    return false
-  }
-  return true
-}
-
 /** 写笔记：必须已收藏，否则后端 40430；前端只做体验提示 */
-async function onNoteAction() {
-  if (!requireLogin() || !tea.value) return
+async function openNoteEditor(teaId: number) {
   try {
-    const res = await getFavoriteStatus(tea.value.id)
+    const res = await getFavoriteStatus(teaId)
     if (!res.data.is_favorited) {
       toast.info('请先收藏该茶品，再写品鉴笔记')
       return
     }
-    void router.push({ name: 'my-list', query: { note: String(tea.value.id) } })
+    void router.push({ name: 'my-list', query: { note: String(teaId) } })
   } catch {
     // 错误提示已由请求拦截器统一处理
   }
 }
 
+async function onNoteAction() {
+  if (!tea.value) return
+  if (!userStore.isLoggedIn) {
+    savePendingAction({ type: 'note', teaId: tea.value.id, path: route.fullPath })
+    void router.push({ name: 'login', query: { redirect: route.fullPath } })
+    return
+  }
+  await openNoteEditor(tea.value.id)
+}
+
 /** 分享入口在我的清单页 */
 function onShareAction() {
-  if (!requireLogin()) return
+  if (!userStore.isLoggedIn) {
+    if (tea.value) {
+      savePendingAction({ type: 'share', teaId: tea.value.id, path: route.fullPath })
+    }
+    void router.push({ name: 'login', query: { redirect: route.fullPath } })
+    return
+  }
+  void router.push({ name: 'my-list', query: { share: '1' } })
+}
+
+/** 登录后回到本页时，继续执行登录前被中断的笔记/分享动作 */
+async function replayPendingAction() {
+  const pending = loadPendingAction()
+  if (!pending || !userStore.isLoggedIn || pending.path !== route.fullPath) return
+  clearPendingAction()
+  if (pending.type === 'note') {
+    await openNoteEditor(pending.teaId)
+    return
+  }
   void router.push({ name: 'my-list', query: { share: '1' } })
 }
 

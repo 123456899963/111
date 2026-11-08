@@ -1,10 +1,13 @@
 """统一响应体 & 业务异常"""
 
+import logging
 from typing import Any
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 
 class TeaGuideError(Exception):
@@ -60,4 +63,13 @@ def register_exception_handlers(app):
         return JSONResponse(
             status_code=400,
             content={"code": 40000, "message": "参数校验失败", "data": None},
+        )
+
+    @app.exception_handler(Exception)
+    async def handle_unexpected_error(request: Request, exc: Exception):
+        # 服务端记录完整堆栈；响应体绝不下发堆栈 / SQL / 表名（SECURITY S-26）
+        logger.exception("未处理异常: %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"code": 50000, "message": "服务器内部错误", "data": None},
         )

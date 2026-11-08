@@ -57,6 +57,40 @@
 
 ## 4. 记录
 
+## 2026-11-08｜审计问题修复：门禁 / 错误处理 / 测试库隔离 / 认证回流
+
+- 任务卡 / 分级：AUDIT-FIX-01 / **B**（未改 API 契约、表结构、认证机制与安全控制）；其中"创建测试库 + 测试配置"为 **C** 类，用户于 2026-11-08 通过选项明确确认
+- 需求来源：PLANS.md T0-03、T0-04、T1-02、T5-01、T5-02、T5-03；TEST_PLAN TC-DEF-01、TC-DEF-03；AGENTS.md §4、§9、§10.1
+- 主要变更：
+  - `app/core/response.py`：新增兜底 `Exception` 处理器，统一返回 500/50000；服务端用 `logger.exception` 记录堆栈，响应体不含堆栈/SQL/表名
+  - `backend/tests/conftest.py`（新建）：导入 `app.*` 前强制测试库；优先读取 `DATABASE_URL_TEST`，否则默认 `tea_guide_test`；启动断言库名必须 `*_test`；同时隔离 `UPLOAD_DIR` 到系统临时目录
+  - `backend/tests/test_defense.py`（新建）：DEF-01（畸形 JSON、非 JSON Content-Type、参数类型错误、role 注入不落库）与 DEF-03（未捕获异常 500/50000、响应不泄露、服务恢复）
+  - `backend/.env.example`：补充 `DATABASE_URL_TEST` 示例（注释状态）
+  - `frontend/src/views/admin/AdminLogin.vue`、`AdminTeaEdit.vue`、`AdminTeas.vue`：Prettier 格式化
+  - `frontend/src/utils/pendingAction.ts`（新建）+ `pendingAction.spec.ts`（新建）：登录前动作暂存/解析/30 分钟过期
+  - `frontend/src/views/TeaDetailView.vue`：未登录点击笔记/分享时保存 pending_action，登录回跳后自动继续原动作并清理
+- 契约 / 数据 / 安全影响：无端点、字段、表结构变更；500 响应符合 API_CONTRACT §1.6；未改动 SECURITY S-01–S-32
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `cd backend; python -m pytest -q` | 全部后端用例（82 条） | 82 passed | 已切换至 `tea_guide_test` |
+  | `python -m ruff check app tests`、`ruff format --check` | 后端静态 | 通过 | 52 文件已格式化 |
+  | `cd frontend; npm run test:run` | 前端 4 个 spec | 30 passed | 新增 pendingAction 5 条 |
+  | `npm run lint`、`npm run typecheck`、`npm run build` | 前端 | 通过 | 仅既有 chunk >500kB 警告 |
+  | `npm run format:check` | 前端格式 | 通过 | 3 个后台文件已修复 |
+  | `python scripts/check_all.py` | 全量静态闸门 | 通过 | 29/60/32/7 常量一致；分层 0 违规 |
+  | `SELECT COUNT(*) FROM tea_guide.users` / `tea_guide_test.users` | 数据库隔离 | 6 / 1 | 开发库未被测试写入；测试库仅种子管理员 |
+
+- 验收结论：通过（本次用户确认的三项范围）
+- 基线例外：`api/request.ts`、`main.ts`、`stores/toast.ts` 仍直接使用 Element Plus（AGENTS §3.1 基线，本次未扩大）
+- 遗留问题：
+  - DEF-02（超大请求体 413）、DEF-04（管理员密码轮换）仍未补用例；T5-04 上线安全项未开始
+  - T1-02 仍采用整页登录而非 LoginModal，但笔记/分享/收藏的登录回跳动作已可自动续接
+  - `tea_guide_test` 为本次手工创建并导入 `database/init.sql` 结构；CI 环境建库脚本尚未落地
+- 回滚方式：回滚上述文件；如需彻底回滚测试库，执行 `DROP DATABASE tea_guide_test`
+- 关联 ADR：无（沿用 PLANS.md §5.4 已定稿的测试库约定，非新增架构决策）
+
 ## 2026-11-08｜阶段 4：管理员后台（T4-01 ~ T4-06）
 
 - 任务卡 / 分级：T4-01 ~ T4-06 / **B**（实现 API_CONTRACT §4.6 已定稿的 8 个 admin 端点与后台 5 页；未改契约路径/字段/错误码，未改表结构、认证机制与安全控制）

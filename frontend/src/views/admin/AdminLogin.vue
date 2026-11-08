@@ -103,8 +103,7 @@ async function submit() {
   justify-content: center;
   padding: 40px 16px;
   background:
-    radial-gradient(circle at 15% 20%, var(--color-bg-muted), transparent 45%),
-    var(--color-bg-page);
+    radial-gradient(circle at 15% 20%, var(--color-bg-muted), transparent 45%), var(--color-bg-page);
 }
 .login-card {
   width: 100%;
