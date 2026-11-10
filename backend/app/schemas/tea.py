@@ -53,6 +53,20 @@ class TeaListResponse(BaseModel):
     page_size: int
 
 
+class TeaArticleItem(BaseModel):
+    """已通过审核的用户科普投稿（S11 / S12），随茶品详情返回。"""
+
+    id: int
+    title: str | None = None
+    content: str
+    contributor: str
+    created_at: datetime
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, v: datetime) -> str:
+        return iso_z(v)
+
+
 class TeaDetail(BaseModel):
     """茶品详情（API_CONTRACT §2.3）：含扁平化 tips_* 派生字段"""
 
@@ -65,6 +79,9 @@ class TeaDetail(BaseModel):
     season: str | None = None
     fermentation: str | None = None
     price_range: str | None = None
+    # 价格区间数值（S2 五档筛选）：单位元/斤
+    price_min: int | None = None
+    price_max: int | None = None
     representative_variety: str | None = None
 
     shape_desc: str
@@ -77,6 +94,11 @@ class TeaDetail(BaseModel):
     brew_time: float | None = None
 
     main_image_url: str | None = None
+    # 视频介绍（ADR-0003 S5）：video_url 为 NULL 时前端整块隐藏
+    video_url: str | None = None
+    video_duration: int | None = None
+    # 图片集（ADR-0003 S4）：最多 9 张，按 sort_order 升序；空列表表示无图片集
+    image_set: list[str] = Field(default_factory=list)
     is_active: bool = True
     favorite_count: int = 0
 
@@ -84,6 +106,9 @@ class TeaDetail(BaseModel):
     tips_suitable: str | None = None
     tips_misconception: str | None = None
     tips_official_note: str | None = None
+
+    # 用户科普投稿（S11 / S12）：仅含审核通过项，空列表时前端隐藏
+    contributed_articles: list[TeaArticleItem] = Field(default_factory=list)
 
     created_at: datetime
     updated_at: datetime
@@ -100,6 +125,8 @@ class TeaDetail(BaseModel):
             columns["tips_suitable"] = tips.suitable if tips else None
             columns["tips_misconception"] = tips.misconception if tips else None
             columns["tips_official_note"] = tips.official_note if tips else None
+            media = getattr(data, "media_images", None) or []
+            columns["image_set"] = [m.image_url for m in media]
             return columns
         return data
 
@@ -163,6 +190,9 @@ class TeaBaseRequest(BaseModel):
     season: SeasonValue | None = None
     fermentation: FermentationValue | None = None
     price_range: str | None = Field(None, max_length=32)
+    # 价格区间数值（S2）：单位元/斤，null 表示未维护，不参与价格筛选
+    price_min: int | None = Field(None, ge=0, le=100000)
+    price_max: int | None = Field(None, ge=0, le=100000)
     representative_variety: str | None = Field(None, max_length=100)
 
     shape_desc: str
@@ -175,6 +205,10 @@ class TeaBaseRequest(BaseModel):
     brew_time: float = Field(..., gt=0, le=999.9)
 
     main_image_url: str = Field(..., max_length=500)
+
+    # 视频介绍（ADR-0003 S5）：仅允许本站 /uploads/ 路径，禁止第三方外链
+    video_url: str | None = Field(None, max_length=500)
+    video_duration: int | None = Field(None, ge=1, le=180)
 
     @field_validator("name", mode="before")
     @classmethod
@@ -192,7 +226,12 @@ class TeaBaseRequest(BaseModel):
         return _normalize_required_text(value, "感官描述")
 
     @field_validator(
-        "season", "fermentation", "price_range", "representative_variety", mode="before"
+        "season",
+        "fermentation",
+        "price_range",
+        "representative_variety",
+        "video_url",
+        mode="before",
     )
     @classmethod
     def _validate_optional_text(cls, value: Any) -> Any:
@@ -214,6 +253,24 @@ class TeaBaseRequest(BaseModel):
             raise ValueError("main_image_url 必须为 http(s):// 或 /uploads/ 路径")
         return value
 
+    @field_validator("video_url")
+    @classmethod
+    def _validate_video_url(cls, value: str | None) -> str | None:
+        if value is not None and not value.startswith("/uploads/"):
+            raise ValueError("video_url 必须为本站 /uploads/ 路径")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_price_order(self) -> "TeaBaseRequest":
+        """价格区间：两端都填时下限不得大于上限（S2）。"""
+        if (
+            self.price_min is not None
+            and self.price_max is not None
+            and self.price_min > self.price_max
+        ):
+            raise ValueError("price_min 不能大于 price_max")
+        return self
+
 
 class TeaCreateRequest(TeaBaseRequest):
     """管理员新增茶品（API_CONTRACT §4.6.3）。"""
@@ -233,3 +290,43 @@ class TeaCreateRequest(TeaBaseRequest):
 
 class TeaUpdateRequest(TeaBaseRequest):
     """管理员编辑茶品（API_CONTRACT §4.6.4）：PUT 全量替换，不接受 tips_*。"""
+
+
+class TeaMediaItem(BaseModel):
+    """茶品图片集条目（ADR-0003 S4 / API_CONTRACT §4.2.7）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    image_url: str
+    sort_order: int
+
+
+class TeaMediaCreateRequest(BaseModel):
+    """管理员追加图片（ADR-0003 S4）：仅接受本站 /uploads/ 路径。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    image_url: str = Field(..., max_length=500)
+    sort_order: int | None = Field(None, ge=0)
+
+    @field_validator("image_url")
+    @classmethod
+    def _validate_image_url(cls, value: str) -> str:
+        if not value.startswith("/uploads/"):
+            raise ValueError("image_url 必须为本站 /uploads/ 路径")
+        return value
+
+
+class LatestTipItem(BaseModel):
+    """首页最新小贴士（S7）：按 tea_tips.updated_at 倒序取前 N 条。"""
+
+    tea_id: int
+    tea_name: str
+    category: str
+    summary: str
+    updated_at: datetime
+
+    @field_serializer("updated_at")
+    def serialize_datetime(self, v: datetime) -> str:
+        return iso_z(v)

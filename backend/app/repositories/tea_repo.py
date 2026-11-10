@@ -4,10 +4,13 @@
 本层只接收已解析好的结构化条件。
 """
 
-from sqlalchemy import func, or_, text
-from sqlalchemy.orm import Session, joinedload
+from datetime import datetime, timedelta
 
-from app.models.tea import Tea
+from sqlalchemy import and_, case, func, or_, text
+from sqlalchemy.orm import Session, joinedload, selectinload
+
+from app.models.favorite import FavoriteItem
+from app.models.tea import Tea, TeaTips
 from app.repositories._common import escape_like
 
 
@@ -17,24 +20,44 @@ def list_teas(
     categories: list[str] | None = None,
     provinces: list[str] | None = None,
     seasons: list[str] | None = None,
+    fermentations: list[str] | None = None,
+    price_min: int | None = None,
+    price_max: int | None = None,
+    filter_mode: str = "and",
     keyword: str | None = None,
     sort: str = "newest",
     offset: int = 0,
     limit: int = 12,
 ) -> tuple[list[Tea], int]:
-    """公开列表查询：仅 is_active=1；返回 (当前页数据, 过滤后总数)。"""
+    """公开列表查询：仅 is_active=1；返回 (当前页数据, 过滤后总数)。
+
+    筛选模式（S1）：and = 跨维度全部满足；or = 任一维度满足。
+    价格（S2）：茶品价格区间与查询区间有交集即命中；未维护价格的茶品不参与价格筛选。
+    """
     query = db.query(Tea).filter(Tea.is_active.is_(True))
 
+    conditions = []
     if categories:
-        query = query.filter(Tea.category.in_(categories))
+        conditions.append(Tea.category.in_(categories))
     if provinces:
         # 省级前缀匹配（API_CONTRACT §4.2.1：如 "浙江%"）；
         # 转义通配符，避免输入 % / _ 使筛选退化为全表
-        query = query.filter(
+        conditions.append(
             or_(*[Tea.origin.like(f"{escape_like(p)}%", escape="\\") for p in provinces])
         )
     if seasons:
-        query = query.filter(Tea.season.in_(seasons))
+        conditions.append(Tea.season.in_(seasons))
+    if fermentations:
+        conditions.append(Tea.fermentation.in_(fermentations))
+    if price_min is not None:
+        conditions.append(Tea.price_max >= price_min)
+    if price_max is not None:
+        conditions.append(Tea.price_min <= price_max)
+
+    if conditions:
+        query = query.filter(or_(*conditions) if filter_mode == "or" else and_(*conditions))
+
+    # 关键词始终 AND 叠加（S1 的 OR 仅作用于三个筛选维度）
     if keyword:
         kw = f"%{escape_like(keyword)}%"
         query = query.filter(
@@ -56,23 +79,79 @@ def list_teas(
 
 
 def list_hot(db: Session, limit: int) -> list[Tea]:
-    """热门推荐：favorite_count DESC, created_at DESC, id DESC（API_CONTRACT §4.2.4）。"""
+    """热门推荐（S17）：7 天收藏数 ×3 + 累计收藏数，稳定次级键兜底。"""
+    since = datetime.utcnow() - timedelta(days=7)
+    recent = (
+        db.query(FavoriteItem.tea_id.label("tea_id"), func.count().label("cnt"))
+        .filter(FavoriteItem.created_at >= since)
+        .group_by(FavoriteItem.tea_id)
+        .subquery()
+    )
+    score = func.coalesce(recent.c.cnt, 0) * 3 + Tea.favorite_count
     return (
         db.query(Tea)
+        .outerjoin(recent, recent.c.tea_id == Tea.id)
         .filter(Tea.is_active.is_(True))
-        .order_by(Tea.favorite_count.desc(), Tea.created_at.desc(), Tea.id.desc())
+        .order_by(score.desc(), Tea.favorite_count.desc(), Tea.created_at.desc(), Tea.id.desc())
         .limit(limit)
         .all()
     )
 
 
-def get_random(db: Session, exclude_id: int | None = None) -> Tea | None:
+def list_related(db: Session, *, tea_id: int, category: str, origin: str, limit: int) -> list[Tea]:
+    """相关推荐（S6）：同茶类优先 → 同产地补足 → 热门兜底；排除自身与下架。"""
+    same_category = case((Tea.category == category, 1), else_=0)
+    same_origin = case((Tea.origin == origin, 1), else_=0)
+    return (
+        db.query(Tea)
+        .filter(Tea.is_active.is_(True), Tea.id != tea_id)
+        .order_by(
+            same_category.desc(),
+            same_origin.desc(),
+            Tea.favorite_count.desc(),
+            Tea.created_at.desc(),
+            Tea.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+
+
+def list_latest_tips(db: Session, limit: int) -> list[tuple[TeaTips, Tea]]:
+    """最新小贴士（S7）：仅上架茶品，按 tea_tips.updated_at 倒序。"""
+    return (
+        db.query(TeaTips, Tea)
+        .join(Tea, Tea.id == TeaTips.tea_id)
+        .filter(Tea.is_active.is_(True))
+        .order_by(TeaTips.updated_at.desc(), TeaTips.tea_id.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def get_random(
+    db: Session,
+    exclude_id: int | None = None,
+    exclude_ids: set[int] | None = None,
+) -> Tea | None:
     """随机发现：仅 is_active=1 中取 1 条（FR-2.3 完全随机）。"""
     query = db.query(Tea).filter(Tea.is_active.is_(True))
     if exclude_id is not None:
         query = query.filter(Tea.id != exclude_id)
+    if exclude_ids:
+        query = query.filter(Tea.id.notin_(exclude_ids))
     # 数据量 < 1000 行，ORDER BY RAND() 成本可接受
     return query.options(joinedload(Tea.tips)).order_by(text("RAND()")).limit(1).first()
+
+
+def get_random_in_category(
+    db: Session, category: str, *, exclude_ids: set[int] | None = None
+) -> Tea | None:
+    """指定茶类内随机取 1 条（S16 个性化推荐）。"""
+    query = db.query(Tea).filter(Tea.is_active.is_(True), Tea.category == category)
+    if exclude_ids:
+        query = query.filter(Tea.id.notin_(exclude_ids))
+    return query.order_by(text("RAND()")).limit(1).first()
 
 
 def count_by_category(db: Session) -> dict[str, int]:
@@ -103,10 +182,10 @@ def count_by_province(db: Session) -> list[tuple[str, int]]:
 
 
 def get_by_id(db: Session, tea_id: int, *, with_tips: bool = True) -> Tea | None:
-    """按主键查询；with_tips=False 时跳过小贴士联表（收藏等无需详情场景）。"""
+    """按主键查询；with_tips=False 时跳过小贴士/图片集联表（收藏等无需详情场景）。"""
     query = db.query(Tea)
     if with_tips:
-        query = query.options(joinedload(Tea.tips))
+        query = query.options(joinedload(Tea.tips), selectinload(Tea.media_images))
     return query.filter(Tea.id == tea_id).first()
 
 

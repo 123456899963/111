@@ -8,7 +8,7 @@ import TeaCard from '@/components/TeaCard.vue'
 import FavoriteButton from '@/components/FavoriteButton.vue'
 import { useUserStore } from '@/stores/user'
 import { useToastStore } from '@/stores/toast'
-import { getHotTeas, getTeaDetail, getTeaList } from '@/api/teas'
+import { getHotTeas, getRelatedTeas, getTeaDetail } from '@/api/teas'
 import { getFavoriteStatus } from '@/api/favorites'
 import { clearPendingAction, loadPendingAction, savePendingAction } from '@/utils/pendingAction'
 import type { Tea, TeaListItem } from '@/types'
@@ -26,9 +26,31 @@ const related = ref<TeaListItem[]>([])
 const fallbackHot = ref<TeaListItem[]>([])
 const errorMessage = ref('')
 const imageFailed = ref(false)
+const videoFailed = ref(false)
+const activeImage = ref<string | null>(null)
 const favoriteCount = ref(0)
 
-const hasImage = computed(() => !!tea.value?.main_image_url && !imageFailed.value)
+/** 图片集（S4）：主图优先 + 去重；无图集时仅主图 */
+const galleryImages = computed(() => {
+  const item = tea.value
+  if (!item) return []
+  const main = item.main_image_url ? [item.main_image_url] : []
+  const set = (item.image_set ?? []).filter((url) => !!url)
+  return Array.from(new Set([...main, ...set]))
+})
+
+const displayImage = computed(() => activeImage.value ?? tea.value?.main_image_url ?? null)
+const hasImage = computed(() => !!displayImage.value && !imageFailed.value)
+
+/** 视频（S5）：无 video_url 或加载失败时整块隐藏，不留空播放器 */
+const hasVideo = computed(() => !!tea.value?.video_url && !videoFailed.value)
+const videoDurationText = computed(() => {
+  const seconds = tea.value?.video_duration
+  if (!seconds || seconds <= 0) return ''
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  return `${minutes}:${String(rest).padStart(2, '0')}`
+})
 
 const tips = computed(() => {
   const item = tea.value
@@ -40,6 +62,13 @@ const tips = computed(() => {
     { icon: '✨', title: '官方备注', text: item.tips_official_note },
   ].filter((tip) => !!tip.text && tip.text.trim())
 })
+
+/** 茶友科普投稿（S11 / S12）：仅审核通过项，空则隐藏 */
+const contributedArticles = computed(() => tea.value?.contributed_articles ?? [])
+
+function formatArticleDate(value: string): string {
+  return new Date(value).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' })
+}
 
 const brewItems = computed(() => {
   const item = tea.value
@@ -82,6 +111,8 @@ async function load() {
   fallbackHot.value = []
   errorMessage.value = ''
   imageFailed.value = false
+  videoFailed.value = false
+  activeImage.value = null
 
   if (!Number.isFinite(id) || id < 1) {
     state.value = 'notfound'
@@ -100,7 +131,7 @@ async function load() {
     }
     favoriteCount.value = res.data.favorite_count
     state.value = 'ready'
-    void loadRelated(tea.value.id, tea.value.category)
+    void loadRelated(tea.value.id)
   } catch (err) {
     const code = getErrorCode(err)
     if (code === 40401) {
@@ -116,15 +147,10 @@ async function load() {
   }
 }
 
-async function loadRelated(id: number, category: Tea['category']) {
+async function loadRelated(id: number) {
   try {
-    const res = await getTeaList({
-      category,
-      page: 1,
-      page_size: 6,
-      sort: 'favorite',
-    })
-    related.value = (res.data?.items ?? []).filter((item) => item.id !== id).slice(0, 4)
+    const res = await getRelatedTeas(id, 4)
+    related.value = res.data ?? []
   } catch {
     related.value = []
   }
@@ -225,7 +251,7 @@ function retry() {
             <img
               v-if="hasImage"
               class="detail-header__image"
-              :src="tea.main_image_url as string"
+              :src="displayImage as string"
               :alt="tea.name"
               @error="imageFailed = true"
             />
@@ -241,6 +267,19 @@ function retry() {
               </svg>
             </div>
             <CategoryTag class="detail-header__category-tag" :category="tea.category" clickable />
+            <!-- 图片集缩略图（S4）：仅 2 张以上才展示，避免单图冗余 -->
+            <div v-if="galleryImages.length > 1" class="detail-gallery">
+              <button
+                v-for="url in galleryImages"
+                :key="url"
+                type="button"
+                class="detail-gallery__thumb"
+                :class="{ 'detail-gallery__thumb--active': url === displayImage }"
+                @click="(activeImage = url), (imageFailed = false)"
+              >
+                <img :src="url" :alt="`${tea.name} 图片`" loading="lazy" />
+              </button>
+            </div>
           </div>
 
           <div class="detail-header__info">
@@ -275,8 +314,33 @@ function retry() {
               <button type="button" class="btn btn--ghost" @click="onShareAction">
                 ↗️ 分享清单
               </button>
+              <RouterLink
+                class="btn btn--ghost"
+                :to="{ name: 'contribute', query: { type: 'article', tea_id: String(tea.id) } }"
+              >
+                📝 投稿科普
+              </RouterLink>
             </div>
           </div>
+        </section>
+
+        <!-- 视频介绍（S5）：无视频或加载失败整块隐藏 -->
+        <section v-if="hasVideo" class="detail-section">
+          <h2 class="detail-section__title">
+            视频介绍
+            <span v-if="videoDurationText" class="detail-section__hint">{{ videoDurationText }}</span>
+          </h2>
+          <video
+            class="detail-video"
+            controls
+            preload="metadata"
+            playsinline
+            :src="tea.video_url as string"
+            :poster="tea.main_image_url ?? undefined"
+            @error="videoFailed = true"
+          >
+            你的浏览器不支持视频播放。
+          </video>
         </section>
 
         <!-- 四大感官 -->
@@ -317,6 +381,24 @@ function retry() {
                 <p class="tip-card__text">{{ tip.text }}</p>
               </div>
             </div>
+          </div>
+        </section>
+
+        <!-- 茶友科普投稿（S11 / S12）：仅展示审核通过内容 -->
+        <section v-if="contributedArticles.length" class="detail-section">
+          <h2 class="detail-section__title">茶友科普</h2>
+          <div class="article-list">
+            <article
+              v-for="article in contributedArticles"
+              :key="article.id"
+              class="article-card"
+            >
+              <h4 class="article-card__title">{{ article.title || '茶友分享' }}</h4>
+              <p class="article-card__content">{{ article.content }}</p>
+              <footer class="article-card__meta">
+                — {{ article.contributor }} · {{ formatArticleDate(article.created_at) }}
+              </footer>
+            </article>
           </div>
         </section>
 
@@ -518,6 +600,62 @@ function retry() {
   backdrop-filter: blur(4px);
 }
 
+/* 图片集缩略图（S4） */
+.detail-gallery {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.detail-gallery__thumb {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 56px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--color-bg-muted);
+  transition: border-color 0.2s ease;
+}
+
+.detail-gallery__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.detail-gallery__thumb--active,
+.detail-gallery__thumb:hover {
+  border-color: var(--color-primary);
+}
+
+.detail-gallery__thumb:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 视频介绍（S5） */
+.detail-video {
+  width: 100%;
+  max-height: 520px;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-muted);
+  display: block;
+}
+
+.detail-section__hint {
+  margin-left: 8px;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
 .detail-header__info {
   display: flex;
   flex-direction: column;
@@ -705,6 +843,40 @@ function retry() {
   color: var(--color-text-primary);
   margin: 0;
   line-height: 1.7;
+}
+
+/* 茶友科普投稿 */
+.article-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.article-card {
+  padding: 20px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+}
+
+.article-card__title {
+  margin: 0 0 10px;
+  font-size: var(--text-h3);
+  color: var(--color-primary-dark);
+}
+
+.article-card__content {
+  margin: 0;
+  color: var(--color-text-primary);
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.article-card__meta {
+  margin-top: 12px;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  text-align: right;
 }
 
 /* 同类推荐 */

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import TeaCard from '@/components/TeaCard.vue'
@@ -10,6 +10,7 @@ import type { TeaCategory, TeaListItem, TeaSort } from '@/types'
 import {
   CATEGORY_LABELS,
   TEA_CATEGORIES,
+  TEA_FERMENTATIONS,
   TEA_SEASONS,
   buildListParams,
   defaultTeaFilterState,
@@ -18,6 +19,9 @@ import {
   serializeFilterState,
 } from '@/utils/teaQuery'
 import type { ActiveFilter, TeaFilterState } from '@/utils/teaQuery'
+
+/** 价格区间下拉预设（元/斤，S2）：0 表示不限 */
+const PRICE_OPTIONS = [0, 100, 300, 500, 1000, 3000, 5000] as const
 
 const route = useRoute()
 const router = useRouter()
@@ -87,14 +91,49 @@ function toggleSeason(season: string) {
   commit({ seasons: next })
 }
 
+function toggleFermentation(fermentation: string) {
+  const next = state.fermentations.includes(fermentation)
+    ? state.fermentations.filter((f) => f !== fermentation)
+    : [...state.fermentations, fermentation]
+  commit({ fermentations: next })
+}
+
+/** 价格下拉：0 表示不限（null），上下限自动保持 min ≤ max */
+function setPriceMin(raw: string) {
+  const value = Number.parseInt(raw, 10)
+  const priceMin = value > 0 ? value : null
+  const priceMax =
+    priceMin != null && state.priceMax != null && state.priceMax < priceMin
+      ? priceMin
+      : state.priceMax
+  commit({ priceMin, priceMax })
+}
+
+function setPriceMax(raw: string) {
+  const value = Number.parseInt(raw, 10)
+  const next = value > 0 ? value : null
+  commit({ priceMax: next })
+}
+
+function setFilterMode(mode: 'and' | 'or') {
+  if (mode === state.filterMode) return
+  commit({ filterMode: mode })
+}
+
 function removeFilter(filter: ActiveFilter) {
   if (filter.dimension === 'categories') {
     commit({ categories: state.categories.filter((c) => c !== filter.value) })
   } else if (filter.dimension === 'origins') {
     commit({ origins: state.origins.filter((o) => o !== filter.value) })
+  } else if (filter.dimension === 'fermentations') {
+    commit({ fermentations: state.fermentations.filter((f) => f !== filter.value) })
   } else {
     commit({ seasons: state.seasons.filter((s) => s !== filter.value) })
   }
+}
+
+function clearPrice() {
+  commit({ priceMin: null, priceMax: null })
 }
 
 function clearAll() {
@@ -120,10 +159,27 @@ const categoryOptions = computed(() => {
 })
 
 const activeFilters = computed(() => listActiveFilters(state))
+const hasPrice = computed(() => state.priceMin != null || state.priceMax != null)
 const hasAnyFilter = computed(
   () =>
-    !!state.keyword || state.categories.length + state.origins.length + state.seasons.length > 0,
+    !!state.keyword ||
+    state.categories.length +
+      state.origins.length +
+      state.seasons.length +
+      state.fermentations.length >
+      0 ||
+    hasPrice.value,
 )
+
+/** 价格区间展示文案 */
+const priceText = computed(() => {
+  const min = state.priceMin
+  const max = state.priceMax
+  if (min != null && max != null) return `¥${min}–${max}/斤`
+  if (min != null) return `¥${min} 以上/斤`
+  if (max != null) return `¥${max} 以下/斤`
+  return ''
+})
 
 const breadcrumbLabel = computed(() => {
   if (state.keyword) return `搜索："${state.keyword}"`
@@ -170,6 +226,7 @@ function goPage(page: number) {
         <RouterLink to="/">首页</RouterLink>
         <span class="breadcrumb__sep">›</span>
         <span class="breadcrumb__current">{{ breadcrumbLabel }}</span>
+        <RouterLink class="breadcrumb__compare" to="/compare">六大茶类对比 →</RouterLink>
       </nav>
 
       <!-- 筛选面板 -->
@@ -230,6 +287,74 @@ function goPage(page: number) {
             </button>
           </div>
         </div>
+
+        <div class="filter-group">
+          <div class="filter-group__label">发酵程度</div>
+          <div class="filter-chips">
+            <button
+              v-for="fermentation in TEA_FERMENTATIONS"
+              :key="fermentation"
+              type="button"
+              class="chip chip--default"
+              :class="{ 'chip--active': state.fermentations.includes(fermentation) }"
+              :aria-pressed="state.fermentations.includes(fermentation)"
+              @click="toggleFermentation(fermentation)"
+            >
+              {{ fermentation }}
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-group__label">价格区间（元/斤）</div>
+          <div class="price-range">
+            <select
+              class="price-range__select"
+              aria-label="价格下限"
+              :value="state.priceMin ?? 0"
+              @change="setPriceMin(($event.target as HTMLSelectElement).value)"
+            >
+              <option v-for="opt in PRICE_OPTIONS" :key="`min-${opt}`" :value="opt">
+                {{ opt === 0 ? '最低不限' : `¥${opt}` }}
+              </option>
+            </select>
+            <span class="price-range__sep">–</span>
+            <select
+              class="price-range__select"
+              aria-label="价格上限"
+              :value="state.priceMax ?? 0"
+              @change="setPriceMax(($event.target as HTMLSelectElement).value)"
+            >
+              <option v-for="opt in PRICE_OPTIONS" :key="`max-${opt}`" :value="opt">
+                {{ opt === 0 ? '最高不限' : `¥${opt}` }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-group__label">组合方式</div>
+          <div class="mode-switch" role="group" aria-label="筛选组合方式">
+            <button
+              type="button"
+              class="mode-switch__btn"
+              :class="{ 'mode-switch__btn--active': state.filterMode === 'and' }"
+              :aria-pressed="state.filterMode === 'and'"
+              @click="setFilterMode('and')"
+            >
+              同时满足
+            </button>
+            <button
+              type="button"
+              class="mode-switch__btn"
+              :class="{ 'mode-switch__btn--active': state.filterMode === 'or' }"
+              :aria-pressed="state.filterMode === 'or'"
+              @click="setFilterMode('or')"
+            >
+              任一满足
+            </button>
+          </div>
+        </div>
       </section>
 
       <!-- 已选条件 -->
@@ -249,6 +374,10 @@ function goPage(page: number) {
           <button type="button" :aria-label="`移除${filter.label}`" @click="removeFilter(filter)">
             ×
           </button>
+        </span>
+        <span v-if="hasPrice" class="filter-selected__pill">
+          {{ priceText }}
+          <button type="button" aria-label="移除价格区间" @click="clearPrice">×</button>
         </span>
         <button v-if="hasAnyFilter" type="button" class="filter-selected__clear" @click="clearAll">
           清除全部
@@ -391,6 +520,16 @@ function goPage(page: number) {
   color: var(--color-text-primary);
 }
 
+.breadcrumb__compare {
+  margin-left: auto;
+  font-size: var(--text-small);
+  color: var(--color-primary);
+}
+
+.breadcrumb__compare:hover {
+  text-decoration: underline;
+}
+
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
@@ -420,6 +559,62 @@ function goPage(page: number) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.price-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.price-range__select {
+  height: 36px;
+  padding: 0 28px 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-dark);
+  background: var(--color-bg-surface);
+  font-size: var(--text-small);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+}
+
+.price-range__select:focus {
+  border-color: var(--color-primary);
+}
+
+.price-range__sep {
+  color: var(--color-text-muted);
+}
+
+.mode-switch {
+  display: inline-flex;
+  border: 1px solid var(--color-border-dark);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.mode-switch__btn {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  background: transparent;
+  font-size: var(--text-small);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.mode-switch__btn + .mode-switch__btn {
+  border-left: 1px solid var(--color-border-dark);
+}
+
+.mode-switch__btn--active {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
 }
 
 .chip {

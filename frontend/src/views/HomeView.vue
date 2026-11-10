@@ -3,15 +3,25 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppFooter from '@/components/AppFooter.vue'
+import HeroBackground from '@/components/HeroBackground.vue'
 import TeaCard from '@/components/TeaCard.vue'
 import CategoryTag from '@/components/CategoryTag.vue'
 import { useTeaStore } from '@/stores/tea'
-import { getHotTeas, getRandomTea, getTeaList } from '@/api/teas'
+import { useUserStore } from '@/stores/user'
+import {
+  getHotTeas,
+  getLatestTips,
+  getRandomTea,
+  getRecommendedTeas,
+  getTeaDetail,
+  getTeaList,
+} from '@/api/teas'
 import { CATEGORY_LABELS, TEA_CATEGORIES } from '@/utils/teaQuery'
-import type { Tea, TeaCategory, TeaListItem } from '@/types'
+import type { LatestTipItem, Tea, TeaCategory, TeaListItem } from '@/types'
 
 const router = useRouter()
 const teaStore = useTeaStore()
+const userStore = useUserStore()
 
 const CATEGORY_EMOJI: Record<TeaCategory, string> = {
   green: '🍃',
@@ -28,6 +38,17 @@ const hotTrack = ref<HTMLElement | null>(null)
 const randomTea = ref<Tea | null>(null)
 const randomLoading = ref(true)
 const spinning = ref(false)
+
+/** 登录用户展示个性化推荐（S16），游客保持随机发现 */
+const randomTitle = computed(() => (userStore.isLoggedIn ? '为你推荐' : '🎲 随机发现'))
+const randomDesc = computed(() =>
+  userStore.isLoggedIn
+    ? '根据你收藏过的茶类，为你挑选一款可能合口味的新茶。每次点击都会换一款。'
+    : '不知道喝什么？点下面按钮，让命运为你选一款。每次都不一样，说不定就能遇到你的下一杯心头好。',
+)
+
+const latestTips = ref<LatestTipItem[]>([])
+const tipsLoading = ref(true)
 
 const keyword = ref('')
 const suggestOpen = ref(false)
@@ -61,12 +82,32 @@ async function loadHot() {
 async function loadRandom() {
   randomLoading.value = true
   try {
-    const res = await getRandomTea(randomTea.value?.id)
-    randomTea.value = res.data
+    if (userStore.isLoggedIn) {
+      // 个性化推荐返回列表卡片，首页卡片需要冲泡信息，再取一次详情
+      const res = await getRecommendedTeas(1)
+      const item = res.data?.[0]
+      randomTea.value = item ? (await getTeaDetail(item.id)).data : null
+    } else {
+      const res = await getRandomTea(randomTea.value?.id)
+      randomTea.value = res.data
+    }
   } catch {
     randomTea.value = null
   } finally {
     randomLoading.value = false
+  }
+}
+
+/** 首页最新小贴士（S7） */
+async function loadTips() {
+  tipsLoading.value = true
+  try {
+    const res = await getLatestTips(3)
+    latestTips.value = res.data ?? []
+  } catch {
+    latestTips.value = []
+  } finally {
+    tipsLoading.value = false
   }
 }
 
@@ -88,6 +129,7 @@ onMounted(() => {
   teaStore.fetchCategories().catch(() => {})
   void loadHot()
   void loadRandom()
+  void loadTips()
   document.addEventListener('click', onDocumentClick)
 })
 
@@ -161,7 +203,9 @@ function categoryStyle(category: TeaCategory) {
   <main class="home-page">
     <!-- Hero -->
     <section class="hero">
-      <div class="container">
+      <!-- 纯装饰滚动背景（ADR-0003 R7）：不承载点击与跳转 -->
+      <HeroBackground />
+      <div class="container hero__content">
         <span class="hero__badge">🍵 六大茶类 · 结构化知识库</span>
         <h1 class="hero__title">一杯茶的千种风味</h1>
         <p class="hero__subtitle">完整图鉴，清晰对比，让每一款茶都有迹可循</p>
@@ -338,10 +382,8 @@ function categoryStyle(category: TeaCategory) {
             </div>
 
             <div class="random__desc">
-              <h3>🎲 随机发现</h3>
-              <p>
-                不知道喝什么？点下面按钮，让命运为你选一款。每次都不一样，说不定就能遇到你的下一杯心头好。
-              </p>
+              <h3>{{ randomTitle }}</h3>
+              <p>{{ randomDesc }}</p>
               <button
                 type="button"
                 class="random__shuffle-btn"
@@ -367,6 +409,32 @@ function categoryStyle(category: TeaCategory) {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+    <!-- 茶知识 · 小贴士（S7） -->
+    <section v-if="tipsLoading || latestTips.length" class="section">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-header__title">📖 茶知识 · 小贴士</h2>
+          <RouterLink class="section-header__action" to="/teas">探索更多 →</RouterLink>
+        </div>
+
+        <div v-if="tipsLoading" class="hot-loading">小贴士加载中…</div>
+        <div v-else class="tips-grid">
+          <RouterLink
+            v-for="tip in latestTips"
+            :key="tip.tea_id"
+            class="tip-preview"
+            :to="{ name: 'tea-detail', params: { id: tip.tea_id } }"
+          >
+            <div class="tip-preview__head">
+              <span class="tip-preview__tea">{{ tip.tea_name }}</span>
+              <CategoryTag :category="tip.category" />
+            </div>
+            <p class="tip-preview__summary">{{ tip.summary }}</p>
+            <span class="tip-preview__more">了解详情 ›</span>
+          </RouterLink>
         </div>
       </div>
     </section>
@@ -410,6 +478,11 @@ function categoryStyle(category: TeaCategory) {
   background: linear-gradient(160deg, var(--color-bg-muted) 0%, var(--color-border-light) 100%);
 }
 
+.hero__content {
+  position: relative;
+  z-index: 1;
+}
+
 .hero::before {
   content: '';
   position: absolute;
@@ -436,12 +509,13 @@ function categoryStyle(category: TeaCategory) {
   display: inline-block;
   padding: 6px 16px;
   border-radius: var(--radius-full);
-  background: rgba(139, 115, 85, 0.1);
-  border: 1px solid rgba(139, 115, 85, 0.2);
+  background: rgba(250, 248, 245, 0.78);
+  border: 1px solid rgba(139, 115, 85, 0.25);
   color: var(--color-primary);
   font-size: var(--text-small);
   font-weight: 500;
   margin-bottom: 24px;
+  backdrop-filter: blur(4px);
 }
 
 .hero__title {
@@ -451,14 +525,21 @@ function categoryStyle(category: TeaCategory) {
   line-height: 1.2;
   color: var(--color-text-primary);
   margin: 0 0 20px;
+  text-shadow:
+    0 1px 2px rgba(250, 248, 245, 0.9),
+    0 0 18px rgba(250, 248, 245, 0.7);
 }
 
 .hero__subtitle {
   font-size: var(--text-h3);
   font-weight: 400;
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+  opacity: 0.82;
   margin: 0 auto 40px;
   max-width: 600px;
+  text-shadow:
+    0 1px 2px rgba(250, 248, 245, 0.9),
+    0 0 14px rgba(250, 248, 245, 0.65);
 }
 
 .hero__search {
@@ -680,6 +761,66 @@ function categoryStyle(category: TeaCategory) {
   padding: 32px 0;
   color: var(--color-text-muted);
   font-size: var(--text-small);
+}
+
+/* 茶知识 · 小贴士（S7） */
+.tips-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.tip-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s,
+    border-color 0.2s;
+}
+
+.tip-preview:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card);
+  border-color: var(--color-primary);
+}
+
+.tip-preview__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tip-preview__tea {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tip-preview__summary {
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+}
+
+.tip-preview__more {
+  font-size: var(--text-caption);
+  color: var(--color-primary);
+}
+
+@media (max-width: 767px) {
+  .tips-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* 热门轨道 */
