@@ -7,6 +7,24 @@
 | 记录顺序 | **最新条目置顶**（按日期倒序） |
 | 定位 | 事实流水，不替代任何权威文档 |
 
+## 2026-11-10｜修复：顶栏「茶文化」下拉切换板块后内容不更新
+
+- 任务编号 / 分级：TASK-20261110-fix-content-switch / B（前端行为修复，无契约变更）
+- 问题现象：在「茶叶产地」页点顶栏下拉「茶叶品牌」，地址变为 `/contents/brand`，但页面标题、面包屑、列表内容仍停留在「茶叶产地」
+- 根因：五个板块共用同一路由记录 `/contents/:code`（[router/index.ts](../frontend/src/router/index.ts) L44-49），Vue 复用组件实例，`onMounted` 不再触发；[ContentListView.vue](../frontend/src/views/ContentListView.vue) 仅在 `onMounted` 拉数据
+- 修复：
+  - `ContentListView.vue` 新增 `watch(() => route.params.code)`：重置分页为 1、同步 `headerItem`、重新拉列表（类型未加载时补拉）
+  - `ContentDetailView.vue` 同样问题（`/contents/:code/:id` 切换 id 不重载），新增 `watch(() => route.params.id)` → `load()`
+- 契约 / 数据 / 安全影响：无
+- 测试证据：
+  | 项 | 结果 |
+  |---|---|
+  | `npm run typecheck` | 通过 |
+  | `npm run lint` | 通过 |
+  | 浏览器实测（Playwright，localhost:5173） | **PASS**：/contents/origin 点「茶叶品牌」→ URL `/contents/brand`、h1「茶叶品牌」、面包屑「首页 › 茶文化 › 茶叶品牌」、产地描述消失、品牌卡片出现 |
+- 遗留问题：顶栏「茶文化 ▾」仍为 hover 展开（`cursor: default`），触屏/键盘无法展开；如需点击展开需另立任务
+- 回滚方式：回退本提交
+
 ## 2026-11-10｜封面落地：39 条内容配图自动下载并回填
 
 - 任务编号 / 分级：TASK-20261110-cover-apply / A（素材落地，无代码/契约变更）

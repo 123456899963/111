@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppFooter from '@/components/AppFooter.vue'
@@ -45,6 +45,14 @@ const currentType = computed(
 )
 
 onMounted(load)
+
+// 同一路由记录下切换 id（如上一页/下一页、相关推荐）时实例被复用，需重新加载
+watch(
+  () => route.params.id,
+  (id) => {
+    if (id) void load()
+  },
+)
 </script>
 
 <template>

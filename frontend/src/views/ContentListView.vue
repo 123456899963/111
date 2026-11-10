@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppFooter from '@/components/AppFooter.vue'
@@ -55,6 +55,21 @@ onMounted(async () => {
   await loadTypes()
   await loadList()
 })
+
+// 五个板块共用 /contents/:code，切换时组件实例被复用，
+// 必须监听参数变化重新加载，否则内容停留在旧板块。
+watch(
+  () => route.params.code,
+  async (code) => {
+    if (!code || code === headerItem.value?.code) return
+    page.value = 1
+    headerItem.value = types.value.find((t) => t.code === code) ?? null
+    if (types.value.length === 0) {
+      await loadTypes()
+    }
+    await loadList()
+  },
+)
 </script>
 
 <template>
