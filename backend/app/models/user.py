@@ -20,6 +20,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(
         Enum("user", "admin", name="user_role"), nullable=False, default="user"
     )
+    avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
     )

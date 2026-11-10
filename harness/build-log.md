@@ -7,6 +7,43 @@
 | 记录顺序 | **最新条目置顶**（按日期倒序） |
 | 定位 | 事实流水，不替代任何权威文档 |
 
+## 2026-11-10｜新功能：登录后顶栏头像 + 个人中心 /profile + 更换头像
+
+- 任务编号 / 分级：TASK-20261110-avatar-profile / **C**（新增 `users.avatar_url` 列 + 2 个新端点 + 契约变更）
+- 决策留痕：[ADR-0004](../docs/development/ADR/ADR-0004-user-avatar-profile.md)（方案 C：上传 + 预置双通道）；用户已通过选项确认「新建个人中心页」与「上传 + 预置头像」
+- 后端变更：
+  - `models/user.py` 增 `avatar_url VARCHAR(255) NULL`；Alembic 迁移 [0010_user_avatar](../backend/app/alembic/versions/0010_user_avatar.py)（已 `upgrade head`）；[init.sql](../database/init.sql) 同步
+  - [services/me.py](../backend/app/services/me.py)：`AVATAR_PRESETS` 白名单（`tea-01`～`tea-08`）、`update_by_upload`、`update_by_preset`
+  - [routers/me.py](../backend/app/routers/me.py)：新增 `POST /api/v1/me/avatar`（multipart）、`PUT /api/v1/me/avatar`（preset）
+  - [repositories/user_repo.py](../backend/app/repositories/user_repo.py)：`update_avatar`、`add_avatar_log`（`operation_logs.action='avatar_update'`）
+  - [schemas/auth.py](../backend/app/schemas/auth.py)：`UserResponse` 增 `avatar_url`；新增 `AvatarPresetRequest`（`extra=forbid`）
+  - [services/me.py](../backend/app/services/me.py) 修正：非法预置原误用 `ValidationError` 实例当成可调用对象（TypeError），改为 `TeaGuideError(40000, ...)`
+- 前端变更：
+  - [AppHeader.vue](../frontend/src/components/AppHeader.vue)：登录态改为「圆形头像（或首字母占位）+ 用户名」并链接 `/profile`
+  - 新增 [ProfileView.vue](../frontend/src/views/ProfileView.vue)：头像预览、上传（前端预校验类型/5 MB）、8 个预置头像即时切换、等级与统计、我的收藏预览（默认清单前 6 条）、快捷入口
+  - [router/index.ts](../frontend/src/router/index.ts)：新增 `/profile`（`requiresAuth`）
+  - [api/me.ts](../frontend/src/api/me.ts)、[types/index.ts](../frontend/src/types/index.ts)：`uploadAvatar` / `setPresetAvatar` / `User.avatar_url`
+  - 预置头像资产：`frontend/public/avatars/tea-01.svg`～`tea-08.svg`（水墨风自绘）
+- 契约 / 数据 / 安全影响：接口 53 → 55；`User` 增 `avatar_url`；新增 SECURITY **S-35**；TEST_PLAN 新增 AVATAR-01～05（84 → 89 条）
+- 文档同步：API_CONTRACT v1.6、openapi.yaml 1.6.0、DATA_MODEL v1.5、MODULE_DESIGN、SECURITY v1.3、TEST_PLAN v1.4、docs/api/README、AGENTS 数量口径、`scripts/check_constants.py` 基线
+- 测试证据：
+  | 项 | 结果 |
+  |---|---|
+  | `python -m pytest -q`（backend） | **170 passed**（新增 `tests/test_avatar.py` 6 条） |
+  | `python -m ruff check app tests` | 通过（顺带修复 0009 迁移与 `schemas/content.py` 的导入排序） |
+  | `npm run typecheck` / `npm run lint` | 通过 |
+  | `python scripts/check_all.py` | 全部通过（链接 253 / 常量 55·89·35·13 / 五层 / 前台 UI / 记录 / 密钥） |
+  | 浏览器实测（localhost:5173） | **PASS**：注册登录 → 顶栏首字母头像 → 点击进 /profile → 选 `tea-01` → `PUT /api/v1/me/avatar` 200 → 顶栏与页面头像同步更新 |
+- 过程中修正：
+  1. 首次浏览器实测 `PUT /api/v1/me/avatar` 返回 404：后端 reload 未生效（WatchFiles 未捕获改动），重启 `python run.py` 后复测通过
+  2. 测试库 `tea_guide_test` 由 `init.sql` 建库、不走 Alembic，补列后 170 条全通过（仅测试库一次性补列，非项目迁移路径）
+  3. 浏览器验证注册的临时用户 `avatarcheck01` 已清理（含 `operation_logs` / 清单 / 收藏）
+- 遗留问题：
+  1. 替换头像后旧文件不即时删除，与茶图共用 `uploads/` 清理技术债（ADR-0004 §7 已登记）
+  2. `backend/uploads/` 仍为 untracked；头像上传文件不进 Git
+  3. 个人中心仅预览默认清单前 6 条，完整多清单管理仍在 `/my`
+- 回滚方式：回退本提交 + `alembic downgrade 0009_seed_content_items_more`
+
 ## 2026-11-10｜修复：顶栏「茶文化」下拉切换板块后内容不更新
 
 - 任务编号 / 分级：TASK-20261110-fix-content-switch / B（前端行为修复，无契约变更）

@@ -2,18 +2,18 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.2** |
+| 文档版本 | **v1.3** |
 | 创建日期 | 2026-11-07 |
-| 分析依据 | [PRD.md](../product/PRD.md) v1.1 · [ARCHITECTURE.md](./ARCHITECTURE.md) v1.0 · [DATA_MODEL.md](./DATA_MODEL.md) v1.4 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.5 · [database/init.sql](../../database/init.sql) · `backend/app/` |
+| 分析依据 | [PRD.md](../product/PRD.md) v1.1 · [ARCHITECTURE.md](./ARCHITECTURE.md) v1.0 · [DATA_MODEL.md](./DATA_MODEL.md) v1.5 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.6 · [database/init.sql](../../database/init.sql) · `backend/app/` |
 | 适用范围 | **MVP（PRD §2.1）+ 已确认实现的 S1–S17 全项**；R1–R5 与 X1–X13 不实现 |
-| 配套测试 | [TEST_PLAN.md](../testing/TEST_PLAN.md)（用例逐条回溯到本文控制编号 S-01–S-34） |
+| 配套测试 | [TEST_PLAN.md](../testing/TEST_PLAN.md)（用例逐条回溯到本文控制编号 S-01–S-35） |
 | 文档地位 | 安全控制的唯一依据；任何控制变更必须同步修改本文控制编号与对应测试用例 |
 
 ---
 
 ## 0. 结论摘要
 
-本方案把安全要求拆成 **34 个可验证控制项（S-01–S-34）**，每一项都落到具体层、具体文件或具体数据库约束，并在 [TEST_PLAN.md](../testing/TEST_PLAN.md) 中绑定测试用例。
+本方案把安全要求拆成 **35 个可验证控制项（S-01–S-35）**，每一项都落到具体层、具体文件或具体数据库约束，并在 [TEST_PLAN.md](../testing/TEST_PLAN.md) 中绑定测试用例。
 
 六条硬性目标与落点：
 
@@ -92,12 +92,13 @@ MySQL（不对公网暴露；最小权限账号）
 | ID | 控制目标 | 落点（层 / 文件 / 约束） | 实现要求 | 验证 |
 |---|---|---|---|---|
 | **S-01** | 密码只以 bcrypt 哈希存储 | `core/security.py` [hash_password / verify_password](file:///d:/项目二/backend/app/core/security.py#L10-L17)；`services/auth.py` [register](file:///d:/项目二/backend/app/services/auth.py#L8-L18)；`models/user.py` [password_hash](file:///d:/项目二/backend/app/models/user.py#L16)；`database/init.sql` [users.password_hash](file:///d:/项目二/database/init.sql#L30-L39) | 统一使用 `bcrypt.hashpw(..., bcrypt.gensalt(rounds=10))`（PRD §4.3 / `init.sql` 注释指定 cost=10；当前代码未显式传 `rounds`，实际为默认 12，强度不降低但与文档不一致，需统一）；数据库列名固定 `password_hash`，**不得新增明文列**；种子数据也必须是哈希 | AUTH-01、AUTH-02、TEA-01 |
-| **S-02** | 密码不得出现在任何响应体 | `schemas/auth.py` [UserResponse](file:///d:/项目二/backend/app/schemas/auth.py#L14-L19)；API_CONTRACT §2.1 `User` 仅 4 字段；Router 只返回显式字段字典 | 禁止把 ORM `User` 直接 `model_dump()` 或 `dict()` 返回；响应 DTO 不声明 `password` / `password_hash`；`/auth/register`、`/auth/login`、`/auth/me`、`/lists` 全部使用 DTO | AUTH-04、AUTH-09 |
+| **S-02** | 密码不得出现在任何响应体 | `schemas/auth.py` [UserResponse](file:///d:/项目二/backend/app/schemas/auth.py#L14-L19)；API_CONTRACT §2.1 `User` 仅 5 字段（id / username / role / avatar_url / created_at）；Router 只返回显式字段字典 | 禁止把 ORM `User` 直接 `model_dump()` 或 `dict()` 返回；响应 DTO 不声明 `password` / `password_hash`；`/auth/register`、`/auth/login`、`/auth/me`、`/lists`、`/me/avatar` 全部使用 DTO | AUTH-04、AUTH-09、AVATAR-02 |
 | **S-03** | 密码不得写入日志 | `services/auth.py` 不含任何 logger；`core/` 增加日志白名单（待补）；`main.py` 不记录请求体 | 禁止打印/记录 `request.body`、表单字段、`password`；uvicorn access log 只记录方法/路径/状态码，不记录 body 与 Cookie 头；错误日志只记录异常类型与堆栈，不记录入参 | AUTH-09、DEF-03 |
 | **S-04** | 登录失败提示统一，降低账号枚举 | `services/auth.py` [login](file:///d:/项目二/backend/app/services/auth.py#L21-L26)；`core/response.py` [BadCredentials](file:///d:/项目二/backend/app/core/response.py#L28-L36) | 用户名不存在与密码错误统一返回 `40110`“用户名或密码错误”；对不存在的用户也执行一次固定 bcrypt 比对（dummy hash），避免响应时间差暴露账号是否存在 | AUTH-05 |
 | **S-05** | 用户名唯一且大小写不敏感 | `database/init.sql` [uk_users_username](file:///d:/项目二/database/init.sql#L37)；`services/auth.py` [register 前置查询](file:///d:/项目二/backend/app/services/auth.py#L8-L18) | 应用层先查重给出友好提示；并发注册以唯一索引兜底，捕获 `IntegrityError` 转 `40910`，不得 500；`utf8mb4_unicode_ci` 使 `TeaFan ≡ teafan` | AUTH-02 |
 | **S-33** | 登录失败锁定（S14） | `services/auth.py` [login / _is_locked / _record_failure](file:///d:/项目二/backend/app/services/auth.py)；`repositories/login_attempt_repo.py`；`models/login_attempt.py`；`core/config.py` [LOGIN_*](file:///d:/项目二/backend/app/core/config.py) | 15 分钟窗口内同一用户名或同一 IP 失败 ≥ 5 次 → 锁定并返回 `42900` / HTTP 429；锁定判定先于账号校验，锁定期间正确密码同样拒绝，不泄露账号是否存在；只记录失败事件，不记录密码明文；每次登录清理 24 小时前记录，成功登录清空该用户名记录；阈值与窗口由配置项控制 | AUTH-10、AUTH-11、AUTH-12、AUTH-13 |
 | **S-34** | 用户贡献与审核门禁（S10–S13） | `routers/contributions.py`、`routers/admin.py`（依赖 `get_current_user` / `get_admin_user`）；`services/contributions.py`；`schemas/contribution.py`；`repositories/contribution_repo.py`；`models/contribution.py` | 提交必须登录；查询与删除仅限本人记录，非本人一律 `40440` 不泄露存在性；仅 `pending` 可删除/审核，已处理记录永久保留；审核队列与通过/拒绝仅管理员；`payload` 由服务端组装，请求体 `extra=forbid`，客户端无法伪造 `status`/`reviewer_id`/`reviewed_at`；新茶提交先经 `tea_name_category_map` 茶类一致性校验与名称相似度查重（>90% 拦截）；拒绝理由必填 1–200 字并回传用户端；审核动作写入 `operation_logs` | CONTRIB-01–CONTRIB-08 |
+| **S-35** | 头像变更（ADR-0004） | `routers/me.py`（`get_current_user`）；`services/me.py`（`AVATAR_PRESETS` 白名单）；`services/upload.py` [save_image](file:///d:/项目二/backend/app/services/upload.py)；`repositories/user_repo.py` [update_avatar / add_avatar_log](file:///d:/项目二/backend/app/repositories/user_repo.py)；`schemas/auth.py` `AvatarPresetRequest` | 两个端点均须登录，只能改本人头像；`avatar_url` 由服务端生成，请求体 `extra=forbid` 拒绝客户端直传 URL；上传仅 JPEG/PNG/WebP 且校验魔数，≤ 5 MB，UUID 文件名防路径穿越；预置头像取值必须命中 `tea-01`～`tea-08` 白名单，越界 `40000`；每次变更写入 `operation_logs`（`avatar_update`）且不记录敏感信息；旧头像文件不做即时删除，纳入既有 `uploads/` 清理技术债 | AVATAR-01～AVATAR-05 |
 
 ### 2.2 会话
 
@@ -261,3 +262,4 @@ MySQL（不对公网暴露；最小权限账号）
 | v1.0 | 2026-11-07 | 基于 PRD/ARCHITECTURE/DATA_MODEL/API_CONTRACT 建立 32 项安全控制、OWASP Top 10 对照、落地差距清单与上线检查单；配套 60 条测试用例 |
 | v1.1 | 2026-11-09 | 批次二：新增 S-33 登录失败锁定（S14，用户名 + IP 双维度、`42900`/HTTP 429、24 小时清理、不泄露账号存在性）；A04/A07 风险条目同步；用例增至 70 条 |
 | v1.2 | 2026-11-09 | 批次四：新增 S-34 用户贡献与审核门禁（S10–S13：提交需登录、仅本人可见/删除、仅 pending 可处理、审核仅管理员、映射与查重校验、拒绝理由必填、操作日志留痕）；适用范围改为 MVP + S1–S17 全项；配套用例增至 84 条 |
+| v1.3 | 2026-11-10 | ADR-0004 头像：新增 S-35 头像变更（登录鉴权、服务端生成地址、魔数+5 MB 限制、预置白名单、`operation_logs` 留痕）；S-02 字段范围补 `avatar_url` 与 `/me/avatar`；配套用例增至 89 条 |

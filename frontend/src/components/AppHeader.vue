@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useToastStore } from '@/stores/toast'
@@ -9,6 +9,9 @@ const userStore = useUserStore()
 const toast = useToastStore()
 
 const keyword = ref('')
+
+/** 无头像时的首字母占位（取用户名首字符） */
+const initial = computed(() => (userStore.user?.username ?? '').slice(0, 1).toUpperCase())
 
 function onSearch() {
   const q = keyword.value.trim()
@@ -77,9 +80,22 @@ async function onLogout() {
         </form>
 
         <template v-if="userStore.isLoggedIn">
-          <span class="app-header__user" :title="userStore.user?.username">
-            {{ userStore.user?.username }}
-          </span>
+          <RouterLink
+            to="/profile"
+            class="app-header__profile"
+            :title="userStore.user?.username"
+          >
+            <img
+              v-if="userStore.user?.avatar_url"
+              class="app-header__avatar"
+              :src="userStore.user.avatar_url"
+              :alt="`${userStore.user.username} 的头像`"
+            />
+            <span v-else class="app-header__avatar app-header__avatar--placeholder" aria-hidden="true">
+              {{ initial }}
+            </span>
+            <span class="app-header__user">{{ userStore.user?.username }}</span>
+          </RouterLink>
           <button class="app-header__logout" type="button" @click="onLogout">退出</button>
         </template>
         <RouterLink v-else to="/login" class="app-header__login">登录</RouterLink>
@@ -247,6 +263,38 @@ async function onLogout() {
 
 .app-header__search-btn:hover {
   color: var(--color-primary);
+}
+
+.app-header__profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border-radius: var(--radius-full);
+  transition: background 0.15s;
+}
+
+.app-header__profile:hover {
+  background: var(--color-bg-muted);
+}
+
+.app-header__avatar {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  background: var(--color-bg-muted);
+  border: 1px solid var(--color-border);
+}
+
+.app-header__avatar--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--color-primary-dark);
 }
 
 .app-header__user {

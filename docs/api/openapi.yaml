@@ -2,7 +2,7 @@ openapi: 3.0.3
 
 info:
   title: 茶·图鉴 API
-  version: 1.5.0
+  version: 1.6.0
   description: |
     六大茶类结构化知识库平台 MVP 后端接口契约。
 
@@ -193,6 +193,80 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserStatsEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /me/avatar:
+    post:
+      tags: [我的]
+      summary: 上传头像（ADR-0004）
+      description: |
+        登录用户；multipart/form-data 字段名固定为 file。
+        限制 5 MB，允许 JPEG/PNG/WebP，校验魔数，UUID 落盘至 uploads/YYYY/MM/。
+        返回更新后的 User（含 avatar_url）；写入 operation_logs(avatar_update)。
+      operationId: uploadMyAvatar
+      security:
+        - teaSession: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: 更新后的当前用户
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/FileTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMedia'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      tags: [我的]
+      summary: 选择预置头像（ADR-0004）
+      description: |
+        登录用户；preset 白名单 tea-01～tea-08，映射到前端静态资源 /avatars/<preset>.svg。
+        返回更新后的 User；写入 operation_logs(avatar_update)。
+      operationId: setMyAvatarPreset
+      security:
+        - teaSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [preset]
+              properties:
+                preset:
+                  type: string
+                  enum: [tea-01, tea-02, tea-03, tea-04, tea-05, tea-06, tea-07, tea-08]
+      responses:
+        '200':
+          description: 更新后的当前用户
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
@@ -2004,6 +2078,11 @@ components:
           type: string
           enum: [user, admin]
           example: user
+        avatar_url:
+          type: string
+          nullable: true
+          description: 头像地址：/uploads/...（上传）或 /avatars/tea-0X.svg（预置）；未设置为 null
+          example: /avatars/tea-03.svg
         created_at:
           type: string
           format: date-time

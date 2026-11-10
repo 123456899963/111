@@ -25,6 +25,7 @@ export interface User {
   id: number
   username: string
   role: 'user' | 'admin'
+  avatar_url: string | null // /uploads/... 或预置 /avatars/tea-0X.svg
   created_at: string // ISO8601 UTC
 }
 

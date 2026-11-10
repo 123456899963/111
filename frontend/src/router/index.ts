@@ -9,6 +9,7 @@ import CompareView from '@/views/CompareView.vue'
 import MyListView from '@/views/MyListView.vue'
 import ContributeView from '@/views/ContributeView.vue'
 import MyContributionsView from '@/views/MyContributionsView.vue'
+import ProfileView from '@/views/ProfileView.vue'
 import ShareView from '@/views/ShareView.vue'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
@@ -25,6 +26,12 @@ const routes: RouteRecordRaw[] = [
     name: 'my-list',
     component: MyListView,
     meta: { title: '我的收藏', requiresAuth: true },
+  },
+  {
+    path: '/profile',
+    name: 'profile',
+    component: ProfileView,
+    meta: { title: '个人中心', requiresAuth: true },
   },
   {
     path: '/contribute',

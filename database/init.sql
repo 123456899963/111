@@ -32,6 +32,7 @@ CREATE TABLE users (
   username      VARCHAR(32)       NOT NULL                COMMENT '用户名，3-20 字符，中文/英文/数字',
   password_hash VARCHAR(255)      NOT NULL                COMMENT 'bcrypt 哈希（60 字符）',
   role          ENUM('user','admin') NOT NULL DEFAULT 'user' COMMENT '角色：user 注册用户 / admin 管理员',
+  avatar_url    VARCHAR(255)      NULL                    COMMENT '头像地址：/uploads/... 或预置 /avatars/tea-0X.svg',
   created_at    DATETIME          NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_users_username (username)

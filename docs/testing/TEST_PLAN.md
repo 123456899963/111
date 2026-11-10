@@ -2,11 +2,11 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.3** |
+| 文档版本 | **v1.4** |
 | 创建日期 | 2026-11-07 |
-| 测试对象 | MVP 后端 46 个 REST 端点 + 11 张表约束 + 安全控制 S-01–S-34 |
-| 依据 | [PRD.md](../product/PRD.md) v1.1 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.5 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.4 · [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) v1.0 · [SECURITY.md](../architecture/SECURITY.md) v1.2 |
-| 用例总数 | **84 条**（高 47 / 中 34 / 低 3） |
+| 测试对象 | MVP 后端 48 个 REST 端点 + 11 张表约束 + 安全控制 S-01–S-35 |
+| 依据 | [PRD.md](../product/PRD.md) v1.1 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.6 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.5 · [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) v1.0 · [SECURITY.md](../architecture/SECURITY.md) v1.3 |
+| 用例总数 | **89 条**（高 50 / 中 36 / 低 3） |
 | 覆盖类型 | 正向、反向、边界；含越权、并发重复提交、超长字段、非法枚举 |
 | 交付边界 | 用例按模块在 `backend/tests/`（pytest）与 `frontend/src/utils/*.spec.ts`（Vitest 纯函数）落地 |
 
@@ -30,7 +30,7 @@
 - 管理员：茶品新增/编辑/上下架/小贴士/统计/上传。
 - 用户贡献：新茶提交（映射 + 查重）、科普投稿、我的提交、管理员审核队列与通过/拒绝。
 - 数据库约束：唯一索引、外键、枚举、软失效状态。
-- 安全控制：S-01–S-34（逐条在用例“对应接口/安全项”列标注）。
+- 安全控制：S-01–S-35（逐条在用例“对应接口/安全项”列标注）。
 
 ### 1.3 范围外
 
@@ -260,6 +260,16 @@
 
 ---
 
+### 5.13 头像与个人中心（5 条）
+
+| 编号 | 模块 | 优先级 | 对应接口/安全项 | 前置条件 | 操作步骤 | 预期结果 |
+|---|---|---|---|---|---|---|
+| **TC-AVATAR-01** | 头像 | 高 | `POST /api/v1/me/avatar`、`PUT /api/v1/me/avatar`；S-35 | 无 Cookie | ① 未登录上传图片；② 未登录提交预置头像 | ① 401/`40100`；② 401/`40100`；均不写库、不落盘 |
+| **TC-AVATAR-02** | 头像 | 高 | `POST /api/v1/me/avatar`；S-02/S-35 | 用户已登录；准备合法 PNG | ① 上传 PNG；② 查 `GET /auth/me`；③ 查磁盘与 `operation_logs` | ① 200/`code=0`，`data.avatar_url` 以 `/uploads/` 开头且 `.png` 结尾，响应不含 `password_hash`；② 返回同一 `avatar_url`；③ 文件实际落盘，新增 1 条 `avatar_update` 日志 |
+| **TC-AVATAR-03** | 头像 | 高 | `POST /api/v1/me/avatar`；S-35 | 用户已登录 | ① 上传 `text/plain` 文件；② 上传伪造扩展名的文本文件（`.png` 但内容非图片） | ① 415/`41500`；② 415/`41500`（按魔数判定，不信任扩展名）；`users.avatar_url` 不变 |
+| **TC-AVATAR-04** | 头像 | 中 | `POST /api/v1/me/avatar`；S-35 | 用户已登录 | ① 上传恰好 5 MB 的合法图片；② 上传 5 MB + 1 字节 | ① 200/`code=0`；② 413/`41300`，`avatar_url` 不变 |
+| **TC-AVATAR-05** | 头像 | 中 | `PUT /api/v1/me/avatar`；S-35 | 用户已登录且已有上传头像 | ① 选择 `tea-03`；② 选择 `tea-99`；③ 请求体附加 `avatar_url` 字段 | ① 200/`code=0`，`avatar_url=/avatars/tea-03.svg`；② 400/`40000`（白名单）；③ 400/`40000`（`extra=forbid`）；②③ 均不改变现有头像 |
+
 ## 6. 覆盖矩阵与统计
 
 ### 6.1 用例数量
@@ -278,15 +288,16 @@
 | 我的与个性化 | 6 | TC-ME-01–03、TC-REC-01–03 | 2 | 4 | 0 |
 | 多清单 | 6 | TC-MLIST-01–06 | 4 | 2 | 0 |
 | 用户贡献与审核 | 8 | TC-CONTRIB-01–08 | 6 | 2 | 0 |
-| **合计** | **84** | — | **47** | **34** | **3** |
+| 头像与个人中心 | 5 | TC-AVATAR-01–05 | 3 | 2 | 0 |
+| **合计** | **89** | — | **50** | **36** | **3** |
 
 ### 6.2 正向 / 反向 / 边界覆盖（按主要目的归类）
 
 | 类型 | 数量 | 代表用例 |
 |---|---:|---|
-| 正向 | 32 | AUTH-01/04、TEA-01/05/07、LIST-01/02/05/08/09、FAV-01/03/06、NOTE-01/03、SHARE-01/05/08、PERM-04、UPLOAD-01/04、DEF-04、ME-02、REC-01/03、MLIST-01/05、CONTRIB-01/04/06/08 |
-| 反向 | 31 | AUTH-02/05/06/07/10/11/13、TEA-02/06、LIST-04、FAV-05、NOTE-02/05、SHARE-03/04/06/07/09、PERM-01/02/03、UPLOAD-02/03/05、DEF-01/03、ME-01、REC-02、MLIST-02/04、CONTRIB-02/03 |
-| 边界/并发 | 21 | AUTH-03/12、TEA-03/04、LIST-06/07、FAV-02/04/07、NOTE-04、SHARE-02/10、DEF-02、ME-03、MLIST-03/06、CONTRIB-05/07 |
+| 正向 | 33 | AUTH-01/04、TEA-01/05/07、LIST-01/02/05/08/09、FAV-01/03/06、NOTE-01/03、SHARE-01/05/08、PERM-04、UPLOAD-01/04、DEF-04、ME-02、REC-01/03、MLIST-01/05、CONTRIB-01/04/06/08、AVATAR-02 |
+| 反向 | 34 | AUTH-02/05/06/07/10/11/13、TEA-02/06、LIST-04、FAV-05、NOTE-02/05、SHARE-03/04/06/07/09、PERM-01/02/03、UPLOAD-02/03/05、DEF-01/03、ME-01、REC-02、MLIST-02/04、CONTRIB-02/03、AVATAR-01/03/05 |
+| 边界/并发 | 22 | AUTH-03/12、TEA-03/04、LIST-06/07、FAV-02/04/07、NOTE-04、SHARE-02/10、DEF-02、ME-03、MLIST-03/06、CONTRIB-05/07、AVATAR-04 |
 
 ### 6.3 强制覆盖项检查
 
@@ -304,6 +315,7 @@
 | 上传类型与大小 | UPLOAD-01、UPLOAD-02、UPLOAD-03 | ✅ |
 | 贡献越权与重复审核 | CONTRIB-05、CONTRIB-06、CONTRIB-07、CONTRIB-08 | ✅ |
 | 茶类矛盾与名称查重 | CONTRIB-02、CONTRIB-03 | ✅ |
+| 头像上传类型/大小/白名单 | AVATAR-01、AVATAR-03、AVATAR-04、AVATAR-05 | ✅ |
 
 ### 6.4 与 SECURITY.md 控制编号的回溯
 
@@ -319,6 +331,7 @@
 | S-30–S-32 配置/上线/供应链 | DEF-01–DEF-04 |
 | S-33 登录失败锁定 | AUTH-10–AUTH-13 |
 | S-34 用户贡献与审核门禁 | CONTRIB-01–CONTRIB-08 |
+| S-35 头像变更 | AVATAR-01–AVATAR-05 |
 
 ---
 
@@ -387,3 +400,5 @@
 | v1.0 | 2026-11-07 | 建立 60 条可执行用例，覆盖 9 个模块、正向/反向/边界、越权/并发/超长/非法枚举；逐条回溯 API 契约与 SECURITY 控制编号 |
 | v1.1 | 2026-11-09 | 批次二：新增 AUTH-10–13（S14 登录锁定 / S-33）与 5.10 我的与个性化（ME-01–03、REC-01–03）；合计 70 条 |
 | v1.2 | 2026-11-09 | 批次三 S9 多清单：新增 5.11 多清单（MLIST-01–06）；FAV-01/02/03、NOTE-01–05、PERM-03、SHARE-01 更新为多清单路径与断言；端点覆盖 40 个；合计 76 条（高 41 / 中 32 / 低 3） |
+| v1.3 | 2026-11-09 | 批次四 S10–S13：新增 5.12 用户贡献与审核（CONTRIB-01–08）；覆盖端点 46 个；合计 84 条（高 47 / 中 34 / 低 3） |
+| v1.4 | 2026-11-10 | ADR-0004 头像：新增 5.13 头像与个人中心（AVATAR-01–05）；S-02 校验范围补 `/me/avatar`；覆盖端点 48 个；合计 89 条（高 50 / 中 36 / 低 3） |

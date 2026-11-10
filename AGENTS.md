@@ -101,8 +101,8 @@ d:\项目二\
 | Element Plus 前台使用（已修复） | 前台 `AppToast` 自研；`main.ts` 仅在 `/admin` 路由按需加载 Element Plus | 前台禁止再引入；后台保持按需加载 |
 | Service 直连查询（已修复） | 查询已全部下沉到 `repositories/`；`check_layers.py` 基线为空 | 保持五层边界，禁止回流 |
 | Router/Service 返回 ORM（已修复） | 端点统一经 Schema 序列化后返回 | 保持统一响应体，禁止直接返回 ORM |
-| 业务端点未实现（已修复） | 53 个业务端点已按 API_CONTRACT 实现 | 新增端点必须同步契约与测试 |
-| 测试未覆盖 TEST_PLAN（已修复） | TEST_PLAN 84 条用例已落地，后端全量 153 条测试通过 | 新增业务代码必须同步补测 |
+| 业务端点未实现（已修复） | 55 个业务端点已按 API_CONTRACT 实现 | 新增端点必须同步契约与测试 |
+| 测试未覆盖 TEST_PLAN（已修复） | TEST_PLAN 89 条用例已落地，后端全量 170 条测试通过 | 新增业务代码必须同步补测 |
 | 例外登记 | 运行 `python scripts/check_layers.py` / `check_frontend.py` 查看最新列表 | 修复后同步更新脚本基线 |
 
 ## 4. 前端开发规范
@@ -129,7 +129,7 @@ d:\项目二\
 - `core/` 为横向支撑（config / database / security / response / auth_deps）
 - 统一响应体 `{ code, message, data }`，业务异常经 `core/response.py` 映射
 - 代码规范：Ruff（`ruff check` + `ruff format --check`）
-- 安全控制共 34 项（S-01–S-34），变更必须同步 [SECURITY.md](docs/architecture/SECURITY.md) 与测试用例
+- 安全控制共 35 项（S-01–S-35），变更必须同步 [SECURITY.md](docs/architecture/SECURITY.md) 与测试用例
 - 静态检查：`python scripts/check_layers.py`
 
 详见 [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) §3、[SECURITY.md](docs/architecture/SECURITY.md)。
@@ -148,7 +148,7 @@ d:\项目二\
 
 ## 7. API 接口规范
 
-- 统一前缀 `/api/v1`；共 **53 个业务端点**（auth 5 / me 1 / teas 9 / tips 1 / favorites 3 / lists 6 / shares 4 / admin 14 / contributions 3 / contents 3 / admin-contents 4）
+- 统一前缀 `/api/v1`；共 **55 个业务端点**（auth 5 / me 3 / teas 9 / tips 1 / favorites 3 / lists 6 / shares 4 / admin 14 / contributions 3 / contents 3 / admin-contents 4）
 - 统一响应 `{ code, message, data }`；成功判定只看 `code === 0`；成功 HTTP 状态统一 **200**；业务失败 `HTTP status = code // 100`；FastAPI 422 必须重映射为 400/`40000`
 - 认证：**HttpOnly Cookie `tea_session`**（itsdangerous 签名，30 天，`SameSite=Lax`），不使用 Token / Authorization 头；角色每次从 `users.role` 实时读库
 - JSON 字段 `snake_case`，与数据库列名一致；空值用 `null`
@@ -169,7 +169,7 @@ d:\项目二\
 
 ## 9. 测试要求
 
-- 测试方案：[TEST_PLAN.md](docs/testing/TEST_PLAN.md) v1.3 —— **84 条用例**（高 47 / 中 34 / 低 3），覆盖 46 端点 + 11 表约束 + 34 项安全控制
+- 测试方案：[TEST_PLAN.md](docs/testing/TEST_PLAN.md) v1.4 —— **89 条用例**（高 50 / 中 36 / 低 3），覆盖 48 端点 + 11 表约束 + 35 项安全控制
 - 后端：pytest + httpx（TestClient），断言同时检查 HTTP 状态码、业务 `code`、数据库最终状态
 - 前端：Vitest，仅覆盖纯函数（筛选/格式化/URL 组装）
 - 高优先级用例任一失败 = 阻断发布；错误响应不得泄露堆栈/SQL/表名
@@ -186,7 +186,7 @@ d:\项目二\
 | [MODULE_DESIGN.md](docs/architecture/MODULE_DESIGN.md) | 模块与端点映射 |
 | [DATA_MODEL.md](docs/architecture/DATA_MODEL.md) + [init.sql](database/init.sql) | 数据库定稿 |
 | [API_CONTRACT.md](docs/api/API_CONTRACT.md) + [openapi.yaml](docs/api/openapi.yaml) | 前后端联调唯一依据 |
-| [SECURITY.md](docs/architecture/SECURITY.md) | 安全控制唯一依据（S-01–S-34） |
+| [SECURITY.md](docs/architecture/SECURITY.md) | 安全控制唯一依据（S-01–S-35） |
 | [DESIGN_SYSTEM.md](docs/design/DESIGN_SYSTEM.md) / [PAGE_SPECS.md](docs/design/PAGE_SPECS.md) | 视觉与页面规范 |
 | [TEST_PLAN.md](docs/testing/TEST_PLAN.md) | 测试用例唯一依据 |
 | [DEVELOPMENT_GUIDE.md](docs/development/DEVELOPMENT_GUIDE.md) | SDD 流程、任务分级与各阶段产出 |
@@ -269,5 +269,5 @@ B 类输出技术方案后即可编码；C 类必须等用户明确答复。
 - [x] `SECRET_KEY` / `DEBUG` 代码默认值已收紧（2026-11-09，缺失 `SECRET_KEY` 拒绝启动）；生产部署仍需注入随机密钥与种子管理员密码 —— 安全 P0
 - [x] bcrypt 已统一为 `cost=10`（`_BCRYPT_ROUNDS`，对齐 SECURITY S-01）
 - [x] `routers/admin.py` 等端点已按 API_CONTRACT 补齐
-- [x] TEST_PLAN 84 条用例已落地；后端全量 153 条测试通过（2026-11-09）
+- [x] TEST_PLAN 89 条用例已落地；后端全量 170 条测试通过（2026-11-10）
 - [x] §3.1 基线遗留已在 2026-11-09 审查中清理（五层 / 前台 UI 遗留均为 0）

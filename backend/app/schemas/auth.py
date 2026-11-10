@@ -49,6 +49,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     role: Literal["user", "admin"]
+    avatar_url: str | None = None
     created_at: datetime
 
 
@@ -57,3 +58,11 @@ class UsernameAvailabilityResponse(BaseModel):
 
     username: str
     available: bool
+
+
+class AvatarPresetRequest(BaseModel):
+    """选择预置头像（ADR-0004）；取值范围由 Service 白名单二次校验。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    preset: str = Field(..., min_length=1, max_length=32)

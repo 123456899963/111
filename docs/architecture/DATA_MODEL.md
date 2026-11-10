@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.4（已确认）** |
+| 文档版本 | **v1.5（已确认）** |
 | 创建日期 | 2026-11-06 |
 | 修订记录 | v1.0（2026-11-06）：基于 PRD v1.1 与已确认技术架构完成数据模型定稿；确认 7 张表、清单独立建表、`share_tokens` 改挂 `list_id`、`operation_logs` 最小留痕、不建 `sessions` 表 |
 | 分析依据 | [PRD.md](../product/PRD.md) v1.1 · [TECH_STACK.md](TECH_STACK.md) v1.0 · [ARCHITECTURE.md](ARCHITECTURE.md) · [MODULE_DESIGN.md](MODULE_DESIGN.md) · `backend/app/models/` |
@@ -177,6 +177,7 @@ erDiagram
 | `username` | VARCHAR(32) | 否 | — | 3–20 字符由 Pydantic 校验；唯一 |
 | `password_hash` | VARCHAR(255) | 否 | — | bcrypt（60 字符），不存明文 |
 | `role` | ENUM('user','admin') | 否 | 'user' | 权限矩阵依据 |
+| `avatar_url` | VARCHAR(255) | 是 | NULL | 头像地址（ADR-0004）：`/uploads/...` 或预置 `/avatars/tea-0X.svg`；NULL 表示未设置 |
 | `created_at` | DATETIME | 否 | CURRENT_TIMESTAMP | UTC |
 
 - **主/外键**：PK `id`；无外键。
@@ -592,3 +593,4 @@ erDiagram
 | **v1.2** | 2026-11-09 | 批次一/二：`teas` 增 `price_min`/`price_max`（S2）、`tea_tips` 增时间戳（S7）、新增 `favorite_items(created_at, tea_id)` 索引（S17）；新增 `login_attempts` 表（S14，0004 迁移）；共 9 张表 |
 | **v1.3** | 2026-11-09 | 批次三 S9 多收藏清单（0005 迁移）：`collection_lists` 去 `uk_list_user`、增 `is_default` + `uk_list_user_default` + `idx_list_user`；`favorite_items` 增 `list_id`，唯一键改 `uk_favorite_list_tea`，新增 `idx_favorite_list_created` 与清单外键；`favorite_count` 改为跨清单去重 |
 | **v1.4** | 2026-11-09 | 批次四 S10–S13（0006 迁移）：新增 `contributions`（JSON payload + pending/approved/rejected）与 `tea_name_category_map`（22 条种子）；共 11 张表 |
+| **v1.5** | 2026-11-10 | ADR-0004 用户头像（0010 迁移）：`users` 增 `avatar_url VARCHAR(255) NULL`（上传 `/uploads/...` 或预置 `/avatars/tea-0X.svg`）；表数量不变 |

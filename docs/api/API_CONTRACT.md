@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.5** |
+| 文档版本 | **v1.6** |
 | 创建日期 | 2026-11-06 |
 | 契约基线 | [PRD.md](../product/PRD.md) v1.1 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.4 · [database/init.sql](../../database/init.sql) · [MODULE_DESIGN.md](../architecture/MODULE_DESIGN.md) |
 | 本契约地位 | 前后端联调与字段命名的唯一依据。脚手架中与本契约不一致的字段，以本契约（数据库列名）为准 |
@@ -265,6 +265,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | `id` | integer | 用户主键 | `users.id` |
 | `username` | string | 用户名，3–20 字符 | `users.username` |
 | `role` | string | `user` / `admin` | `users.role` |
+| `avatar_url` | string \| null | 头像地址：`/uploads/...`（上传）或 `/avatars/tea-0X.svg`（预置）；未设置为 `null` | `users.avatar_url` |
 | `created_at` | datetime | 注册时间（UTC） | `users.created_at` |
 
 > 统一使用 `id`，不使用 `user_id`。`password_hash` 永不返回。
@@ -276,6 +277,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
   "id": 12,
   "username": "teafan",
   "role": "user",
+  "avatar_url": "/avatars/tea-03.svg",
   "created_at": "2026-11-06T12:00:00Z"
 }
 ```
@@ -2002,6 +2004,44 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 
 ---
 
+#### 4.7.2 上传头像（ADR-0004）
+
+- **方法与路径**：`POST /me/avatar`
+- **权限**：登录用户
+- **请求体**：`multipart/form-data`，字段 `file`（必填）
+- **约束**：仅 JPEG / PNG / WebP；按魔数判定，不信任扩展名与 `Content-Type`；单文件 ≤ 5 MB（`MAX_UPLOAD_SIZE_MB`）；文件名服务端 UUID 生成，落盘 `uploads/YYYY/MM/`
+- **成功响应**：HTTP 200，`code=0`，`data` 为更新后的 `User` 对象（含 `avatar_url`）
+- **副作用**：写入 `operation_logs`：`action='avatar_update'`、`target_type='user'`、`target_id=当前用户 ID`
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | 空文件 / 参数校验失败 |
+| 401 | 40100 | 未登录 |
+| 413 | 41300 | 文件超过 5 MB |
+| 415 | 41500 | 非 JPEG/PNG/WebP |
+
+#### 4.7.3 选择预置头像（ADR-0004）
+
+- **方法与路径**：`PUT /me/avatar`
+- **权限**：登录用户
+- **请求体**（JSON，`extra=forbid`）：
+
+| 字段 | 类型 | 必填 | 约束 |
+|---|---|---|---|
+| `preset` | string | 是 | 白名单 `tea-01` ～ `tea-08`（前端静态资源 `/avatars/<preset>.svg`） |
+
+- **成功响应**：HTTP 200，`code=0`，`data` 为更新后的 `User` 对象；`avatar_url` 形如 `/avatars/tea-03.svg`
+- **副作用**：写入 `operation_logs`：`action='avatar_update'`
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | `preset` 不在白名单 / 请求体含额外字段 |
+| 401 | 40100 | 未登录 |
+
+---
+
 ### 4.8 用户贡献模块（S10–S13）
 
 > 双层校验：① 系统层校验表单完整性、名品-茶类映射、名称相似度查重；② 管理员人工审核。
@@ -2340,3 +2380,4 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 | **v1.3** | 2026-11-09 | 批次一/二（PLAN_剩余功能）：新增 §4.2.8 相关推荐、§4.2.9 最新小贴士、§4.2.10 个性化推荐、§4.7.1 用户统计与等级；登录新增 `42900` 锁定；接口总览补齐至 37 个；新增 §5.8 `login_attempts` |
 | **v1.4** | 2026-11-09 | 批次三 S9 多收藏清单：清单拆分为 6 个端点；`FavoriteState` 增 `list_ids`，收藏/取消/分享支持可选 `list_id`；新增错误码 `40420`；`favorite_count` 改为跨清单去重；接口总览 37 → 40 个 |
 | **v1.5** | 2026-11-09 | 批次四 S10–S13 用户贡献：新增 §4.8 六个端点；`TeaDetail` 增 `contributed_articles`；新增错误码 `40440`；新增枚举 `contribution.type/status`；新增 §5.9 `contributions`、§5.10 `tea_name_category_map`；接口总览 40 → 46 个 |
+| **v1.6** | 2026-11-10 | ADR-0004 用户头像：`User` 增 `avatar_url`；新增 §4.7.2 `POST /me/avatar`、§4.7.3 `PUT /me/avatar`；错误码复用 400/401/413/415；接口总数 53 → 55 |

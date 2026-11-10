@@ -8,8 +8,8 @@ Create Date: 2026-11-10
 幂等：按 title 去重。
 """
 
-from collections.abc import Sequence
 import json
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
