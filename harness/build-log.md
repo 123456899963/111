@@ -7,6 +7,35 @@
 | 记录顺序 | **最新条目置顶**（按日期倒序） |
 | 定位 | 事实流水，不替代任何权威文档 |
 
+## 2026-11-10｜P0 收尾：顶栏可访问性 + 三项冒烟 + 部署演练 + CI 本地等效
+
+- 任务编号 / 分级：TASK-20261110-p0-closeout / **B**（AppHeader 交互修复无契约变更；其余为验证、格式化与文档修正）
+- 内容 1：顶栏「茶文化 ▾」下拉支持触屏/键盘
+  - [AppHeader.vue](../frontend/src/components/AppHeader.vue)：触发元素 span → button（`aria-haspopup` / `aria-expanded`），点击切换 `--open` 类，Escape 关闭并回焦按钮，点击外部 / 路由跳转自动关闭；hover 规则包进 `@media (hover: hover)`，触屏不再依赖 hover
+  - 测试：`npm run lint` / `npm run typecheck` 通过；浏览器实测 **5/5 PASS**（hover 展开、点击开合 + aria 同步、Esc 关闭、外点关闭、跳转 /contents/knowledge）
+- 内容 2：三项功能手工冒烟（浏览器实测）
+  - 多收藏清单 + 分享海报：**7/8 PASS** —— 注册 / 收藏计数 / 建清单 / 8 位分享 token / 海报下载 / 撤销分享（旧链接显失效页）全部通过；**发现缺口：前端无「把茶加入非默认清单」入口**（FavoriteButton 仅默认清单，后端 `addFavorite` 已支持 listId）→ 遗留 B 类任务
+  - 用户贡献 + 管理员审核：**5/5 PASS**（提交 → 待审核 → admin/admin123 通过 → 我的提交同步「已通过」）
+  - 冒烟数据清理（**经用户明确授权**）：删除 smoketest02/03 及其清单/收藏/分享/贡献/日志 + 审核上架的测试茶「冒烟测试茶」；复核 `teas=36`、残留用户=0
+- 内容 3：部署全链路演练（本地模拟全新环境）
+  - 干净库 `tea_guide_deploy_check` ← init.sql（13 表 + 种子 + admin）
+  - **发现并修正部署阻断**：文档旧流程「stamp 0001_baseline → upgrade head」在当前 init.sql 上必失败（0002 对已有列 `teas.video_url` 报 1060 Duplicate column）——init.sql 已随批次演进包含最新全量结构与种子
+  - 修正后标准流程：全新环境 `init.sql 建库 → alembic stamp head`（演练通过，`current = 0010_user_avatar (head)`）；既有旧环境直接 `alembic upgrade head`
+  - 生产模式 Uvicorn（无 reload、注入随机 SECRET_KEY，端口 8010）：`/api/v1/health`、`/api/v1/teas`、`/api/v1/contents?type=knowledge`（8 条）均 `code=0`；演练库与临时文件已清理
+  - 文档同步：[0001_baseline.py](../backend/app/alembic/versions/0001_baseline.py) docstring、[README](../README.md) 已知问题 3 与改进方向
+- 内容 4：CI 本地等效实跑（ci.yml 三 job 原命令）
+  - **发现并修正格式漂移**：后端 `ruff format --check` 失败（7 文件：0008/0009 迁移 + 5 测试文件）、前端 prettier 失败（19 文件）——历史记录曾声称通过，以本次实跑为准
+  - 修复后全绿：`ruff check` ✓ / `ruff format --check`（93 files）✓ / `pytest -q` **170 passed** / `npm run lint` ✓ / `format:check` ✓ / `typecheck` ✓ / `test:run` **45 passed** / `check_all.py` 全部通过
+  - **CI 远程触发未完成（C 类待决策）**：远程仓库为 Gitee，`.github/workflows/ci.yml`（GitHub Actions）push 不触发；候选：① 转 Gitee Go 流水线 ② 镜像到 GitHub ③ 维持本地等效，待用户拍板
+- 契约 / 数据 / 安全影响：无契约变更、无表结构变更（仅前端交互 + 格式化 + 文档）；冒烟数据清理经用户授权
+- 测试证据：见上各内容块；全部实跑
+- 遗留问题：
+  1. 前端「加入指定清单」UI 缺口（S9 体验闭环，B 类待立项）
+  2. CI 远程触发平台待决策（C 类，本条内容 4）
+  3. 真实服务器（Linux + Nginx）部署验证仍待实机；Nginx `client_max_body_size 6m` 与 413 复测属部署项
+  4. `backend/uploads/` 仍 untracked（既有口径）
+- 回滚方式：回退本提交（AppHeader / 格式化 / 文档均为独立可回退改动）
+
 ## 2026-11-10｜新功能：登录后顶栏头像 + 个人中心 /profile + 更换头像
 
 - 任务编号 / 分级：TASK-20261110-avatar-profile / **C**（新增 `users.avatar_url` 列 + 2 个新端点 + 契约变更）
