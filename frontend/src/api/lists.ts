@@ -3,13 +3,7 @@
  */
 
 import request from './request'
-import type {
-  ApiEnvelope,
-  ListData,
-  ListSummary,
-  NoteUpdateData,
-  TitleUpdateData,
-} from '@/types'
+import type { ApiEnvelope, ListData, ListSummary, NoteUpdateData, TitleUpdateData } from '@/types'
 
 /** GET /lists 我的全部清单摘要（默认清单置顶，首次访问自动创建） */
 export function getMyLists() {

@@ -169,16 +169,13 @@ def upgrade() -> None:
     conn = op.get_bind()
     # 获取各板块 type_id
     type_map: dict[str, int] = {}
-    rows = conn.execute(
-        sa.text("SELECT id, code FROM content_types")
-    ).fetchall()
+    rows = conn.execute(sa.text("SELECT id, code FROM content_types")).fetchall()
     for row in rows:
         type_map[row[1]] = row[0]
 
     # 去重：同标题已存在则跳过
     existing_titles = {
-        r[0]
-        for r in conn.execute(sa.text("SELECT title FROM content_items")).fetchall()
+        r[0] for r in conn.execute(sa.text("SELECT title FROM content_items")).fetchall()
     }
 
     for item in ALL_SEED:
@@ -208,8 +205,6 @@ def downgrade() -> None:
     conn = op.get_bind()
     titles = [item["title"] for item in ALL_SEED]
     conn.execute(
-        sa.text(
-            "DELETE FROM content_items WHERE title IN :titles"
-        ),
+        sa.text("DELETE FROM content_items WHERE title IN :titles"),
         {"titles": titles},
     )

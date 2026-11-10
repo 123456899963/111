@@ -6,11 +6,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { RouterLink, useRouter } from 'vue-router'
 import { deleteAdminContent, getAdminContents } from '@/api/admin'
-import type {
-  AdminContentListData,
-  AdminContentListItem,
-  ContentTypeCode,
-} from '@/types'
+import type { AdminContentListData, AdminContentListItem, ContentTypeCode } from '@/types'
 
 const router = useRouter()
 
@@ -106,13 +102,7 @@ onMounted(load)
     </div>
 
     <!-- 表格 -->
-    <el-table
-      v-if="state === 'ready'"
-      :data="data.items"
-      stripe
-      border
-      style="width: 100%"
-    >
+    <el-table v-if="state === 'ready'" :data="data.items" stripe border style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="type_code" label="板块" width="110">
         <template #default="{ row }">{{ TYPE_LABELS[row.type_code] }}</template>
@@ -143,7 +133,8 @@ onMounted(load)
             size="small"
             :disabled="!row.is_active"
             @click="onDelete(row)"
-          >软删除</el-button>
+            >软删除</el-button
+          >
         </template>
       </el-table-column>
     </el-table>
@@ -158,7 +149,12 @@ onMounted(load)
         :page-size="pageSize"
         :total="data.total"
         layout="prev, pager, next, total"
-        @current-change="(p: number) => { page = p; void load() }"
+        @current-change="
+          (p: number) => {
+            page = p
+            void load()
+          }
+        "
       />
     </div>
   </div>

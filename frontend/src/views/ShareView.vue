@@ -174,7 +174,12 @@ async function copyAll() {
                 登录后一键收藏
               </button>
             </template>
-            <button type="button" class="btn btn--secondary" :disabled="posterLoading" @click="downloadPoster">
+            <button
+              type="button"
+              class="btn btn--secondary"
+              :disabled="posterLoading"
+              @click="downloadPoster"
+            >
               {{ posterLoading ? '海报生成中…' : '下载分享海报' }}
             </button>
             <RouterLink class="btn btn--secondary" to="/teas">继续逛茶</RouterLink>

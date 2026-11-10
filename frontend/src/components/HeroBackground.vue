@@ -43,9 +43,7 @@ function currentSrc(banner: Banner): string {
   return banner.sources.find((src) => !failed.value.includes(src)) ?? ''
 }
 
-const available = computed(() =>
-  BANNERS.filter((banner) => currentSrc(banner) !== ''),
-)
+const available = computed(() => BANNERS.filter((banner) => currentSrc(banner) !== ''))
 const activeIndex = computed(() =>
   available.value.length === 0 ? -1 : current.value % available.value.length,
 )

@@ -275,7 +275,7 @@ function retry() {
                 type="button"
                 class="detail-gallery__thumb"
                 :class="{ 'detail-gallery__thumb--active': url === displayImage }"
-                @click="(activeImage = url), (imageFailed = false)"
+                @click="((activeImage = url), (imageFailed = false))"
               >
                 <img :src="url" :alt="`${tea.name} 图片`" loading="lazy" />
               </button>
@@ -328,7 +328,9 @@ function retry() {
         <section v-if="hasVideo" class="detail-section">
           <h2 class="detail-section__title">
             视频介绍
-            <span v-if="videoDurationText" class="detail-section__hint">{{ videoDurationText }}</span>
+            <span v-if="videoDurationText" class="detail-section__hint">{{
+              videoDurationText
+            }}</span>
           </h2>
           <video
             class="detail-video"
@@ -388,11 +390,7 @@ function retry() {
         <section v-if="contributedArticles.length" class="detail-section">
           <h2 class="detail-section__title">茶友科普</h2>
           <div class="article-list">
-            <article
-              v-for="article in contributedArticles"
-              :key="article.id"
-              class="article-card"
-            >
+            <article v-for="article in contributedArticles" :key="article.id" class="article-card">
               <h4 class="article-card__title">{{ article.title || '茶友分享' }}</h4>
               <p class="article-card__content">{{ article.content }}</p>
               <footer class="article-card__meta">

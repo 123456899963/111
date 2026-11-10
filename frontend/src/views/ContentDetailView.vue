@@ -40,9 +40,7 @@ async function load() {
   }
 }
 
-const currentType = computed(
-  () => types.value.find((t) => t.code === typeCode.value) ?? null,
-)
+const currentType = computed(() => types.value.find((t) => t.code === typeCode.value) ?? null)
 
 onMounted(load)
 
@@ -64,7 +62,9 @@ watch(
       <nav class="breadcrumb">
         <RouterLink to="/">首页</RouterLink>
         <span class="sep">/</span>
-        <RouterLink :to="`/contents/${typeCode}`">茶文化 · {{ currentType?.name ?? typeCode }}</RouterLink>
+        <RouterLink :to="`/contents/${typeCode}`"
+          >茶文化 · {{ currentType?.name ?? typeCode }}</RouterLink
+        >
         <span class="sep">/</span>
         <span class="current">{{ item?.title ?? '详情' }}</span>
       </nav>
@@ -91,46 +91,50 @@ watch(
         </header>
 
         <!-- 板块特有字段（meta JSON） -->
-        <section
-          v-if="item.meta && Object.keys(item.meta).length > 0"
-          class="detail__meta"
-        >
+        <section v-if="item.meta && Object.keys(item.meta).length > 0" class="detail__meta">
           <!-- teaware: material / volume / category -->
           <template v-if="typeCode === 'teaware'">
             <dl v-if="isStr(item.meta.material)" class="meta-row">
-              <dt>材质</dt><dd>{{ item.meta.material as string }}</dd>
+              <dt>材质</dt>
+              <dd>{{ item.meta.material as string }}</dd>
             </dl>
             <dl v-if="isStr(item.meta.volume)" class="meta-row">
-              <dt>容量</dt><dd>{{ item.meta.volume as string }}</dd>
+              <dt>容量</dt>
+              <dd>{{ item.meta.volume as string }}</dd>
             </dl>
             <dl v-if="isStr(item.meta.category)" class="meta-row">
-              <dt>分类</dt><dd>{{ item.meta.category as string }}</dd>
+              <dt>分类</dt>
+              <dd>{{ item.meta.category as string }}</dd>
             </dl>
           </template>
 
           <!-- origin: province / region -->
           <template v-if="typeCode === 'origin'">
             <dl v-if="isStr(item.meta.province)" class="meta-row">
-              <dt>省份</dt><dd>{{ item.meta.province as string }}</dd>
+              <dt>省份</dt>
+              <dd>{{ item.meta.province as string }}</dd>
             </dl>
             <dl v-if="isStr(item.meta.region)" class="meta-row">
-              <dt>产区</dt><dd>{{ item.meta.region as string }}</dd>
+              <dt>产区</dt>
+              <dd>{{ item.meta.region as string }}</dd>
             </dl>
           </template>
 
           <!-- culture: era / tags -->
           <template v-if="typeCode === 'culture'">
             <dl v-if="isStr(item.meta.era)" class="meta-row">
-              <dt>时期</dt><dd>{{ item.meta.era as string }}</dd>
+              <dt>时期</dt>
+              <dd>{{ item.meta.era as string }}</dd>
             </dl>
-            <dl v-if="Array.isArray(item.meta.tags) && (item.meta.tags as unknown[]).length" class="meta-row">
+            <dl
+              v-if="Array.isArray(item.meta.tags) && (item.meta.tags as unknown[]).length"
+              class="meta-row"
+            >
               <dt>标签</dt>
               <dd>
-                <span
-                  v-for="tag in item.meta.tags as string[]"
-                  :key="tag"
-                  class="tag"
-                >{{ tag }}</span>
+                <span v-for="tag in item.meta.tags as string[]" :key="tag" class="tag">{{
+                  tag
+                }}</span>
               </dd>
             </dl>
           </template>
@@ -138,14 +142,20 @@ watch(
           <!-- brand: founded / brand_origin / website -->
           <template v-if="typeCode === 'brand'">
             <dl v-if="item.meta.founded" class="meta-row">
-              <dt>创立年份</dt><dd>{{ item.meta.founded }}</dd>
+              <dt>创立年份</dt>
+              <dd>{{ item.meta.founded }}</dd>
             </dl>
             <dl v-if="isStr(item.meta.brand_origin)" class="meta-row">
-              <dt>产地</dt><dd>{{ item.meta.brand_origin as string }}</dd>
+              <dt>产地</dt>
+              <dd>{{ item.meta.brand_origin as string }}</dd>
             </dl>
             <dl v-if="isStr(item.meta.website)" class="meta-row">
               <dt>官网</dt>
-              <dd><a :href="item.meta.website as string" target="_blank" rel="noopener">{{ item.meta.website as string }}</a></dd>
+              <dd>
+                <a :href="item.meta.website as string" target="_blank" rel="noopener">{{
+                  item.meta.website as string
+                }}</a>
+              </dd>
             </dl>
           </template>
 

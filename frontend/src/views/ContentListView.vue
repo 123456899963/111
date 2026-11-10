@@ -7,7 +7,9 @@ import { getContentList, getContentTypes } from '@/api/contents'
 import type { ContentItem, ContentTypeCode, ContentTypeItem } from '@/types'
 
 const route = useRoute()
-const typeCode = computed<ContentTypeCode>(() => (route.params.code as ContentTypeCode) ?? 'teaware')
+const typeCode = computed<ContentTypeCode>(
+  () => (route.params.code as ContentTypeCode) ?? 'teaware',
+)
 
 const types = ref<ContentTypeItem[]>([])
 const items = ref<ContentItem[]>([])
@@ -105,11 +107,7 @@ watch(
         </div>
 
         <div v-else class="content-list-page__grid">
-          <article
-            v-for="item in items"
-            :key="item.id"
-            class="content-list-page__card"
-          >
+          <article v-for="item in items" :key="item.id" class="content-list-page__card">
             <RouterLink :to="`/contents/${typeCode}/${item.id}`" class="card-link">
               <div v-if="item.cover_image" class="card-image">
                 <img :src="item.cover_image" :alt="item.title" loading="lazy" />
@@ -126,26 +124,12 @@ watch(
         </div>
 
         <!-- 分页 -->
-        <nav
-          v-if="totalPages > 1"
-          class="content-list-page__pagination"
-          aria-label="分页"
-        >
-          <button
-            class="page-btn"
-            :disabled="page <= 1"
-            @click="onPageChange(page - 1)"
-          >
+        <nav v-if="totalPages > 1" class="content-list-page__pagination" aria-label="分页">
+          <button class="page-btn" :disabled="page <= 1" @click="onPageChange(page - 1)">
             上一页
           </button>
-          <span class="page-info">
-            {{ page }} / {{ totalPages }}
-          </span>
-          <button
-            class="page-btn"
-            :disabled="page >= totalPages"
-            @click="onPageChange(page + 1)"
-          >
+          <span class="page-info"> {{ page }} / {{ totalPages }} </span>
+          <button class="page-btn" :disabled="page >= totalPages" @click="onPageChange(page + 1)">
             下一页
           </button>
         </nav>
@@ -234,7 +218,9 @@ watch(
   border-radius: var(--radius-lg);
   overflow: hidden;
   border: 1px solid var(--color-border-light);
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
 }
 .content-list-page__card:hover {
   box-shadow: 0 4px 20px rgba(139, 115, 85, 0.1);

@@ -98,17 +98,14 @@ export function getAdminContributions(params: ContributionListParams) {
 
 /** POST /admin/contributions/{id}/approve 审核通过 */
 export function approveContribution(id: number) {
-  return request.post<unknown, ApiEnvelope<ContributionItem>>(
-    `/admin/contributions/${id}/approve`,
-  )
+  return request.post<unknown, ApiEnvelope<ContributionItem>>(`/admin/contributions/${id}/approve`)
 }
 
 /** POST /admin/contributions/{id}/reject 审核拒绝（附理由 1–200 字） */
 export function rejectContribution(id: number, reason: string) {
-  return request.post<unknown, ApiEnvelope<ContributionItem>>(
-    `/admin/contributions/${id}/reject`,
-    { reason },
-  )
+  return request.post<unknown, ApiEnvelope<ContributionItem>>(`/admin/contributions/${id}/reject`, {
+    reason,
+  })
 }
 
 // —— 批次五 R1–R5 内容管理 ——

@@ -83,7 +83,11 @@ function syncFormFromMeta() {
     const m = cultureMeta.value
     const meta: Record<string, unknown> = {}
     if (m.era) meta.era = m.era
-    if (m.tags) meta.tags = m.tags.split(',').map((s) => s.trim()).filter(Boolean)
+    if (m.tags)
+      meta.tags = m.tags
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
     form.value.meta = meta
   } else if (form.value.type_code === 'brand') {
     const m = brandMeta.value
@@ -206,7 +210,9 @@ function onCancel() {
     confirmButtonText: '返回',
     cancelButtonText: '继续编辑',
     type: 'warning',
-  }).then(() => router.push('/admin/contents')).catch(() => {})
+  })
+    .then(() => router.push('/admin/contents'))
+    .catch(() => {})
 }
 
 onMounted(load)
@@ -216,12 +222,7 @@ onMounted(load)
   <div class="admin-content-edit">
     <h3 class="admin-content-edit__title">{{ isEdit ? '编辑内容' : '新增内容' }}</h3>
 
-    <el-form
-      v-if="!loading"
-      :model="form"
-      label-width="100px"
-      style="max-width: 720px"
-    >
+    <el-form v-if="!loading" :model="form" label-width="100px" style="max-width: 720px">
       <el-form-item label="板块类型" required>
         <el-select v-model="form.type_code" placeholder="请选择板块" :disabled="isEdit">
           <el-option
@@ -261,7 +262,10 @@ onMounted(load)
           <el-input v-model="teawareMeta.volume" placeholder="如：200ml" />
         </el-form-item>
         <el-form-item label="分类">
-          <el-input v-model="teawareMeta.category" placeholder="如：盖碗 / 茶壶 / 品茗杯 / 公道杯" />
+          <el-input
+            v-model="teawareMeta.category"
+            placeholder="如：盖碗 / 茶壶 / 品茗杯 / 公道杯"
+          />
         </el-form-item>
       </template>
 
@@ -288,7 +292,12 @@ onMounted(load)
       <template v-else-if="form.type_code === 'brand'">
         <el-divider content-position="left">品牌特有字段</el-divider>
         <el-form-item label="创立年份">
-          <el-input-number v-model="brandMeta.founded" :min="0" :max="2100" placeholder="如：1915" />
+          <el-input-number
+            v-model="brandMeta.founded"
+            :min="0"
+            :max="2100"
+            placeholder="如：1915"
+          />
         </el-form-item>
         <el-form-item label="产地">
           <el-input v-model="brandMeta.brand_origin" placeholder="如：福建安溪" />

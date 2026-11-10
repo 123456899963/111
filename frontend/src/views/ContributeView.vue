@@ -235,14 +235,18 @@ onMounted(() => {
             <span class="field__label">采摘季节</span>
             <select v-model="teaForm.season" class="field__input">
               <option value="">不填</option>
-              <option v-for="season in TEA_SEASONS" :key="season" :value="season">{{ season }}</option>
+              <option v-for="season in TEA_SEASONS" :key="season" :value="season">
+                {{ season }}
+              </option>
             </select>
           </label>
           <label class="field">
             <span class="field__label">发酵程度</span>
             <select v-model="teaForm.fermentation" class="field__input">
               <option value="">不填</option>
-              <option v-for="item in TEA_FERMENTATIONS" :key="item" :value="item">{{ item }}</option>
+              <option v-for="item in TEA_FERMENTATIONS" :key="item" :value="item">
+                {{ item }}
+              </option>
             </select>
           </label>
           <label class="field">
@@ -265,7 +269,12 @@ onMounted(() => {
         <div class="grid grid--2">
           <label class="field">
             <span class="field__label">外形描述 *</span>
-            <textarea v-model="teaForm.shape_desc" class="field__input" rows="3" required></textarea>
+            <textarea
+              v-model="teaForm.shape_desc"
+              class="field__input"
+              rows="3"
+              required
+            ></textarea>
           </label>
           <label class="field">
             <span class="field__label">汤色描述 *</span>
@@ -273,11 +282,21 @@ onMounted(() => {
           </label>
           <label class="field">
             <span class="field__label">香气描述 *</span>
-            <textarea v-model="teaForm.aroma_desc" class="field__input" rows="3" required></textarea>
+            <textarea
+              v-model="teaForm.aroma_desc"
+              class="field__input"
+              rows="3"
+              required
+            ></textarea>
           </label>
           <label class="field">
             <span class="field__label">滋味描述 *</span>
-            <textarea v-model="teaForm.taste_desc" class="field__input" rows="3" required></textarea>
+            <textarea
+              v-model="teaForm.taste_desc"
+              class="field__input"
+              rows="3"
+              required
+            ></textarea>
           </label>
         </div>
 
@@ -349,9 +368,7 @@ onMounted(() => {
           </label>
         </div>
 
-        <p class="fcard__hint">
-          名称与茶类会先经名品映射校验；与已有茶品名称过于相似会被拦截。
-        </p>
+        <p class="fcard__hint">名称与茶类会先经名品映射校验；与已有茶品名称过于相似会被拦截。</p>
         <div class="fcard__actions">
           <button type="submit" class="btn btn--primary" :disabled="submitting">
             {{ submitting ? '提交中…' : '提交审核' }}
@@ -383,7 +400,11 @@ onMounted(() => {
         </label>
         <p class="fcard__hint">仅支持纯文本；图片与富文本将在后续版本开放。</p>
         <div class="fcard__actions">
-          <button type="submit" class="btn btn--primary" :disabled="submitting || !canSubmitArticle">
+          <button
+            type="submit"
+            class="btn btn--primary"
+            :disabled="submitting || !canSubmitArticle"
+          >
             {{ submitting ? '提交中…' : '提交审核' }}
           </button>
           <RouterLink class="btn btn--ghost" :to="{ name: 'my-contributions' }">取消</RouterLink>

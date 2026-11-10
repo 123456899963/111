@@ -6,13 +6,7 @@ import AppFooter from '@/components/AppFooter.vue'
 import CategoryTag from '@/components/CategoryTag.vue'
 import NoteEditor from '@/components/NoteEditor.vue'
 import SharePanel from '@/components/SharePanel.vue'
-import {
-  createList,
-  deleteList,
-  getListDetail,
-  getMyLists,
-  updateListTitle,
-} from '@/api/lists'
+import { createList, deleteList, getListDetail, getMyLists, updateListTitle } from '@/api/lists'
 import { getMyStats } from '@/api/me'
 import { removeFavorite } from '@/api/favorites'
 import { isValidListTitle } from '@/utils/list'
@@ -63,10 +57,7 @@ async function load() {
   errorMessage.value = ''
   try {
     // 等级统计失败不阻断清单展示（统计仅为展示增强）
-    const [listsRes, statsRes] = await Promise.all([
-      getMyLists(),
-      getMyStats().catch(() => null),
-    ])
+    const [listsRes, statsRes] = await Promise.all([getMyLists(), getMyStats().catch(() => null)])
     lists.value = listsRes.data
     stats.value = statsRes?.data ?? null
 
@@ -402,11 +393,7 @@ function onShareUpdate(share: ListShareBrief | null) {
               <button type="submit" class="btn btn--tiny" :disabled="creatingPending">
                 {{ creatingPending ? '创建中…' : '创建' }}
               </button>
-              <button
-                type="button"
-                class="btn btn--tiny btn--ghost"
-                @click="creating = false"
-              >
+              <button type="button" class="btn btn--tiny btn--ghost" @click="creating = false">
                 取消
               </button>
             </div>
@@ -428,9 +415,7 @@ function onShareUpdate(share: ListShareBrief | null) {
           <div v-if="!items.length" class="page-state">
             <div class="page-state__icon">🍃</div>
             <h2 class="page-state__title">清单还是空的</h2>
-            <p class="page-state__desc">
-              去茶品列表逛逛，收藏喜欢的茶，开启你的品鉴记录。
-            </p>
+            <p class="page-state__desc">去茶品列表逛逛，收藏喜欢的茶，开启你的品鉴记录。</p>
             <RouterLink class="btn btn--primary" to="/teas">浏览茶品列表</RouterLink>
           </div>
 

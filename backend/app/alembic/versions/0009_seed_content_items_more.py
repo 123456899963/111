@@ -367,8 +367,7 @@ def upgrade() -> None:
         type_map[row[1]] = row[0]
 
     existing_titles = {
-        r[0]
-        for r in conn.execute(sa.text("SELECT title FROM content_items")).fetchall()
+        r[0] for r in conn.execute(sa.text("SELECT title FROM content_items")).fetchall()
     }
 
     for item in ALL_SEED:

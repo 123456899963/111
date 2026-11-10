@@ -71,9 +71,7 @@ def test_s2_price_range_overlap():
     cheap_id = _make_tea(name="S2低价茶", price_min=100, price_max=300)
     dear_id = _make_tea(name="S2高价茶", price_min=2000, price_max=3000)
     try:
-        data = client.get(
-            "/api/v1/teas", params={"price_min": 0, "price_max": 500}
-        ).json()["data"]
+        data = client.get("/api/v1/teas", params={"price_min": 0, "price_max": 500}).json()["data"]
         ids = {item["id"] for item in data["items"]}
         assert cheap_id in ids
         assert dear_id not in ids
@@ -82,7 +80,10 @@ def test_s2_price_range_overlap():
 
 
 def test_s2_price_bounds_validation():
-    assert client.get("/api/v1/teas", params={"price_min": 500, "price_max": 100}).json()["code"] == 40000
+    assert (
+        client.get("/api/v1/teas", params={"price_min": 500, "price_max": 100}).json()["code"]
+        == 40000
+    )
     assert client.get("/api/v1/teas", params={"price_min": -1}).status_code == 400
 
 
@@ -96,13 +97,17 @@ def test_s1_filter_mode_and_vs_or():
         params = {"category": "green", "origin": "测试省B"}
         and_ids = {
             item["id"]
-            for item in client.get("/api/v1/teas", params={**params, "filter_mode": "and"}).json()["data"]["items"]
+            for item in client.get("/api/v1/teas", params={**params, "filter_mode": "and"}).json()[
+                "data"
+            ]["items"]
         }
         assert green_id not in and_ids and white_id not in and_ids
 
         or_ids = {
             item["id"]
-            for item in client.get("/api/v1/teas", params={**params, "filter_mode": "or"}).json()["data"]["items"]
+            for item in client.get("/api/v1/teas", params={**params, "filter_mode": "or"}).json()[
+                "data"
+            ]["items"]
         }
         # OR：茶类命中（绿）或产地命中（白）
         assert green_id in or_ids and white_id in or_ids
@@ -155,7 +160,9 @@ def test_s7_latest_tips_sorted_desc_and_limit():
         now = datetime.now()
         db.add_all(
             [
-                TeaTips(tea_id=old_id, official_note="旧贴士内容", updated_at=now - timedelta(seconds=5)),
+                TeaTips(
+                    tea_id=old_id, official_note="旧贴士内容", updated_at=now - timedelta(seconds=5)
+                ),
                 TeaTips(tea_id=new_id, official_note="新贴士内容", updated_at=now),
             ]
         )

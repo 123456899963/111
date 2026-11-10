@@ -454,7 +454,9 @@ onMounted(loadDetail)
             <el-button type="danger" link @click="removeGalleryItem(item)">删除</el-button>
           </div>
           <div v-if="gallery.length < 9" class="gallery-add">
-            <el-button :loading="uploadingGallery" @click="triggerGalleryInput">+ 添加图片</el-button>
+            <el-button :loading="uploadingGallery" @click="triggerGalleryInput"
+              >+ 添加图片</el-button
+            >
             <input
               id="tea-gallery-input"
               type="file"

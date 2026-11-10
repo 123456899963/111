@@ -23,9 +23,7 @@ def _unique_username(prefix: str = "b2user") -> str:
 
 def _register(username: str, password: str = "tea2026") -> TestClient:
     client = TestClient(app)
-    resp = client.post(
-        "/api/v1/auth/register", json={"username": username, "password": password}
-    )
+    resp = client.post("/api/v1/auth/register", json={"username": username, "password": password})
     assert resp.status_code == 200, resp.text
     return client
 
@@ -146,9 +144,7 @@ def test_login_success_clears_username_failures():
 
         db = SessionLocal()
         try:
-            remaining = (
-                db.query(LoginAttempt).filter(LoginAttempt.username == username).count()
-            )
+            remaining = db.query(LoginAttempt).filter(LoginAttempt.username == username).count()
             assert remaining == 0
         finally:
             db.close()
@@ -197,9 +193,7 @@ def test_me_stats_returns_counts_and_level():
         client = _register(username)
         client.post(f"/api/v1/favorites/{tea_id}")
         default_list = client.get("/api/v1/lists").json()["data"][0]["id"]
-        client.put(
-            f"/api/v1/lists/{default_list}/notes/{tea_id}", json={"content": "香气清雅"}
-        )
+        client.put(f"/api/v1/lists/{default_list}/notes/{tea_id}", json={"content": "香气清雅"})
         client.post("/api/v1/shares/generate")
 
         resp = client.get("/api/v1/me/stats")

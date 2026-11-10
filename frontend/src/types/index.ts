@@ -476,7 +476,7 @@ export interface ContentItem {
   cover_image: string | null
   meta: Record<string, unknown> | null
   sort_order: number
-  is_active?: boolean | null  // 后台返回（前台详情不含）
+  is_active?: boolean | null // 后台返回（前台详情不含）
   created_at: string
   updated_at: string
 }

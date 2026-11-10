@@ -83,7 +83,9 @@ onMounted(load)
         <div>
           <h1 class="page-head__title">我的提交</h1>
           <p class="page-head__desc">
-            共 {{ items.length }} 条记录<span v-if="pendingCount"> · {{ pendingCount }} 条待审核</span>
+            共 {{ items.length }} 条记录<span v-if="pendingCount">
+              · {{ pendingCount }} 条待审核</span
+            >
           </p>
         </div>
         <RouterLink class="btn btn--primary" :to="{ name: 'contribute' }">＋ 新建投稿</RouterLink>
@@ -112,10 +114,7 @@ onMounted(load)
               <span class="contrib-card__type">{{ typeLabel(item.type) }}</span>
               <strong class="contrib-card__name">{{ summary(item) }}</strong>
             </div>
-            <span
-              class="status-tag"
-              :class="`status-tag--${STATUS_META[item.status].tone}`"
-            >
+            <span class="status-tag" :class="`status-tag--${STATUS_META[item.status].tone}`">
               {{ STATUS_META[item.status].label }}
             </span>
           </div>

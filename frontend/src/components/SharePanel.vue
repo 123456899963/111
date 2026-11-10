@@ -170,7 +170,12 @@ async function onRevoke() {
         </div>
         <p class="share-tip">已有有效链接时会复用，不会重复生成；撤销后旧链接不可恢复。</p>
 
-        <button type="button" class="btn btn--secondary poster-btn" :disabled="posterLoading" @click="downloadPoster">
+        <button
+          type="button"
+          class="btn btn--secondary poster-btn"
+          :disabled="posterLoading"
+          @click="downloadPoster"
+        >
           {{ posterLoading ? '海报生成中…' : '⬇️ 下载分享海报' }}
         </button>
       </template>

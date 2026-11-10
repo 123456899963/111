@@ -126,7 +126,9 @@ def test_note_02_cannot_write_note_for_unfavorited_tea():
     client, _ = _register(username)
     try:
         default = _default_list(client)
-        resp = client.put(f"/api/v1/lists/{default['id']}/notes/{tea_id}", json={"content": "不该保存"})
+        resp = client.put(
+            f"/api/v1/lists/{default['id']}/notes/{tea_id}", json={"content": "不该保存"}
+        )
         assert resp.status_code == 404
         assert resp.json()["code"] == 40430
 
@@ -274,15 +276,11 @@ def test_perm_03_lists_are_user_scoped():
             == 40420
         )
         # A 在自己的清单里对未收藏茶写笔记 → 40430
-        resp = client_a.put(
-            f"/api/v1/lists/{list_a['id']}/notes/{tea_b}", json={"content": "篡改"}
-        )
+        resp = client_a.put(f"/api/v1/lists/{list_a['id']}/notes/{tea_b}", json={"content": "篡改"})
         assert resp.status_code == 404
         assert resp.json()["code"] == 40430
         assert (
-            client_b.get(f"/api/v1/lists/{list_b['id']}").json()["data"]["items"][0][
-                "tasting_note"
-            ]
+            client_b.get(f"/api/v1/lists/{list_b['id']}").json()["data"]["items"][0]["tasting_note"]
             == "B 的笔记"
         )
     finally:
@@ -452,13 +450,15 @@ def test_list_05_share_is_per_list():
         extra = _create_list(client, "另一个清单")
 
         default_share = client.post("/api/v1/shares/generate").json()["data"]
-        extra_share = client.post(
-            "/api/v1/shares/generate", json={"list_id": extra["id"]}
-        ).json()["data"]
+        extra_share = client.post("/api/v1/shares/generate", json={"list_id": extra["id"]}).json()[
+            "data"
+        ]
         assert default_share["token"] != extra_share["token"]
 
         guest = TestClient(app)
-        assert guest.get(f"/api/v1/shares/{default_share['token']}").json()["data"]["tea_count"] == 1
+        assert (
+            guest.get(f"/api/v1/shares/{default_share['token']}").json()["data"]["tea_count"] == 1
+        )
         assert guest.get(f"/api/v1/shares/{extra_share['token']}").json()["data"]["tea_count"] == 0
 
         assert (

@@ -135,8 +135,17 @@ async function onLogout() {
       <!-- 个人信息 -->
       <section class="profile-hero">
         <div class="profile-hero__avatar-wrap">
-          <img v-if="avatarUrl" class="profile-hero__avatar" :src="avatarUrl" :alt="`${userStore.user?.username} 的头像`" />
-          <span v-else class="profile-hero__avatar profile-hero__avatar--placeholder" aria-hidden="true">
+          <img
+            v-if="avatarUrl"
+            class="profile-hero__avatar"
+            :src="avatarUrl"
+            :alt="`${userStore.user?.username} 的头像`"
+          />
+          <span
+            v-else
+            class="profile-hero__avatar profile-hero__avatar--placeholder"
+            aria-hidden="true"
+          >
             {{ initial }}
           </span>
           <button class="profile-hero__avatar-btn" type="button" @click="avatarOpen = !avatarOpen">
@@ -184,7 +193,12 @@ async function onLogout() {
       <section v-if="avatarOpen" class="avatar-panel">
         <header class="avatar-panel__head">
           <h2 class="avatar-panel__title">更换头像</h2>
-          <button type="button" class="avatar-panel__close" aria-label="收起" @click="avatarOpen = false">
+          <button
+            type="button"
+            class="avatar-panel__close"
+            aria-label="收起"
+            @click="avatarOpen = false"
+          >
             ✕
           </button>
         </header>
@@ -230,14 +244,19 @@ async function onLogout() {
       <section class="favorites">
         <header class="section-head">
           <h2 class="section-head__title">我的收藏</h2>
-          <RouterLink class="section-head__more" :to="{ name: 'my-list' }">查看全部清单 →</RouterLink>
+          <RouterLink class="section-head__more" :to="{ name: 'my-list' }"
+            >查看全部清单 →</RouterLink
+          >
         </header>
 
         <div v-if="loading" class="favorites__skeleton" aria-hidden="true"></div>
 
         <ul v-else-if="preview.length" class="favorite-grid">
           <li v-for="item in preview" :key="item.tea_id" class="favorite-card">
-            <RouterLink class="favorite-card__link" :to="{ name: 'tea-detail', params: { id: item.tea_id } }">
+            <RouterLink
+              class="favorite-card__link"
+              :to="{ name: 'tea-detail', params: { id: item.tea_id } }"
+            >
               <img
                 v-if="item.main_image_url"
                 class="favorite-card__image"
@@ -245,7 +264,11 @@ async function onLogout() {
                 :alt="item.name"
                 loading="lazy"
               />
-              <span v-else class="favorite-card__image favorite-card__image--placeholder" aria-hidden="true">
+              <span
+                v-else
+                class="favorite-card__image favorite-card__image--placeholder"
+                aria-hidden="true"
+              >
                 🫖
               </span>
               <span class="favorite-card__body">

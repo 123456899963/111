@@ -1,12 +1,7 @@
 /** 内容板块 API（批次五 R1–R5 / API_CONTRACT §4.2.10–11） */
 
 import request from './request'
-import type {
-  ContentItem,
-  ContentListData,
-  ContentListParams,
-  ContentTypeItem,
-} from '@/types'
+import type { ContentItem, ContentListData, ContentListParams, ContentTypeItem } from '@/types'
 
 /** 板块分类列表（游客，无认证） */
 export function getContentTypes(): Promise<ContentTypeItem[]> {

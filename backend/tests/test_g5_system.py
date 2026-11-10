@@ -759,9 +759,7 @@ def test_tc_share_05_public_fields_and_off_shelf_flag():
         client.post(f"/api/v1/favorites/{active_tea}")
         client.post(f"/api/v1/favorites/{off_tea}")
         default_list = client.get("/api/v1/lists").json()["data"][0]["id"]
-        client.put(
-            f"/api/v1/lists/{default_list}/notes/{active_tea}", json={"content": "私有笔记"}
-        )
+        client.put(f"/api/v1/lists/{default_list}/notes/{active_tea}", json={"content": "私有笔记"})
         db = SessionLocal()
         try:
             db.query(Tea).filter(Tea.id == off_tea).update({"is_active": False})

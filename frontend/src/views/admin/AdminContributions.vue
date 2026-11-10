@@ -4,11 +4,7 @@
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  approveContribution,
-  getAdminContributions,
-  rejectContribution,
-} from '@/api/admin'
+import { approveContribution, getAdminContributions, rejectContribution } from '@/api/admin'
 import type {
   ContributionItem,
   ContributionListData,
@@ -144,9 +140,7 @@ onMounted(load)
     <header class="contrib-admin__head">
       <div>
         <h1 class="contrib-admin__title">投稿审核</h1>
-        <p class="text-small text-muted">
-          用户提交的新茶与科普先经系统校验，再由管理员人工审核。
-        </p>
+        <p class="text-small text-muted">用户提交的新茶与科普先经系统校验，再由管理员人工审核。</p>
       </div>
       <div class="contrib-admin__filters">
         <el-select v-model="filters.status" size="small" @change="resetAndLoad">
@@ -154,7 +148,13 @@ onMounted(load)
           <el-option label="已通过" value="approved" />
           <el-option label="已拒绝" value="rejected" />
         </el-select>
-        <el-select v-model="filters.type" size="small" clearable placeholder="全部类型" @change="resetAndLoad">
+        <el-select
+          v-model="filters.type"
+          size="small"
+          clearable
+          placeholder="全部类型"
+          @change="resetAndLoad"
+        >
           <el-option label="补充新茶" value="new_tea" />
           <el-option label="科普投稿" value="article" />
         </el-select>
@@ -178,9 +178,17 @@ onMounted(load)
         <template #default="{ row }">
           <el-tag
             size="small"
-            :type="row.status === 'pending' ? 'warning' : row.status === 'approved' ? 'success' : 'danger'"
+            :type="
+              row.status === 'pending'
+                ? 'warning'
+                : row.status === 'approved'
+                  ? 'success'
+                  : 'danger'
+            "
           >
-            {{ row.status === 'pending' ? '待审核' : row.status === 'approved' ? '已通过' : '已拒绝' }}
+            {{
+              row.status === 'pending' ? '待审核' : row.status === 'approved' ? '已通过' : '已拒绝'
+            }}
           </el-tag>
         </template>
       </el-table-column>

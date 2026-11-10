@@ -234,7 +234,9 @@ def test_contrib_06_admin_approve_new_tea_creates_active_tea():
         queue = admin.get(
             "/api/v1/admin/contributions", params={"status": "pending", "type": "new_tea"}
         ).json()["data"]
-        assert any(row["id"] == item["id"] and row["username"] == username for row in queue["items"])
+        assert any(
+            row["id"] == item["id"] and row["username"] == username for row in queue["items"]
+        )
 
         approved = admin.post(f"/api/v1/admin/contributions/{item['id']}/approve").json()
         assert approved["code"] == 0
@@ -311,8 +313,6 @@ def test_contrib_08_permissions_and_approved_article_in_detail():
 
         detail = guest.get(f"/api/v1/teas/{tea_id}").json()["data"]
         articles = detail["contributed_articles"]
-        assert any(
-            row["id"] == item["id"] and row["contributor"] == username for row in articles
-        )
+        assert any(row["id"] == item["id"] and row["contributor"] == username for row in articles)
     finally:
         _cleanup(usernames=[username], tea_ids=[tea_id], names=[])
