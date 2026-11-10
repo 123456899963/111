@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""
     SESSION_EXPIRE_DAYS: int = 30  # PRD FR-4.3：30 天 Cookie 会话
 
+    # === 登录失败锁定（S14 / SECURITY S-33）===
+    # 统计窗口内，同一用户名或同一 IP 失败达到阈值即拒绝登录，窗口滚动过期后解锁
+    LOGIN_MAX_FAILURES: int = 5
+    LOGIN_WINDOW_MINUTES: int = 15
+    LOGIN_ATTEMPT_RETENTION_HOURS: int = 24
+
     # === CORS ===
     # 开发期允许的前端源；生产经 Nginx 同域反代后可改为 ["http://localhost"]
     CORS_ORIGINS: list[str] = [
@@ -33,8 +39,13 @@ class Settings(BaseSettings):
     # === 文件 ===
     UPLOAD_DIR: Path = Path("uploads")
     MAX_UPLOAD_SIZE_MB: int = 5
+    # 视频上传（ADR-0003 / PRD S5）：≤3 分钟、≤50 MB、仅 MP4/MOV
+    MAX_VIDEO_SIZE_MB: int = 50
+    MAX_VIDEO_DURATION_SECONDS: int = 180
     # 请求体上限（对齐 TEST_PLAN DEF-02 的网关 6MB 限制）
     MAX_REQUEST_BODY_MB: int = 6
+    # 视频端点专属请求体上限（50 MB 文件 + multipart 开销余量）
+    MAX_VIDEO_REQUEST_BODY_MB: int = 52
 
     # === 管理员初始账号 ===
     ADMIN_USERNAME: str = "admin"

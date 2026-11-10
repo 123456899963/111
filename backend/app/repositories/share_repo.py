@@ -2,8 +2,10 @@
 
 from datetime import datetime
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.models.collection_list import CollectionList
 from app.models.favorite import ShareToken
 
 
@@ -38,3 +40,14 @@ def revoke(db: Session, item: ShareToken) -> ShareToken:
     db.commit()
     db.refresh(item)
     return item
+
+
+def count_active_by_user(db: Session, user_id: int) -> int:
+    """用户当前生效的分享数（S15 统计）。"""
+    return int(
+        db.query(func.count(ShareToken.id))
+        .join(CollectionList, CollectionList.id == ShareToken.list_id)
+        .filter(CollectionList.user_id == user_id, ShareToken.is_active.is_(True))
+        .scalar()
+        or 0
+    )

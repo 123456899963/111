@@ -6,11 +6,20 @@ import AppFooter from '@/components/AppFooter.vue'
 import CategoryTag from '@/components/CategoryTag.vue'
 import NoteEditor from '@/components/NoteEditor.vue'
 import SharePanel from '@/components/SharePanel.vue'
-import { getMyList, updateListTitle } from '@/api/lists'
+import {
+  createList,
+  deleteList,
+  getListDetail,
+  getMyLists,
+  updateListTitle,
+} from '@/api/lists'
+import { getMyStats } from '@/api/me'
 import { removeFavorite } from '@/api/favorites'
 import { isValidListTitle } from '@/utils/list'
 import { useToastStore } from '@/stores/toast'
-import type { ListData, ListItem, ListShareBrief } from '@/types'
+import type { ListData, ListItem, ListShareBrief, ListSummary, UserStats } from '@/types'
+
+const MAX_LISTS = 10
 
 const route = useRoute()
 const toast = useToastStore()
@@ -18,12 +27,21 @@ const toast = useToastStore()
 type PageState = 'loading' | 'ready' | 'error'
 
 const state = ref<PageState>('loading')
+const lists = ref<ListSummary[]>([])
 const list = ref<ListData | null>(null)
+const activeListId = ref<number | null>(null)
+const stats = ref<UserStats | null>(null)
 const errorMessage = ref('')
+const detailLoading = ref(false)
 
 const editingTitle = ref(false)
 const titleDraft = ref('')
 const savingTitle = ref(false)
+
+const creating = ref(false)
+const newTitle = ref('')
+const creatingPending = ref(false)
+const deleting = ref(false)
 
 const noteOpen = ref(false)
 const noteTarget = ref<ListItem | null>(null)
@@ -33,6 +51,8 @@ const removingId = ref<number | null>(null)
 const items = computed(() => list.value?.items ?? [])
 const noteCount = computed(() => items.value.filter((item) => !!item.tasting_note).length)
 const unavailableCount = computed(() => items.value.filter((item) => !item.is_available).length)
+const isDefaultList = computed(() => !!list.value?.is_default)
+const canCreate = computed(() => lists.value.length < MAX_LISTS)
 
 onMounted(() => {
   void load()
@@ -42,21 +62,81 @@ async function load() {
   state.value = 'loading'
   errorMessage.value = ''
   try {
-    const res = await getMyList()
-    list.value = res.data
+    // 等级统计失败不阻断清单展示（统计仅为展示增强）
+    const [listsRes, statsRes] = await Promise.all([
+      getMyLists(),
+      getMyStats().catch(() => null),
+    ])
+    lists.value = listsRes.data
+    stats.value = statsRes?.data ?? null
+
+    const requested = Number(route.query.list)
+    const initial =
+      lists.value.find((item) => item.id === requested)?.id ?? lists.value[0]?.id ?? null
+    await loadDetail(initial)
     state.value = 'ready'
-    applyQueryActions()
+    await applyQueryActions()
   } catch (err) {
     state.value = 'error'
     errorMessage.value = err instanceof Error ? err.message : '清单加载失败'
   }
 }
 
-function applyQueryActions() {
+async function loadDetail(listId: number | null) {
+  if (listId === null) {
+    list.value = null
+    activeListId.value = null
+    return
+  }
+  detailLoading.value = true
+  try {
+    const res = await getListDetail(listId)
+    list.value = res.data
+    activeListId.value = res.data.id
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+async function selectList(listId: number) {
+  if (listId === activeListId.value || detailLoading.value) return
+  editingTitle.value = false
+  creating.value = false
+  try {
+    await loadDetail(listId)
+  } catch {
+    // 统一错误提示由请求拦截器处理
+  }
+}
+
+async function refreshSummaries() {
+  const res = await getMyLists()
+  lists.value = res.data
+}
+
+async function applyQueryActions() {
   const noteRaw = route.query.note
   const noteId = Number(Array.isArray(noteRaw) ? noteRaw[0] : noteRaw)
   if (Number.isFinite(noteId) && noteId > 0) {
-    const target = items.value.find((item) => item.tea_id === noteId)
+    let target = items.value.find((item) => item.tea_id === noteId)
+    if (!target) {
+      // 茶品可能位于其它清单：逐个小清单查找（最多 10 个）
+      for (const summary of lists.value) {
+        if (summary.id === activeListId.value) continue
+        try {
+          const res = await getListDetail(summary.id)
+          const found = res.data.items.find((item) => item.tea_id === noteId)
+          if (found) {
+            list.value = res.data
+            activeListId.value = res.data.id
+            target = found
+            break
+          }
+        } catch {
+          // 忽略单个清单加载失败
+        }
+      }
+    }
     if (target) openNote(target)
   }
   if (route.query.share === '1') shareOpen.value = true
@@ -88,15 +168,59 @@ async function saveTitle() {
   }
   savingTitle.value = true
   try {
-    const res = await updateListTitle(normalized)
+    const res = await updateListTitle(list.value.id, normalized)
     list.value.title = res.data.title
     list.value.updated_at = res.data.updated_at
+    const summary = lists.value.find((item) => item.id === list.value?.id)
+    if (summary) summary.title = res.data.title
     editingTitle.value = false
     toast.success('清单标题已更新')
   } catch {
     // 统一错误提示由请求拦截器处理
   } finally {
     savingTitle.value = false
+  }
+}
+
+async function submitCreate() {
+  const normalized = newTitle.value.trim()
+  if (!isValidListTitle(normalized)) {
+    toast.warn('清单标题需为 2–20 个字符')
+    return
+  }
+  if (!canCreate.value || creatingPending.value) return
+  creatingPending.value = true
+  try {
+    const res = await createList(normalized)
+    newTitle.value = ''
+    creating.value = false
+    await refreshSummaries()
+    await loadDetail(res.data.id)
+    toast.success('清单已创建')
+  } catch {
+    // 统一错误提示由请求拦截器处理
+  } finally {
+    creatingPending.value = false
+  }
+}
+
+async function removeCurrentList() {
+  if (!list.value || isDefaultList.value || deleting.value) return
+  const confirmed = window.confirm(
+    `确定删除“${list.value.title}”吗？清单中的茶品会迁移到“我的收藏”，笔记不会丢失。`,
+  )
+  if (!confirmed) return
+
+  deleting.value = true
+  try {
+    await deleteList(list.value.id)
+    await refreshSummaries()
+    await loadDetail(lists.value[0]?.id ?? null)
+    toast.success('清单已删除，条目已迁移到我的收藏')
+  } catch {
+    // 统一错误提示由请求拦截器处理
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -114,19 +238,24 @@ function onNoteSaved(note: string | null) {
 
 async function removeItem(item: ListItem) {
   if (!list.value || removingId.value !== null) return
-  const confirmed = window.confirm(`确定将“${item.name}”移出我的清单吗？`)
+  const confirmed = window.confirm(`确定将“${item.name}”移出“${list.value.title}”吗？`)
   if (!confirmed) return
 
+  const listId = list.value.id
   removingId.value = item.tea_id
   try {
-    await removeFavorite(item.tea_id)
-    list.value.items = list.value.items.filter((row) => row.tea_id !== item.tea_id)
-    list.value.tea_count = list.value.items.length
+    await removeFavorite(item.tea_id, listId)
+    if (list.value) {
+      list.value.items = list.value.items.filter((row) => row.tea_id !== item.tea_id)
+      list.value.tea_count = list.value.items.length
+    }
+    const summary = lists.value.find((row) => row.id === listId)
+    if (summary) summary.tea_count = Math.max(0, summary.tea_count - 1)
     if (noteTarget.value?.tea_id === item.tea_id) {
       noteOpen.value = false
       noteTarget.value = null
     }
-    toast.success('已移出我的清单')
+    toast.success('已移出当前清单')
   } catch {
     // 统一错误提示由请求拦截器处理
   } finally {
@@ -137,6 +266,8 @@ async function removeItem(item: ListItem) {
 function onShareUpdate(share: ListShareBrief | null) {
   if (!list.value) return
   list.value.share = share
+  const summary = lists.value.find((item) => item.id === list.value?.id)
+  if (summary) summary.share = share
 }
 </script>
 
@@ -159,7 +290,9 @@ function onShareUpdate(share: ListShareBrief | null) {
 
       <section v-else-if="state === 'ready' && list" class="list-hero">
         <div class="list-hero__main">
-          <p class="list-hero__eyebrow">我的清单</p>
+          <p class="list-hero__eyebrow">
+            我的清单<span v-if="isDefaultList" class="list-hero__default-tag">默认</span>
+          </p>
 
           <div v-if="!editingTitle" class="list-hero__title-row">
             <h1 class="list-hero__title">{{ list.title }}</h1>
@@ -191,106 +324,198 @@ function onShareUpdate(share: ListShareBrief | null) {
               {{ unavailableCount }} 款已下架
             </template>
           </p>
+
+          <!-- 等级徽章（S15）：按收藏数实时计算 -->
+          <div v-if="stats" class="level" :data-level="stats.level.index">
+            <span class="level__badge">🏅 {{ stats.level.name }}</span>
+            <span class="level__hint">
+              <template v-if="stats.level.next_name">
+                再收藏 {{ stats.level.remaining }} 款，升为{{ stats.level.next_name }}
+              </template>
+              <template v-else>已达最高等级</template>
+            </span>
+          </div>
         </div>
 
         <div class="list-hero__actions">
           <button type="button" class="btn btn--primary" @click="shareOpen = true">
             ↗️ 分享清单
           </button>
+          <RouterLink class="btn btn--secondary" :to="{ name: 'contribute' }">
+            ✍️ 投稿新茶 / 科普
+          </RouterLink>
+          <RouterLink class="btn btn--ghost" :to="{ name: 'my-contributions' }">
+            我的提交
+          </RouterLink>
+          <button
+            v-if="!isDefaultList"
+            type="button"
+            class="btn btn--danger-text"
+            :disabled="deleting"
+            @click="removeCurrentList"
+          >
+            {{ deleting ? '删除中…' : '删除清单' }}
+          </button>
           <RouterLink class="btn btn--secondary" to="/teas">去发现好茶</RouterLink>
         </div>
       </section>
 
       <!-- 错误 -->
-      <div v-else class="page-state">
+      <div v-else-if="state === 'error'" class="page-state">
         <div class="page-state__icon">🫖</div>
         <h2 class="page-state__title">清单加载失败</h2>
         <p class="page-state__desc">{{ errorMessage || '请稍后重试' }}</p>
         <button type="button" class="btn btn--primary" @click="load">重新加载</button>
       </div>
 
-      <!-- 空状态 -->
-      <div v-if="state === 'ready' && list && !items.length" class="page-state">
-        <div class="page-state__icon">🍃</div>
-        <h2 class="page-state__title">清单还是空的</h2>
-        <p class="page-state__desc">去茶品列表逛逛，收藏喜欢的茶，开启你的品鉴记录。</p>
-        <RouterLink class="btn btn--primary" to="/teas">浏览茶品列表</RouterLink>
-      </div>
-
-      <!-- 条目 -->
-      <ul v-if="state === 'ready' && items.length" class="list-items">
-        <li
-          v-for="item in items"
-          :key="item.tea_id"
-          class="list-item"
-          :class="{ 'list-item--unavailable': !item.is_available }"
-        >
-          <RouterLink
-            v-if="item.is_available"
-            class="list-item__image-link"
-            :to="{ name: 'tea-detail', params: { id: item.tea_id } }"
-          >
-            <img
-              v-if="item.main_image_url"
-              class="list-item__image"
-              :src="item.main_image_url"
-              :alt="item.name"
-              loading="lazy"
-            />
-            <span v-else class="list-item__image list-item__image--placeholder" aria-hidden="true"
-              >🫖</span
-            >
-          </RouterLink>
-          <div v-else class="list-item__image-link">
-            <img
-              v-if="item.main_image_url"
-              class="list-item__image"
-              :src="item.main_image_url"
-              :alt="item.name"
-              loading="lazy"
-            />
-            <span v-else class="list-item__image list-item__image--placeholder" aria-hidden="true"
-              >🫖</span
-            >
-            <span class="list-item__offline-badge">已下架</span>
+      <!-- 侧栏 + 条目区 -->
+      <div v-if="state === 'ready'" class="list-layout">
+        <aside class="list-side" aria-label="我的清单列表">
+          <div class="list-side__header">
+            <span>全部清单</span>
+            <span class="list-side__count">{{ lists.length }}/{{ MAX_LISTS }}</span>
           </div>
 
-          <div class="list-item__body">
-            <div class="list-item__title-row">
-              <h3 class="list-item__name">{{ item.name }}</h3>
-              <CategoryTag :category="item.category" />
-            </div>
-            <p class="list-item__meta">
-              {{ item.origin }}
-              <template v-if="item.season"> · {{ item.season }}</template>
-              <template v-if="!item.is_available"> · 暂不可用</template>
-            </p>
+          <ul class="side-lists">
+            <li v-for="summary in lists" :key="summary.id">
+              <button
+                type="button"
+                class="side-lists__item"
+                :class="{ 'side-lists__item--active': summary.id === activeListId }"
+                @click="selectList(summary.id)"
+              >
+                <span class="side-lists__title">{{ summary.title }}</span>
+                <span class="side-lists__num">{{ summary.tea_count }}</span>
+              </button>
+            </li>
+          </ul>
 
-            <p v-if="item.tasting_note" class="list-item__note">
-              <span class="list-item__note-label">私密笔记</span>
-              {{ item.tasting_note }}
-            </p>
-            <p v-else class="list-item__note list-item__note--empty">还没有品鉴笔记</p>
-          </div>
-
-          <div class="list-item__side">
-            <span class="list-item__date">收藏于 {{ formatDate(item.favorited_at) }}</span>
-            <div class="list-item__actions">
-              <button type="button" class="btn btn--tiny" @click="openNote(item)">
-                {{ item.tasting_note ? '编辑笔记' : '写笔记' }}
+          <form v-if="creating" class="side-create" @submit.prevent="submitCreate">
+            <input
+              v-model="newTitle"
+              class="side-create__input"
+              maxlength="20"
+              placeholder="清单名称（2–20 字）"
+              aria-label="新清单名称"
+            />
+            <div class="side-create__actions">
+              <button type="submit" class="btn btn--tiny" :disabled="creatingPending">
+                {{ creatingPending ? '创建中…' : '创建' }}
               </button>
               <button
                 type="button"
-                class="btn btn--tiny btn--danger-text"
-                :disabled="removingId === item.tea_id"
-                @click="removeItem(item)"
+                class="btn btn--tiny btn--ghost"
+                @click="creating = false"
               >
-                {{ removingId === item.tea_id ? '移除中…' : '移除' }}
+                取消
               </button>
             </div>
+          </form>
+          <button
+            v-else
+            type="button"
+            class="btn btn--tiny side-create-btn"
+            :disabled="!canCreate"
+            @click="creating = true"
+          >
+            ＋ 新建清单
+          </button>
+          <p v-if="!canCreate" class="side-hint">每个账号最多 10 个清单</p>
+        </aside>
+
+        <section class="list-main" :aria-busy="detailLoading">
+          <!-- 空状态 -->
+          <div v-if="!items.length" class="page-state">
+            <div class="page-state__icon">🍃</div>
+            <h2 class="page-state__title">清单还是空的</h2>
+            <p class="page-state__desc">
+              去茶品列表逛逛，收藏喜欢的茶，开启你的品鉴记录。
+            </p>
+            <RouterLink class="btn btn--primary" to="/teas">浏览茶品列表</RouterLink>
           </div>
-        </li>
-      </ul>
+
+          <!-- 条目 -->
+          <ul v-else class="list-items">
+            <li
+              v-for="item in items"
+              :key="item.tea_id"
+              class="list-item"
+              :class="{ 'list-item--unavailable': !item.is_available }"
+            >
+              <RouterLink
+                v-if="item.is_available"
+                class="list-item__image-link"
+                :to="{ name: 'tea-detail', params: { id: item.tea_id } }"
+              >
+                <img
+                  v-if="item.main_image_url"
+                  class="list-item__image"
+                  :src="item.main_image_url"
+                  :alt="item.name"
+                  loading="lazy"
+                />
+                <span
+                  v-else
+                  class="list-item__image list-item__image--placeholder"
+                  aria-hidden="true"
+                  >🫖</span
+                >
+              </RouterLink>
+              <div v-else class="list-item__image-link">
+                <img
+                  v-if="item.main_image_url"
+                  class="list-item__image"
+                  :src="item.main_image_url"
+                  :alt="item.name"
+                  loading="lazy"
+                />
+                <span
+                  v-else
+                  class="list-item__image list-item__image--placeholder"
+                  aria-hidden="true"
+                  >🫖</span
+                >
+                <span class="list-item__offline-badge">已下架</span>
+              </div>
+
+              <div class="list-item__body">
+                <div class="list-item__title-row">
+                  <h3 class="list-item__name">{{ item.name }}</h3>
+                  <CategoryTag :category="item.category" />
+                </div>
+                <p class="list-item__meta">
+                  {{ item.origin }}
+                  <template v-if="item.season"> · {{ item.season }}</template>
+                  <template v-if="!item.is_available"> · 暂不可用</template>
+                </p>
+
+                <p v-if="item.tasting_note" class="list-item__note">
+                  <span class="list-item__note-label">私密笔记</span>
+                  {{ item.tasting_note }}
+                </p>
+                <p v-else class="list-item__note list-item__note--empty">还没有品鉴笔记</p>
+              </div>
+
+              <div class="list-item__side">
+                <span class="list-item__date">收藏于 {{ formatDate(item.favorited_at) }}</span>
+                <div class="list-item__actions">
+                  <button type="button" class="btn btn--tiny" @click="openNote(item)">
+                    {{ item.tasting_note ? '编辑笔记' : '写笔记' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--tiny btn--danger-text"
+                    :disabled="removingId === item.tea_id"
+                    @click="removeItem(item)"
+                  >
+                    {{ removingId === item.tea_id ? '移除中…' : '移除' }}
+                  </button>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </div>
     </div>
   </main>
 
@@ -298,13 +523,23 @@ function onShareUpdate(share: ListShareBrief | null) {
 
   <NoteEditor
     v-model="noteOpen"
+    :list-id="activeListId ?? 0"
     :tea-id="noteTarget?.tea_id ?? 0"
     :tea-name="noteTarget?.name ?? ''"
     :initial-note="noteTarget?.tasting_note ?? null"
     @saved="onNoteSaved"
   />
 
-  <SharePanel v-model="shareOpen" :share="list?.share ?? null" @update:share="onShareUpdate" />
+  <SharePanel
+    v-model="shareOpen"
+    :share="list?.share ?? null"
+    :list-id="activeListId"
+    :title="list?.title ?? '我的茶单'"
+    :tea-names="items.map((item) => item.name)"
+    :tea-count="list?.tea_count ?? 0"
+    :created-at="list ? formatDate(list.created_at) : ''"
+    @update:share="onShareUpdate"
+  />
 </template>
 
 <style scoped>
@@ -315,7 +550,7 @@ function onShareUpdate(share: ListShareBrief | null) {
 }
 
 .container {
-  max-width: 1000px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 0 32px;
 }
@@ -368,10 +603,45 @@ function onShareUpdate(share: ListShareBrief | null) {
   color: var(--color-text-muted);
 }
 
+.list-hero__default-tag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-muted);
+  color: var(--color-primary-dark);
+  letter-spacing: 0;
+}
+
 .list-hero__title-row {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* 等级徽章（S15） */
+.level {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.level__badge {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: var(--radius-full);
+  background: rgba(139, 115, 85, 0.12);
+  color: var(--color-primary-dark);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.level__hint {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
 }
 
 .list-hero__title {
@@ -436,6 +706,129 @@ function onShareUpdate(share: ListShareBrief | null) {
   border-color: var(--color-primary);
 }
 
+/* 侧栏 + 条目区 */
+.list-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.list-side {
+  position: sticky;
+  top: 84px;
+  padding: 16px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.list-side__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.list-side__count {
+  font-weight: 400;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.side-lists {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.side-lists__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: var(--text-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.side-lists__item:hover {
+  background: var(--color-bg-muted);
+}
+
+.side-lists__item--active {
+  background: var(--color-bg-muted);
+  border-color: var(--color-border-dark);
+  color: var(--color-primary-dark);
+  font-weight: 600;
+}
+
+.side-lists__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-lists__num {
+  flex-shrink: 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.side-create {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side-create__input {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-dark);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--text-small);
+}
+
+.side-create__input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.side-create__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.side-create-btn {
+  width: 100%;
+}
+
+.side-hint {
+  margin: 8px 0 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.list-main {
+  min-width: 0;
+}
+
 /* 状态 */
 .page-state {
   text-align: center;
@@ -476,7 +869,7 @@ function onShareUpdate(share: ListShareBrief | null) {
 
 .list-item {
   display: grid;
-  grid-template-columns: 120px 1fr auto;
+  grid-template-columns: 120px 1fr;
   gap: 20px;
   padding: 16px;
   background: var(--color-bg-surface);
@@ -593,11 +986,13 @@ function onShareUpdate(share: ListShareBrief | null) {
 }
 
 .list-item__side {
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--color-border);
 }
 
 .list-item__date {
@@ -681,6 +1076,7 @@ function onShareUpdate(share: ListShareBrief | null) {
 
 .btn--danger-text {
   color: var(--color-error);
+  border-color: var(--color-error);
 }
 
 /* 骨架屏 */
@@ -724,6 +1120,25 @@ function onShareUpdate(share: ListShareBrief | null) {
   height: 18px;
 }
 
+@media (max-width: 900px) {
+  .list-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .list-side {
+    position: static;
+  }
+
+  .side-lists {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .side-lists__item {
+    width: auto;
+  }
+}
+
 @media (max-width: 767px) {
   .list-hero {
     flex-direction: column;
@@ -739,12 +1154,6 @@ function onShareUpdate(share: ListShareBrief | null) {
   .list-item__image-link {
     width: 88px;
     height: 72px;
-  }
-
-  .list-item__side {
-    grid-column: 1 / -1;
-    flex-direction: row;
-    align-items: center;
   }
 }
 </style>

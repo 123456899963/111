@@ -2,14 +2,29 @@
 import { computed, ref, watch } from 'vue'
 import { generateShare, revokeShare } from '@/api/shares'
 import { buildShareUrl } from '@/utils/favorite'
+import { downloadSharePoster } from '@/utils/poster'
 import type { ListShareBrief } from '@/types'
 import { useToastStore } from '@/stores/toast'
 
 const visible = defineModel<boolean>({ required: true })
 
-const props = defineProps<{
-  share: ListShareBrief | null
-}>()
+const props = withDefaults(
+  defineProps<{
+    share: ListShareBrief | null
+    listId?: number | null
+    title?: string
+    teaNames?: string[]
+    teaCount?: number
+    createdAt?: string
+  }>(),
+  {
+    listId: null,
+    title: '我的茶单',
+    teaNames: () => [],
+    teaCount: 0,
+    createdAt: '',
+  },
+)
 
 const emit = defineEmits<{ 'update:share': [share: ListShareBrief | null] }>()
 
@@ -19,6 +34,7 @@ const generating = ref(false)
 const revoking = ref(false)
 const confirmingRevoke = ref(false)
 const revokedToken = ref<string | null>(null)
+const posterLoading = ref(false)
 
 const link = computed(() => (token.value ? buildShareUrl(window.location.origin, token.value) : ''))
 
@@ -47,7 +63,7 @@ async function generate() {
   if (generating.value) return
   generating.value = true
   try {
-    const res = await generateShare()
+    const res = await generateShare(props.listId ?? undefined)
     token.value = res.data.token
     revokedToken.value = null
     confirmingRevoke.value = false
@@ -77,6 +93,26 @@ async function copyLink() {
 function selectLink(event: Event) {
   const target = event.target as HTMLInputElement | null
   target?.select()
+}
+
+/** S8：纯前端 canvas 生成分享海报并下载 PNG */
+async function downloadPoster() {
+  if (!token.value || posterLoading.value) return
+  posterLoading.value = true
+  try {
+    await downloadSharePoster({
+      title: props.title,
+      shareUrl: link.value,
+      teaNames: props.teaNames,
+      teaCount: props.teaCount,
+      createdAt: props.createdAt,
+    })
+    toast.success('海报已生成，请查看下载')
+  } catch {
+    toast.error('海报生成失败，请稍后重试')
+  } finally {
+    posterLoading.value = false
+  }
 }
 
 async function onRevoke() {
@@ -133,6 +169,10 @@ async function onRevoke() {
           <button type="button" class="btn btn--secondary" @click="copyLink">复制链接</button>
         </div>
         <p class="share-tip">已有有效链接时会复用，不会重复生成；撤销后旧链接不可恢复。</p>
+
+        <button type="button" class="btn btn--secondary poster-btn" :disabled="posterLoading" @click="downloadPoster">
+          {{ posterLoading ? '海报生成中…' : '⬇️ 下载分享海报' }}
+        </button>
       </template>
 
       <div v-else class="share-empty">
@@ -254,6 +294,11 @@ async function onRevoke() {
   margin: 10px 0 0;
   font-size: var(--text-caption);
   color: var(--color-text-muted);
+}
+
+.poster-btn {
+  margin-top: 14px;
+  width: 100%;
 }
 
 .share-empty {

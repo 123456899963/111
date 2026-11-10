@@ -56,3 +56,22 @@ def pytest_configure(config: pytest.Config) -> None:
             f"测试库配置错误：当前库为 {settings.MYSQL_DATABASE}，必须使用 *_test 库",
             returncode=1,
         )
+
+
+@pytest.fixture(autouse=True)
+def _reset_login_attempts():
+    """S14：每个用例前清空登录失败记录。
+
+    TestClient 的客户端 IP 固定为 testclient，若不清空会跨用例累计并误触发
+    IP 维度锁定；该清理只触碰 login_attempts 表，不影响其他用例数据。
+    """
+    from app.core.database import SessionLocal
+    from app.models.login_attempt import LoginAttempt
+
+    db = SessionLocal()
+    try:
+        db.query(LoginAttempt).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+    yield

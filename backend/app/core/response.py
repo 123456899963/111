@@ -39,11 +39,24 @@ UserForbidden = TeaGuideError(40300, "无权限执行此操作")
 ShareNotFound = TeaGuideError(40410, "该分享已被撤销或不存在")
 ShareAlreadyRevoked = TeaGuideError(40900, "该分享已被撤销")
 FavoriteNotFound = TeaGuideError(40430, "该茶品不在当前用户收藏中")
+ListNotFound = TeaGuideError(40420, "清单不存在")
+# S10–S13 用户贡献：提交记录不存在（含非本人提交，不泄露存在性）
+ContributionNotFound = TeaGuideError(40440, "提交记录不存在")
+# 批次五 R1–R5 内容板块：板块不存在 / 条目不存在
+ContentTypeNotFound = TeaGuideError(40450, "内容板块不存在")
+ContentItemNotFound = TeaGuideError(40460, "内容条目不存在")
 UsernameExists = TeaGuideError(40910, "用户名已存在")
 BadCredentials = TeaGuideError(40110, "用户名或密码错误")
+# S14 登录失败锁定：窗口内失败次数达到阈值（HTTP 429）
+TooManyLoginAttempts = TeaGuideError(42900, "尝试过于频繁，请 15 分钟后再试")
 ValidationError = TeaGuideError(40000, "参数校验失败")
 FileTooLarge = TeaGuideError(41300, "文件超过 5 MB")
 UnsupportedMedia = TeaGuideError(41500, "仅支持 JPEG/PNG/WebP 图片")
+# 视频上传（ADR-0003）：沿用 413/415/400 的错误码族，不新增业务码
+VideoTooLarge = TeaGuideError(41300, "视频超过 50 MB")
+UnsupportedVideo = TeaGuideError(41500, "仅支持 MP4/MOV 视频")
+VideoTooLong = TeaGuideError(40000, "视频时长超过 3 分钟")
+VideoUnreadable = TeaGuideError(40000, "无法解析视频时长")
 InternalError = TeaGuideError(50000, "服务器内部错误")
 
 

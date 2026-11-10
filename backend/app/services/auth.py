@@ -5,15 +5,19 @@
 - S-04：登录失败统一 40110，对不存在用户执行哑哈希比对（等时）
 - S-05：用户名唯一性，并发注册以唯一索引兜底（IntegrityError → 40910）
 - S-20：不整包映射 ORM，字段显式构造
+- S-33：登录失败锁定（用户名 + IP 双维度，窗口内达到阈值返回 42900）
 """
+
+from datetime import datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.response import BadCredentials, UsernameExists
+from app.core.config import settings
+from app.core.response import BadCredentials, TooManyLoginAttempts, UsernameExists
 from app.core.security import DUMMY_HASH, hash_password, verify_password
 from app.models.user import User
-from app.repositories import user_repo
+from app.repositories import login_attempt_repo, user_repo
 
 
 def register(db: Session, username: str, password: str) -> User:
@@ -33,20 +37,49 @@ def register(db: Session, username: str, password: str) -> User:
         raise UsernameExists
 
 
-def login(db: Session, username: str, password: str) -> User:
+def _is_locked(db: Session, username: str, ip: str, now: datetime) -> bool:
+    """窗口内同一用户名或同一 IP 的失败次数是否达到阈值（S-33）。"""
+    since = now - timedelta(minutes=settings.LOGIN_WINDOW_MINUTES)
+    by_username, by_ip = login_attempt_repo.count_recent(db, username=username, ip=ip, since=since)
+    return by_username >= settings.LOGIN_MAX_FAILURES or by_ip >= settings.LOGIN_MAX_FAILURES
+
+
+def _record_failure(db: Session, username: str, ip: str, now: datetime) -> None:
+    """记录失败事件，并顺带清理超过保留期的历史记录。"""
+    login_attempt_repo.delete_older_than(
+        db, now - timedelta(hours=settings.LOGIN_ATTEMPT_RETENTION_HOURS)
+    )
+    login_attempt_repo.create(db, username=username, ip=ip, failed_at=now)
+    db.commit()
+
+
+def login(db: Session, username: str, password: str, *, ip: str) -> User:
     """校验用户名 + 密码。
 
-    用户名不存在与密码错误统一返回 40110（不区分）；对不存在的用户也执行一次
-    bcrypt 哑哈希比对，避免响应时间差暴露账号是否存在（SECURITY S-04）。
+    - 锁定判定先于账号存在性校验，避免通过 429/401 差异探测账号（S-33 / S-04）
+    - 用户名不存在与密码错误统一返回 40110（不区分）；对不存在的用户也执行一次
+      bcrypt 哑哈希比对，避免响应时间差暴露账号是否存在（SECURITY S-04）
     """
+    now = datetime.utcnow()
+
+    if _is_locked(db, username, ip, now):
+        # 锁定期间即使密码正确也拒绝；不泄露账号是否存在
+        raise TooManyLoginAttempts
+
     user = user_repo.get_by_username(db, username)
     if not user:
         # 等时比对：对哑哈希做一次校验，消耗与正常登录相近的时间
         verify_password(password, DUMMY_HASH)
+        _record_failure(db, username, ip, now)
         raise BadCredentials
 
     if not verify_password(password, user.password_hash):
+        _record_failure(db, username, ip, now)
         raise BadCredentials
+
+    # 成功登录清空该用户名的失败记录（IP 维度保留至自然过期，防止借有效账号洗白 IP）
+    login_attempt_repo.delete_by_username(db, username)
+    db.commit()
     return user
 
 

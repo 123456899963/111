@@ -6,6 +6,8 @@ import AppFooter from '@/components/AppFooter.vue'
 import CategoryTag from '@/components/CategoryTag.vue'
 import { copyShare, getShareView } from '@/api/shares'
 import { getHotTeas } from '@/api/teas'
+import { buildShareUrl } from '@/utils/favorite'
+import { downloadSharePoster } from '@/utils/poster'
 import { useUserStore } from '@/stores/user'
 import { useToastStore } from '@/stores/toast'
 import type { CopyResult, ShareViewData, TeaListItem } from '@/types'
@@ -23,6 +25,7 @@ const errorMessage = ref('')
 const hot = ref<TeaListItem[]>([])
 const copying = ref(false)
 const copyResult = ref<CopyResult | null>(null)
+const posterLoading = ref(false)
 
 const items = computed(() => data.value?.items ?? [])
 const createdText = computed(() => {
@@ -72,6 +75,26 @@ async function loadRecommendations() {
 
 function goLogin() {
   void router.push({ name: 'login', query: { redirect: route.fullPath } })
+}
+
+/** S8：纯前端 canvas 生成分享海报并下载 PNG */
+async function downloadPoster() {
+  if (!data.value || posterLoading.value) return
+  posterLoading.value = true
+  try {
+    await downloadSharePoster({
+      title: data.value.title,
+      shareUrl: buildShareUrl(window.location.origin, data.value.token),
+      teaNames: items.value.map((item) => item.name),
+      teaCount: data.value.tea_count,
+      createdAt: createdText.value,
+    })
+    toast.success('海报已生成，请查看下载')
+  } catch {
+    toast.error('海报生成失败，请稍后重试')
+  } finally {
+    posterLoading.value = false
+  }
 }
 
 async function copyAll() {
@@ -151,6 +174,9 @@ async function copyAll() {
                 登录后一键收藏
               </button>
             </template>
+            <button type="button" class="btn btn--secondary" :disabled="posterLoading" @click="downloadPoster">
+              {{ posterLoading ? '海报生成中…' : '下载分享海报' }}
+            </button>
             <RouterLink class="btn btn--secondary" to="/teas">继续逛茶</RouterLink>
           </div>
         </section>

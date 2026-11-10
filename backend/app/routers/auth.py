@@ -8,7 +8,7 @@
 
 import re
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import get_current_user
@@ -77,10 +77,14 @@ def register(req: RegisterRequest, response: Response, db: Session = Depends(get
 
 
 @router.post("/login")
-def login(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
-    """登录 → Set-Cookie（API_CONTRACT §4.1.3）。"""
+def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    """登录 → Set-Cookie（API_CONTRACT §4.1.3）。
+
+    S14：按「用户名 + IP」双维度统计失败次数，达到阈值返回 42900。
+    """
     username = req.username.strip()
-    user = auth_service.login(db, username, req.password)
+    ip = request.client.host if request.client else "unknown"
+    user = auth_service.login(db, username, req.password, ip=ip)
     _set_session_cookie(response, user.id)
     return ok(_user_to_dict(user))
 
