@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useToastStore } from '@/stores/toast'
@@ -9,6 +9,46 @@ const userStore = useUserStore()
 const toast = useToastStore()
 
 const keyword = ref('')
+
+/** 「茶文化」下拉：hover 之外的触屏/键盘开启通道（点击切换，Esc/点击外部/路由跳转关闭） */
+const dropdownOpen = ref(false)
+const navGroupRef = ref<HTMLElement | null>(null)
+
+function toggleDropdown() {
+  dropdownOpen.value = !dropdownOpen.value
+}
+
+function closeDropdown() {
+  dropdownOpen.value = false
+}
+
+function onDocumentClick(event: MouseEvent) {
+  if (dropdownOpen.value && !navGroupRef.value?.contains(event.target as Node)) {
+    closeDropdown()
+  }
+}
+
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && dropdownOpen.value) {
+    closeDropdown()
+    navGroupRef.value?.querySelector('button')?.focus()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+  document.addEventListener('keydown', onDocumentKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick)
+  document.removeEventListener('keydown', onDocumentKeydown)
+})
+
+watch(
+  () => router.currentRoute.value.fullPath,
+  () => closeDropdown(),
+)
 
 /** 无头像时的首字母占位（取用户名首字符） */
 const initial = computed(() => (userStore.user?.username ?? '').slice(0, 1).toUpperCase())
@@ -42,14 +82,36 @@ async function onLogout() {
       <nav class="app-header__links" aria-label="主导航">
         <RouterLink to="/" class="app-header__link">首页</RouterLink>
         <RouterLink to="/teas" class="app-header__link">茶品列表</RouterLink>
-        <div class="app-header__nav-group">
-          <span class="app-header__link app-header__link--trigger">茶文化 ▾</span>
-          <div class="app-header__dropdown" role="menu">
-            <RouterLink to="/contents/teaware" class="app-header__dropdown-item" role="menuitem">🫖 茶具茶器</RouterLink>
-            <RouterLink to="/contents/origin" class="app-header__dropdown-item" role="menuitem">🗺️ 茶叶产地</RouterLink>
-            <RouterLink to="/contents/culture" class="app-header__dropdown-item" role="menuitem">📜 茶叶文化</RouterLink>
-            <RouterLink to="/contents/brand" class="app-header__dropdown-item" role="menuitem">🏷️ 茶叶品牌</RouterLink>
-            <RouterLink to="/contents/knowledge" class="app-header__dropdown-item" role="menuitem">📚 茶叶知识</RouterLink>
+        <div ref="navGroupRef" class="app-header__nav-group">
+          <button
+            type="button"
+            class="app-header__link app-header__link--trigger"
+            aria-haspopup="menu"
+            :aria-expanded="dropdownOpen"
+            @click="toggleDropdown"
+          >
+            茶文化 ▾
+          </button>
+          <div
+            class="app-header__dropdown"
+            :class="{ 'app-header__dropdown--open': dropdownOpen }"
+            role="menu"
+          >
+            <RouterLink to="/contents/teaware" class="app-header__dropdown-item" role="menuitem"
+              >🫖 茶具茶器</RouterLink
+            >
+            <RouterLink to="/contents/origin" class="app-header__dropdown-item" role="menuitem"
+              >🗺️ 茶叶产地</RouterLink
+            >
+            <RouterLink to="/contents/culture" class="app-header__dropdown-item" role="menuitem"
+              >📜 茶叶文化</RouterLink
+            >
+            <RouterLink to="/contents/brand" class="app-header__dropdown-item" role="menuitem"
+              >🏷️ 茶叶品牌</RouterLink
+            >
+            <RouterLink to="/contents/knowledge" class="app-header__dropdown-item" role="menuitem"
+              >📚 茶叶知识</RouterLink
+            >
           </div>
         </div>
       </nav>
@@ -80,18 +142,18 @@ async function onLogout() {
         </form>
 
         <template v-if="userStore.isLoggedIn">
-          <RouterLink
-            to="/profile"
-            class="app-header__profile"
-            :title="userStore.user?.username"
-          >
+          <RouterLink to="/profile" class="app-header__profile" :title="userStore.user?.username">
             <img
               v-if="userStore.user?.avatar_url"
               class="app-header__avatar"
               :src="userStore.user.avatar_url"
               :alt="`${userStore.user.username} 的头像`"
             />
-            <span v-else class="app-header__avatar app-header__avatar--placeholder" aria-hidden="true">
+            <span
+              v-else
+              class="app-header__avatar app-header__avatar--placeholder"
+              aria-hidden="true"
+            >
               {{ initial }}
             </span>
             <span class="app-header__user">{{ userStore.user?.username }}</span>
@@ -181,7 +243,10 @@ async function onLogout() {
   position: relative;
 }
 .app-header__link--trigger {
-  cursor: default;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-family: inherit;
 }
 .app-header__dropdown {
   position: absolute;
@@ -197,11 +262,22 @@ async function onLogout() {
   opacity: 0;
   visibility: hidden;
   transform: translateX(-50%) translateY(-4px);
-  transition: opacity 0.15s, visibility 0.15s, transform 0.15s;
+  transition:
+    opacity 0.15s,
+    visibility 0.15s,
+    transform 0.15s;
   z-index: 60;
 }
-.app-header__nav-group:hover .app-header__dropdown,
-.app-header__link--trigger:hover + .app-header__dropdown {
+/* hover 仅在支持 hover 的指针设备生效，触屏/键盘依赖点击开启（is-open） */
+@media (hover: hover) {
+  .app-header__nav-group:hover .app-header__dropdown,
+  .app-header__link--trigger:hover + .app-header__dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+.app-header__dropdown--open {
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) translateY(0);
@@ -214,7 +290,9 @@ async function onLogout() {
   color: var(--color-text-secondary);
   text-decoration: none;
   line-height: 1.5;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 .app-header__dropdown-item:hover {
   background: var(--color-bg-muted);
