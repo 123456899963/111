@@ -1298,3 +1298,21 @@ gba(250,248,245,0.12)，无方向、无渐变，肉眼不可辨认为独立图�
   | pytest / itest | 未运行 | 无后端/前端逻辑改动 |
 
 - 遗留：hero 轮播一次加载 6 张，生产建议加 srcset 或仅预载当前+下一张（属组件改造，需另开任务）
+
+
+## 2026-11-10 将 backend/uploads 纳入版本管理
+
+- 分级：A（仓库配置与静态素材入库，无代码行为变更）
+- 背景：交付给他人的仓库缺少 ackend/uploads/ 时，	eas.main_image_url / content_items.cover_image / 	ea_media.image_url 指向的图片全部缺失，页面虽回退到内置 SVG 占位、不产生死链，但图鉴视觉为空
+- 同时修正：.gitignore:40 原为 uploads/          # FastAPI 图片上传目录，gitignore 不支持行尾注释，该行从未生效（ackend/uploads/ 一直是未跟踪状态）；本次删除该规则并注明 uploads 纳入版本管理
+- 入库内容：159 个文件 / 38.4 MB（jpg 98、webp 59、png 2），即 36 款茶品主图、图片集与 39 条内容封面
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | 暂存核对 | 通过 | git diff --cached --stat = 160 files（159 图 + .gitignore），无 .env、日志、临时文件 |
+  | 单文件体积 | 通过 | 最大单文件 < 1 MB，远低于 Gitee 100 MB 限制 |
+  | 静态检查 | 通过 | python scripts/check_all.py |
+
+- 后续约定：此后通过后台新增/替换的上传素材会以未跟踪文件出现，需随功能提交一并 git add backend/uploads
+- 遗留：仓库体积将持续增长，若素材规模上量，建议迁移 Git LFS（需评估 Gitee LFS 配额）
