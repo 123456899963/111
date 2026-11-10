@@ -239,6 +239,19 @@ localStorage.setItem('tea_notes', JSON.stringify({
 
 common.js 的 openLoginModal 在登录成功和注册成功后都会 `document.dispatchEvent(new CustomEvent('tea:login'))`。所有需要登录的页面（P3 分享/收藏按钮、P4 收藏清单）都监听此事件来刷新 UI 状态。
 
+### 5.6 收藏清单选择面板（S9 多清单交互，Vue 实现新增）
+
+**组件**：`frontend/src/components/FavoriteButton.vue`（仅 primary variant，用于茶品详情页）
+
+详情页主收藏按钮右侧附加「选择清单」箭头按钮，与主按钮拼为胶囊组合：
+
+- 主按钮行为不变：未收藏 → 加入默认清单；已收藏 → 从全部清单移除
+- 箭头按钮（仅登录态渲染）：展开清单选择面板，逐清单勾选/取消收录；勾选态由收藏状态响应 `list_ids` 驱动（`aria-checked` 同步）
+- 面板行为：懒加载 `GET /lists`；点击清单行幂等切换（已含则移出、未含则加入）；计数按「用户 × 茶品」去重口径联动（加入首个清单 +1、移出最后一个清单 -1）
+- 关闭方式：Esc（焦点回箭头）、点击面板外区域、路由跳转
+- 无障碍：`aria-haspopup` + `aria-expanded` + `role="menu"` / `role="menuitemcheckbox"`；触屏可用（不依赖 hover）
+- 视觉：全部引用 `:root` 设计变量，无硬编码 HEX
+
 ---
 
 ## 六、P4 收藏清单页完整规格
