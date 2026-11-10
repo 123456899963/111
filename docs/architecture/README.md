@@ -13,8 +13,8 @@
 | [TECH_STACK.md](TECH_STACK.md) | 技术选型定稿（9 项决策） |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 分层架构与五层职责红线 |
 | [MODULE_DESIGN.md](MODULE_DESIGN.md) | 模块划分与端点映射 |
-| [DATA_MODEL.md](DATA_MODEL.md) | 7 张表的结构、索引、约束与语义 |
-| [SECURITY.md](SECURITY.md) | 32 项安全控制（S-01–S-32） |
+| [DATA_MODEL.md](DATA_MODEL.md) | 9 张表的结构、索引、约束与语义 |
+| [SECURITY.md](SECURITY.md) | 33 项安全控制（S-01–S-33） |
 
 数据库建表脚本在 [database/init.sql](../../database/init.sql)，迁移在 `backend/app/alembic/`。
 

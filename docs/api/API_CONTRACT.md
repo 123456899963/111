@@ -2,11 +2,11 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.0** |
+| 文档版本 | **v1.5** |
 | 创建日期 | 2026-11-06 |
-| 契约基线 | [PRD.md](../product/PRD.md) v1.1 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.0 · [database/init.sql](../../database/init.sql) · [MODULE_DESIGN.md](../architecture/MODULE_DESIGN.md) |
+| 契约基线 | [PRD.md](../product/PRD.md) v1.1 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.4 · [database/init.sql](../../database/init.sql) · [MODULE_DESIGN.md](../architecture/MODULE_DESIGN.md) |
 | 本契约地位 | 前后端联调与字段命名的唯一依据。脚手架中与本契约不一致的字段，以本契约（数据库列名）为准 |
-| 覆盖范围 | MVP 全部业务接口（注册登录、茶品、收藏、清单与笔记、分享、管理员维护） |
+| 覆盖范围 | MVP 业务接口 + 第二阶段已实施项（S1–S17） |
 | 不覆盖 | 第二阶段能力；后端实现代码不在本次交付内 |
 | 配套机器可读文件 | [openapi.yaml](openapi.yaml) |
 
@@ -25,7 +25,7 @@
 | `/api/v1/auth` | 注册、登录、退出、当前用户 |
 | `/api/v1/teas` | 茶品列表、筛选、排序、分页、详情、首页数据 |
 | `/api/v1/favorites` | 收藏与取消收藏 |
-| `/api/v1/lists` | 我的清单、标题、品鉴笔记 |
+| `/api/v1/lists` | 我的多清单、标题、品鉴笔记 |
 | `/api/v1/shares` | 分享链接生成、撤销、游客查看、一键收藏 |
 | `/api/v1/admin` | 管理员茶品维护、上下架、小贴士、统计、图片上传 |
 
@@ -93,11 +93,14 @@
 | `40400` | 404 | 茶品不存在 | `tea_id` 无对应行 |
 | `40401` | 404 | 该茶品暂不可用 | 茶品 `is_active=0`，公开详情/收藏被拒 |
 | `40410` | 404 | 该分享已被撤销或不存在 | 分享 token 不存在 |
+| `40420` | 404 | 清单不存在 | 访问/操作不属于当前用户的清单（S9） |
 | `40430` | 404 | 收藏条目不存在 | 对未收藏的茶写品鉴笔记 |
+| `40440` | 404 | 提交记录不存在 | 贡献提交不存在，或不属于当前用户（不泄露存在性） |
 | `40900` | 409 | 该分享已被撤销 | 对已撤销 token 再次撤销或一键收藏 |
 | `40910` | 409 | 用户名已存在 | 注册重名（大小写不敏感） |
 | `41300` | 413 | 上传文件超过大小限制 | 文件大于 5 MB |
 | `41500` | 415 | 不支持的文件类型 | 非 JPEG/PNG/WebP |
+| `42900` | 429 | 尝试过于频繁 | S14 登录失败锁定：窗口内同一用户名或同一 IP 失败次数达到阈值 |
 | `50000` | 500 | 服务器内部错误 | 未捕获异常；详情仅记录服务端日志 |
 
 ### 1.5 认证与会话（HttpOnly Cookie）
@@ -181,6 +184,8 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | `role` | `user` / `admin` | 注册用户 / 管理员 |
 | `sort` | `newest`（默认）/ `favorite` | 最新上架 / 收藏最多 |
 | `share token` | 8 位 URL-safe 字符（`A-Z a-z 0-9 - _`），**大小写敏感** | 如 `k7X9m2Qa` |
+| `contribution.type` | `new_tea` / `article` | 补充新茶 / 科普投稿 |
+| `contribution.status` | `pending` / `approved` / `rejected` | 待审核 / 已通过 / 已拒绝 |
 
 - `price_range` 在 PRD 中仅说明“5 档”，文案与边界未定稿，因此 API 保持 **字符串（≤32 字符）**，不在契约中硬编码档位；应用层校验，不建 ENUM。
 - 枚举值非法一律 `40000`，不做静默丢弃。
@@ -238,13 +243,14 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 
 以下业务**不存在对应接口**，契约中不得出现：
 
-- 失物、拾物、认领、审核、通知、消息、站内信；
-- 用户投稿、审核队列、举报、评论；
-- 多清单创建/删除、清单描述；
-- 用户管理、修改他人账号、密码找回、邮箱登录、微信扫码登录；
+- 失物、拾物、认领、通知、消息、站内信；
+- 举报、评论；用户贡献的富文本与图片上传（X7，仅接受纯文本）；
+- 清单描述、用户管理、修改他人账号、密码找回、邮箱登录、微信扫码登录；
 - 茶品物理删除（`DELETE /admin/teas/{id}` 不提供，只有上下架软失效）；
-- 批量导入、图片删除、分享海报；
+- 批量导入、茶品图片删除（分享海报为纯前端生成，无接口）；
 - 管理员操作日志查询接口（日志仅服务端记录，不对外暴露，见 §6.3）。
+
+> 用户贡献与审核（S10–S13）已在 v1.5 纳入契约，见 §4.8；多清单（S9）见 §4.4/§4.5。
 
 ---
 
@@ -308,6 +314,8 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 |---|---|---|---|
 | `fermentation` | string / null | 发酵程度 | `teas.fermentation` |
 | `price_range` | string / null | 价格区间文案（≤32 字符） | `teas.price_range` |
+| `price_min` | integer / null | 价格下限（元/斤，S2）；null 表示未维护，不参与价格筛选 | `teas.price_min` |
+| `price_max` | integer / null | 价格上限（元/斤，S2）；null 表示未维护 | `teas.price_max` |
 | `representative_variety` | string / null | 代表品类 | `teas.representative_variety` |
 | `shape_desc` | string | 外形描述 | `teas.shape_desc` |
 | `soup_desc` | string | 汤色描述 | `teas.soup_desc` |
@@ -316,6 +324,9 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | `water_temp` | number / null | 水温（摄氏度，70.0–100.0） | `teas.water_temp` |
 | `tea_amount` | number / null | 投茶量（克） | `teas.tea_amount` |
 | `brew_time` | number / null | 浸泡时间（秒） | `teas.brew_time` |
+| `video_url` | string / null | 视频介绍（本站 `/uploads/videos/...`）；null 时前端隐藏视频区 | `teas.video_url` |
+| `video_duration` | integer / null | 视频时长（秒，≤180） | `teas.video_duration` |
+| `image_set` | string[] | 图片集 URL 列表，按 `sort_order` 升序，最多 9 条；空数组隐藏缩略图行 | `tea_media.image_url` |
 | `is_active` | boolean | 是否上架；公开详情恒为 `true` | `teas.is_active` |
 | `created_at` | datetime | 创建/上架时间 | `teas.created_at` |
 | `updated_at` | datetime | 最近编辑时间 | `teas.updated_at` |
@@ -323,6 +334,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | `tips_suitable` | string / null | 适合人群 | `tea_tips.suitable` |
 | `tips_misconception` | string / null | 冲泡误区 | `tea_tips.misconception` |
 | `tips_official_note` | string / null | 官方品鉴笔记 | `tea_tips.official_note` |
+| `contributed_articles` | `TeaArticle[]` | 已通过审核的用户科普投稿（S11/S12），按提交时间倒序；空数组隐藏 | `contributions`（type=article 且 status=approved） |
 
 说明：
 
@@ -357,11 +369,30 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
   "tips_history": "西湖龙井始于唐代，是中国十大名茶之首，狮峰产区为核心原产地。",
   "tips_suitable": "适合脾胃强健、喜鲜爽口感的茶友；春季饮用尤佳。",
   "tips_misconception": "水温不宜过高，85℃即可，沸水会烫熟嫩芽导致苦涩。",
-  "tips_official_note": "采摘标准为一芽一叶或一芽二叶初展，炒制工艺独特。"
+  "tips_official_note": "采摘标准为一芽一叶或一芽二叶初展，炒制工艺独特。",
+  "contributed_articles": [
+    {
+      "id": 8,
+      "title": "龙井的冲泡小记",
+      "content": "建议使用玻璃杯，85℃水温，先注水三分之一再投茶……",
+      "contributor": "teafan",
+      "created_at": "2026-11-09T10:00:00Z"
+    }
+  ]
 }
 ```
 
-### 2.3.1 `CategoryCount` / `OriginCount`
+#### 2.3.1 `TeaArticle`
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | integer | 贡献记录 ID（`contributions.id`） |
+| `title` | string / null | 标题，可为空 |
+| `content` | string | 纯文本正文，3–500 字 |
+| `contributor` | string | 投稿用户名 |
+| `created_at` | datetime | 投稿时间（UTC） |
+
+### 2.3.2 `CategoryCount` / `OriginCount`
 
 | 结构 | 字段 | 类型 | 说明 |
 |---|---|---|---|
@@ -375,8 +406,9 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `tea_id` | integer | 茶品主键 |
-| `is_favorited` | boolean | 当前用户是否已收藏 |
+| `is_favorited` | boolean | 当前用户是否已收藏（任一清单命中即为 `true`） |
 | `favorite_count` | integer | `teas.favorite_count` 缓存值 |
+| `list_ids` | integer[] | S9：该茶所在清单 ID 列表，空数组表示未收藏 |
 
 ### 2.5 `ListItem` / `ListData` / `ShareBrief`
 
@@ -405,12 +437,25 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | `url` | string | 前端路由 `/c/{token}`（相对路径） |
 | `created_at` | datetime | 令牌生成时间 |
 
+`ListSummary`（§4.4.1 清单摘要）：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | integer | `collection_lists.id` |
+| `title` | string | 清单标题 |
+| `is_default` | boolean | 是否默认清单（每用户仅一个） |
+| `tea_count` | integer | 清单条目总数（含已下架占位） |
+| `created_at` | datetime | 清单创建时间 |
+| `updated_at` | datetime | 清单最近更新时间 |
+| `share` | `ShareBrief` / null | 该清单当前生效分享 |
+
 `ListData`：
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `id` | integer | `collection_lists.id` |
-| `title` | string | 清单标题 | 
+| `title` | string | 清单标题 |
+| `is_default` | boolean | 是否默认清单 |
 | `tea_count` | integer | 清单条目总数（含已下架占位） |
 | `created_at` | datetime | 清单创建时间 |
 | `updated_at` | datetime | 清单最近更新时间 |
@@ -488,32 +533,49 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | 3 | 认证 | POST | `/auth/login` | 游客 |
 | 4 | 认证 | POST | `/auth/logout` | 任意 |
 | 5 | 认证 | GET | `/auth/me` | 登录用户 |
-| 6 | 茶品 | GET | `/teas` | 游客 |
-| 7 | 茶品 | GET | `/teas/categories` | 游客 |
-| 8 | 茶品 | GET | `/teas/origins` | 游客 |
-| 9 | 茶品 | GET | `/teas/hot` | 游客 |
-| 10 | 茶品 | GET | `/teas/random` | 游客 |
-| 11 | 茶品 | GET | `/teas/{tea_id}` | 游客 |
-| 12 | 收藏 | POST | `/favorites/{tea_id}` | 登录用户 |
-| 13 | 收藏 | DELETE | `/favorites/{tea_id}` | 登录用户 |
-| 14 | 收藏 | GET | `/favorites/{tea_id}/status` | 登录用户 |
-| 15 | 清单 | GET | `/lists` | 登录用户 |
-| 16 | 清单 | PUT | `/lists/title` | 登录用户 |
-| 17 | 清单 | PUT | `/lists/notes/{tea_id}` | 登录用户 |
-| 18 | 分享 | POST | `/shares/generate` | 登录用户 |
-| 19 | 分享 | POST | `/shares/revoke/{token}` | 登录用户（所有者） |
-| 20 | 分享 | GET | `/shares/{token}` | 游客（可选 Cookie） |
-| 21 | 分享 | POST | `/shares/{token}/copy` | 登录用户（非所有者） |
-| 22 | 管理员 | GET | `/admin/teas` | 管理员 |
-| 23 | 管理员 | GET | `/admin/teas/{tea_id}` | 管理员 |
-| 24 | 管理员 | POST | `/admin/teas` | 管理员 |
-| 25 | 管理员 | PUT | `/admin/teas/{tea_id}` | 管理员 |
-| 26 | 管理员 | PATCH | `/admin/teas/{tea_id}/toggle` | 管理员 |
-| 27 | 管理员 | PUT | `/admin/teas/{tea_id}/tips` | 管理员 |
-| 28 | 管理员 | GET | `/admin/stats` | 管理员 |
-| 29 | 管理员 | POST | `/admin/upload` | 管理员 |
+| 6 | 我的 | GET | `/me/stats` | 登录用户 |
+| 7 | 茶品 | GET | `/teas` | 游客 |
+| 8 | 茶品 | GET | `/teas/categories` | 游客 |
+| 9 | 茶品 | GET | `/teas/origins` | 游客 |
+| 10 | 茶品 | GET | `/teas/hot` | 游客 |
+| 11 | 茶品 | GET | `/teas/random` | 游客 |
+| 12 | 茶品 | GET | `/teas/recommended` | 游客（可选 Cookie） |
+| 13 | 茶品 | GET | `/teas/{tea_id}` | 游客 |
+| 14 | 茶品 | GET | `/teas/{tea_id}/images` | 游客 |
+| 15 | 茶品 | GET | `/teas/{tea_id}/related` | 游客 |
+| 16 | 茶品 | GET | `/tips/latest` | 游客 |
+| 17 | 收藏 | POST | `/favorites/{tea_id}` | 登录用户 |
+| 18 | 收藏 | DELETE | `/favorites/{tea_id}` | 登录用户 |
+| 19 | 收藏 | GET | `/favorites/{tea_id}/status` | 登录用户 |
+| 20 | 清单 | GET | `/lists` | 登录用户 |
+| 21 | 清单 | POST | `/lists` | 登录用户 |
+| 22 | 清单 | GET | `/lists/{list_id}` | 登录用户（所有者） |
+| 23 | 清单 | PUT | `/lists/{list_id}` | 登录用户（所有者） |
+| 24 | 清单 | DELETE | `/lists/{list_id}` | 登录用户（所有者） |
+| 25 | 清单 | PUT | `/lists/{list_id}/notes/{tea_id}` | 登录用户（所有者） |
+| 26 | 分享 | POST | `/shares/generate` | 登录用户 |
+| 27 | 分享 | POST | `/shares/revoke/{token}` | 登录用户（所有者） |
+| 28 | 分享 | GET | `/shares/{token}` | 游客（可选 Cookie） |
+| 29 | 分享 | POST | `/shares/{token}/copy` | 登录用户（非所有者） |
+| 30 | 管理员 | GET | `/admin/teas` | 管理员 |
+| 31 | 管理员 | GET | `/admin/teas/{tea_id}` | 管理员 |
+| 32 | 管理员 | POST | `/admin/teas` | 管理员 |
+| 33 | 管理员 | PUT | `/admin/teas/{tea_id}` | 管理员 |
+| 34 | 管理员 | PATCH | `/admin/teas/{tea_id}/toggle` | 管理员 |
+| 35 | 管理员 | PUT | `/admin/teas/{tea_id}/tips` | 管理员 |
+| 36 | 管理员 | GET | `/admin/stats` | 管理员 |
+| 37 | 管理员 | POST | `/admin/upload` | 管理员 |
+| 38 | 管理员 | POST | `/admin/media/video` | 管理员 |
+| 39 | 管理员 | POST | `/admin/teas/{tea_id}/images` | 管理员 |
+| 40 | 管理员 | DELETE | `/admin/teas/{tea_id}/images/{image_id}` | 管理员 |
+| 41 | 贡献 | POST | `/contributions` | 登录用户 |
+| 42 | 贡献 | GET | `/contributions/mine` | 登录用户 |
+| 43 | 贡献 | DELETE | `/contributions/{contribution_id}` | 登录用户（本人） |
+| 44 | 管理员 | GET | `/admin/contributions` | 管理员 |
+| 45 | 管理员 | POST | `/admin/contributions/{contribution_id}/approve` | 管理员 |
+| 46 | 管理员 | POST | `/admin/contributions/{contribution_id}/reject` | 管理员 |
 
-> 清单条目移除不单独提供 `DELETE /lists/{tea_id}`，统一复用 `DELETE /favorites/{tea_id}`，避免同一语义两个入口。
+> 清单条目移除不单独提供 `DELETE /lists/{tea_id}`，统一复用 `DELETE /favorites/{tea_id}`（可带 `?list_id`），避免同一语义两个入口。
 
 ---
 
@@ -624,8 +686,12 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 |---|---|---|
 | 400 | 40000 | 字段缺失/超长 |
 | 401 | 40110 | 用户名不存在或密码错误（统一提示，不区分） |
+| 429 | 42900 | 15 分钟窗口内同一用户名或同一 IP 失败 ≥ 5 次（S14 锁定） |
 
-- **规则**：登录失败不锁定账号（PRD FR-4.4）；成功覆盖旧 Cookie；`role` 由数据库读取。
+- **规则**：
+  - S14 锁定：先判定锁定再校验账号，锁定期间正确密码同样返回 `42900`，不泄露账号是否存在；窗口滚动过期后自动解锁。
+  - 每次登录顺带清理 24 小时前的失败记录；成功登录清空该用户名的失败记录（IP 维度保留到自然过期）。
+  - 成功登录覆盖旧 Cookie；`role` 由数据库读取。
 
 #### 4.1.4 退出登录
 
@@ -679,12 +745,16 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | `category` | string | 否 | — | 逗号分隔枚举，如 `green,oolong`；同维度多选为 OR |
 | `origin` | string | 否 | — | 逗号分隔**省级名称**，如 `浙江,福建`；按 `origin` 前缀匹配（`浙江%`）；同维度 OR |
 | `season` | string | 否 | — | 逗号分隔枚举，如 `明前,春茶`；同维度 OR |
+| `fermentation` | string | 否 | — | 逗号分隔枚举（S2）：`不发酵/微发酵/半发酵/全发酵/后发酵`；同维度 OR |
+| `price_min` | integer | 否 | — | 价格下限（元/斤，S2），≥0；与 `price_max` 按区间**交集**匹配（`price_max >= price_min 且 price_min <= price_max`） |
+| `price_max` | integer | 否 | — | 价格上限（元/斤，S2），≥0；与 `price_min` 同时提供时 `price_min ≤ price_max` |
+| `filter_mode` | string | 否 | `and` | `and` / `or`（S1）：跨维度组合方式；同维度内部始终 OR |
 | `keyword` | string | 否 | — | 1–50 字符；对 `name`、`origin` 做 `LIKE %词%`，空串忽略 |
 | `sort` | string | 否 | `newest` | `newest`（创建时间倒序）/ `favorite`（收藏数倒序） |
 | `page` | integer | 否 | `1` | ≥1；越界夹取 |
 | `page_size` | integer | 否 | **12** | 1–50；越界夹取；默认值对应 PRD FR-1.6 |
 
-- **过滤逻辑**：不同维度之间固定 AND（茶类 AND 产地 AND 季节 AND 关键词）；同维度多选 OR（PRD FR-1.2）。
+- **过滤逻辑**：默认不同维度之间 AND（茶类 AND 产地 AND 季节 AND 发酵 AND 价格 AND 关键词）；`filter_mode=or` 时茶类/产地/季节/发酵之间改为 OR（S1），关键词仍为独立 AND 叠加；同维度多选始终 OR（PRD FR-1.2）。未维护价格（`price_min`/`price_max` 为 null）的茶品不命中任何价格区间筛选。
 - **请求体**：无
 - **成功响应**：HTTP 200，`code=0`，`data` 为分页结构：
 
@@ -722,7 +792,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 
 | HTTP | code | 触发 |
 |---|---|---|
-| 400 | 40000 | `category`/`season`/`sort` 非法枚举，或 `keyword` 超过 50 字符 |
+| 400 | 40000 | `category`/`season`/`fermentation`/`sort`/`filter_mode` 非法枚举，`price_min`/`price_max` 为负或倒置，或 `keyword` 超过 50 字符 |
 
 - **规则**：
   - 只返回 `is_active=1` 的茶品；下架茶品在列表/搜索/推荐中完全隐藏（PRD FR-6.3）。
@@ -809,7 +879,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 ```
 
 - **错误**：`40000`（`limit` 非整数）。
-- **规则**：只取 `is_active=1`；排序 `favorite_count DESC, created_at DESC, id DESC`；数据不足 8 条时返回实际条数，不补占位。
+- **规则**：只取 `is_active=1`；按热度权重排序（S17）：`7 天内收藏数 × 3 + favorite_count` 降序，次级键 `favorite_count DESC, id DESC`；数据不足 8 条时返回实际条数，不补占位。
 
 #### 4.2.5 随机发现
 
@@ -869,6 +939,12 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
     "tea_amount": 3.0,
     "brew_time": 90.0,
     "main_image_url": "https://images.unsplash.com/photo-1563822249366-3efb23b8e0c9?w=600&h=400&fit=crop",
+    "video_url": "/uploads/videos/2026/11/1a2b3c4d5e6f708192a3b4c5d6e7f8a9.mp4",
+    "video_duration": 96,
+    "image_set": [
+      "/uploads/2026/11/8f3c2b1a4d5e6f708192a3b4c5d6e7f8.jpg",
+      "/uploads/2026/11/2c4d6e8f0a1b3c5d7e9f1a3b5c7d9e1f.jpg"
+    ],
     "is_active": true,
     "favorite_count": 2480,
     "created_at": "2026-11-06T12:00:00Z",
@@ -889,24 +965,137 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | 404 | 40401 | 茶品已下架（PRD 例外：旧链接访问） |
 
 - **规则**：下架茶品不返回详情数据；前端展示“该茶品暂不可用”+ 同类替代引导；`tips_*` 为空的区块由前端隐藏，不返回空占位对象。
+- **内容扩展字段（ADR-0003，v1.1 追加）**：
+  - `video_url`：`string | null`。本站 `/uploads/videos/...` 路径；为 `null` 时前端整块隐藏视频区，不渲染空播放器。
+  - `video_duration`：`integer | null`。秒，服务端解析并校验 ≤180。
+  - `image_set`：`string[]`。按 `sort_order` 升序的图片 URL 列表；最多 9 条；为空数组时前端隐藏缩略图行。
+
+#### 4.2.7 茶品图片集
+
+- **方法与路径**：`GET /teas/{tea_id}/images`
+- **权限**：游客
+- **路径参数**：`tea_id`（integer，必填）
+- **请求体**：无
+- **成功响应**：HTTP 200，`code=0`，`data` 为数组，按 `sort_order` 升序、同序按 `id` 升序：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": [
+    { "id": 1, "image_url": "/uploads/2026/11/a.jpg", "sort_order": 0 },
+    { "id": 2, "image_url": "/uploads/2026/11/b.jpg", "sort_order": 1 }
+  ]
+}
+```
+
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 404 | 40400 | `tea_id` 不存在 |
+| 404 | 40401 | 茶品已下架 |
+
+- **规则**：无图片集时返回空数组 `[]`，不返回 404；数据与 `TeaDetail.image_set` 同源。
+
+#### 4.2.8 相关推荐（S6）
+
+- **方法与路径**：`GET /teas/{tea_id}/related`
+- **权限**：游客
+- **查询参数**：
+
+| 参数 | 类型 | 必填 | 默认 | 约束与语义 |
+|---|---|---|---|---|
+| `limit` | integer | 否 | `4` | 1–8；越界夹取 |
+
+- **请求体**：无
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `TeaListItem[]`。
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 404 | 40400 | `tea_id` 不存在 |
+| 404 | 40401 | 茶品已下架 |
+
+- **规则**：排除自身与下架茶品；同茶类优先 → 同产地（省级）次之 → 热门（`favorite_count`）兜底；结果去重，条数不足时返回实际数量。
+
+#### 4.2.9 最新小贴士（S7）
+
+- **方法与路径**：`GET /tips/latest`
+- **权限**：游客
+- **查询参数**：
+
+| 参数 | 类型 | 必填 | 默认 | 约束与语义 |
+|---|---|---|---|---|
+| `limit` | integer | 否 | `3` | 1–6；越界夹取 |
+
+- **请求体**：无
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `LatestTipItem[]`，按 `tea_tips.updated_at DESC、tea_id DESC` 排序：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": [
+    {
+      "tea_id": 1,
+      "tea_name": "西湖龙井",
+      "category": "green",
+      "summary": "采摘标准为一芽一叶或一芽二叶初展，炒制工艺独特。",
+      "updated_at": "2026-11-06T12:00:00Z"
+    }
+  ]
+}
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `tea_id` | integer | 茶品 ID |
+| `tea_name` | string | 茶品名称 |
+| `category` | string | 茶类枚举 |
+| `summary` | string | 小贴士摘要：取官方备注→适合人群→历史→误区的首个非空项，超过 80 字截断加「…」 |
+| `updated_at` | datetime | 小贴士最近更新时间（ISO8601 UTC 带 Z） |
+
+- **规则**：只取 `is_active=1` 且四项小贴士至少一项非空的茶品；无有效摘要的记录跳过。
+
+---
+
+#### 4.2.10 个性化推荐（S16）
+
+- **方法与路径**：`GET /teas/recommended`
+- **权限**：游客（可选 Cookie；登录用户按收藏偏好推荐）
+- **查询参数**：
+
+| 参数 | 类型 | 必填 | 默认 | 约束与语义 |
+|---|---|---|---|---|
+| `limit` | integer | 否 | `1` | 1–8；越界夹取 |
+
+- **请求体**：无
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `TeaListItem[]`（字段同 §4.2.1 列表项）
+- **规则**：
+  - 登录且已有收藏：按收藏茶类分布加权随机，优先返回**未收藏**的同茶类茶品；
+  - 未登录 / 无收藏 / 偏好茶类候选耗尽：回退完全随机（返回 1 条）；
+  - 仅返回 `is_active=1` 的茶品；无可选茶品时 `data` 为空数组。
 
 ---
 
 ### 4.3 收藏模块
+
+> S9 起支持多清单：收藏可指定目标清单，`teas.favorite_count` 按「用户 × 茶品」跨清单去重。
 
 #### 4.3.1 收藏茶品
 
 - **方法与路径**：`POST /favorites/{tea_id}`
 - **权限**：登录用户（`user` / `admin`）
 - **路径参数**：`tea_id` integer，必填
-- **请求体**：无
+- **请求体**（可选）：`{ "list_id": 7 }`；缺省或 `null` 时归入默认清单
 - **成功响应**：HTTP 200，`code=0`，`data` 为 `FavoriteState`：
 
 ```json
 {
   "code": 0,
   "message": "ok",
-  "data": { "tea_id": 1, "is_favorited": true, "favorite_count": 2481 }
+  "data": { "tea_id": 1, "is_favorited": true, "favorite_count": 2481, "list_ids": [7] }
 }
 ```
 
@@ -914,28 +1103,30 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 
 | HTTP | code | 触发 |
 |---|---|---|
+| 400 | 40000 | 请求体结构非法 |
 | 401 | 40100 | 未登录/会话过期 |
 | 404 | 40400 | 茶品不存在 |
 | 404 | 40401 | 茶品已下架，不可收藏 |
+| 404 | 40420 | `list_id` 不存在或不属于当前用户 |
 
 - **规则**：
-  - **幂等**：已收藏时再次调用不新增行、不重复计数，仍返回 `is_favorited=true` 与当前计数。
-  - 同事务写入 `favorite_items` 与 `teas.favorite_count +1`（见 §1.10）。
-  - 依赖 `UNIQUE(user_id, tea_id)` 防并发重复；撞唯一冲突按“已收藏”处理，不返回 409。
+  - **幂等**：同一清单内已收藏时再次调用不新增行、不重复计数。
+  - 同一茶品可加入多个清单；`favorite_count` 只在用户**首次**收藏该茶（跨清单无记录）时 +1（见 §1.10）。
+  - 依赖 `UNIQUE(list_id, tea_id)` 防并发重复；撞唯一冲突按“已收藏”处理，不返回 409。
 
 #### 4.3.2 取消收藏
 
 - **方法与路径**：`DELETE /favorites/{tea_id}`
 - **权限**：登录用户
 - **路径参数**：`tea_id` integer，必填
-- **请求体**：无
+- **查询参数**：`list_id` integer，可选；传入时仅移除该清单条目，不传时移除该茶在所有清单中的条目
 - **成功响应**：HTTP 200，`code=0`，`data` 为 `FavoriteState`：
 
 ```json
 {
   "code": 0,
   "message": "ok",
-  "data": { "tea_id": 1, "is_favorited": false, "favorite_count": 2480 }
+  "data": { "tea_id": 1, "is_favorited": false, "favorite_count": 2480, "list_ids": [] }
 }
 ```
 
@@ -945,25 +1136,25 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 |---|---|---|
 | 401 | 40100 | 未登录/会话过期 |
 | 404 | 40400 | 茶品不存在 |
+| 404 | 40420 | `list_id` 不存在或不属于当前用户 |
 
 - **规则**：
   - **幂等**：未收藏时调用仍返回成功，计数不变。
-  - **不校验 `is_active`**：已下架茶品仍需可从清单中移除，因此只校验茶品是否存在。
-  - 同事务删除条目并 `favorite_count = GREATEST(favorite_count - 1, 0)`。
+  - **不校验 `is_active`**：已下架茶品仍需可从清单中移除。
+  - 仅当该茶在用户所有清单中的最后一条被移除时，才 `favorite_count = GREATEST(favorite_count - 1, 0)`。
 
 #### 4.3.3 查询收藏状态
 
 - **方法与路径**：`GET /favorites/{tea_id}/status`
 - **权限**：登录用户
 - **路径参数**：`tea_id` integer，必填
-- **请求体**：无
 - **成功响应**：HTTP 200，`code=0`，`data` 为 `FavoriteState`：
 
 ```json
 {
   "code": 0,
   "message": "ok",
-  "data": { "tea_id": 1, "is_favorited": true, "favorite_count": 2480 }
+  "data": { "tea_id": 1, "is_favorited": true, "favorite_count": 2480, "list_ids": [7, 9] }
 }
 ```
 
@@ -974,131 +1165,123 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | 401 | 40100 | 未登录/会话过期 |
 | 404 | 40400 | 茶品不存在 |
 
-- **规则**：允许查询已下架茶品的收藏状态（清单占位场景）；`favorite_count` 为缓存值。
+- **规则**：允许查询已下架茶品的收藏状态；`list_ids` 为该茶所在全部清单。
 
 ---
 
 ### 4.4 清单与品鉴笔记模块
 
-#### 4.4.1 获取我的默认清单
+> S9 多清单：每用户有且仅有一个默认清单（`is_default=1`），其余为非默认清单；
+> 单账号最多 **10 个**清单；默认清单不可删除。访问他人清单统一返回 `40420`。
+
+#### 4.4.1 获取我的全部清单
 
 - **方法与路径**：`GET /lists`
 - **权限**：登录用户
 - **参数/请求体**：无
-- **成功响应**：HTTP 200，`code=0`，`data` 为 `ListData`：
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `ListSummary[]`（默认清单置顶，其余按创建时间升序）：
 
 ```json
 {
   "code": 0,
   "message": "ok",
-  "data": {
-    "id": 7,
-    "title": "我的收藏",
-    "tea_count": 2,
-    "created_at": "2026-11-06T12:00:00Z",
-    "updated_at": "2026-11-06T12:00:00Z",
-    "share": null,
-    "items": [
-      {
-        "tea_id": 1,
-        "name": "西湖龙井",
-        "category": "green",
-        "origin": "浙江 杭州 西湖狮峰",
-        "season": "明前",
-        "main_image_url": "https://images.unsplash.com/photo-1563822249366-3efb23b8e0c9?w=600&h=400&fit=crop",
-        "favorite_count": 2480,
-        "is_available": true,
-        "tasting_note": "豆香明显，回甘快。",
-        "favorited_at": "2026-11-06T12:00:00Z"
-      }
-    ]
-  }
+  "data": [
+    { "id": 7, "title": "我的收藏", "is_default": true, "tea_count": 2,
+      "created_at": "2026-11-06T12:00:00Z", "updated_at": "2026-11-06T12:00:00Z",
+      "share": null }
+  ]
 }
 ```
 
-- **错误**：`40100`（未登录/会话过期）。
-- **规则**：
-  - 首次调用自动创建默认清单（标题“我的收藏”，`UNIQUE(user_id)` 保证只有一次成功）；已有则直接返回（幂等）。
-  - `items` 返回全部条目，不分页（MVP 单清单、数据量可控），按 `favorited_at DESC, tea_id DESC`。
-  - `tea_count` 为条目总数，包含已下架占位。
-  - `is_available=false` 表示茶已下架，前端灰显“该茶品暂不可用”，但条目仍保留（PRD FR-5 例外）。
-  - `share` 为当前生效令牌；无生效分享时为 `null`；已撤销令牌不返回。
+- **错误**：`40100`。
+- **规则**：首次调用自动创建默认清单（标题“我的收藏”），`UNIQUE(user_id, is_default)` 保证并发下只成功一次。
 
-#### 4.4.2 更新清单标题
+#### 4.4.2 新建清单
 
-- **方法与路径**：`PUT /lists/title`
-- **权限**：登录用户（清单所有者；MVP 一人一清单，登录即所有者）
-- **请求体**：
-
-| 字段 | 类型 | 必填 | 约束 |
-|---|---|---|---|
-| `title` | string | 是 | trim 后 2–20 字符；不能为纯空白 |
-
-- **请求示例**：`{ "title": "我的私房茶单" }`
-- **成功响应**：HTTP 200，`code=0`
-
-```json
-{
-  "code": 0,
-  "message": "ok",
-  "data": { "id": 7, "title": "我的私房茶单", "updated_at": "2026-11-06T12:30:00Z" }
-}
-```
-
+- **方法与路径**：`POST /lists`
+- **权限**：登录用户
+- **请求体**：`{ "title": "办公室茶单" }`（trim 后 2–20 字符）
+- **成功响应**：HTTP 200，`code=0`，`data` 为新建的 `ListSummary`（`is_default=false`）。
 - **错误**：
 
 | HTTP | code | 触发 |
 |---|---|---|
-| 400 | 40000 | 标题缺失、长度不在 2–20 或纯空白 |
+| 400 | 40000 | 标题缺失/长度越界/纯空白；或清单数已达 10 个 |
 | 401 | 40100 | 未登录/会话过期 |
 
-- **规则**：清单不可删除；分享访问时标题动态读本字段，不存在令牌上的标题副本（DATA_MODEL C2）。
+#### 4.4.3 获取清单详情
 
-#### 4.4.3 保存品鉴笔记
-
-- **方法与路径**：`PUT /lists/notes/{tea_id}`
+- **方法与路径**：`GET /lists/{list_id}`
 - **权限**：登录用户（清单所有者）
-- **路径参数**：`tea_id` integer，必填
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `ListData`（含 `items` 与 `share`）。
+- **错误**：`40100`；`40420`（清单不存在或不属于当前用户）。
+- **规则**：
+  - `items` 不分页，按 `favorited_at DESC, tea_id DESC`。
+  - `is_available=false` 表示茶已下架，条目仍保留并灰显。
+  - `share` 为该清单当前生效令牌；已撤销不返回。
+
+#### 4.4.4 更新清单标题
+
+- **方法与路径**：`PUT /lists/{list_id}`
+- **权限**：登录用户（清单所有者）
+- **请求体**：`{ "title": "我的私房茶单" }`（trim 后 2–20 字符）
+- **成功响应**：
+
+```json
+{ "code": 0, "message": "ok",
+  "data": { "id": 7, "title": "我的私房茶单", "is_default": true, "updated_at": "2026-11-06T12:30:00Z" } }
+```
+
+- **错误**：`40000`（标题非法）；`40100`；`40420`（清单不存在/越权）。
+- **规则**：默认清单与非默认清单均可改名；分享访问时标题动态读取。
+
+#### 4.4.5 删除清单
+
+- **方法与路径**：`DELETE /lists/{list_id}`
+- **权限**：登录用户（清单所有者）
+- **成功响应**：HTTP 200，`code=0`，`data=null`。
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | 尝试删除默认清单 |
+| 401 | 40100 | 未登录/会话过期 |
+| 404 | 40420 | 清单不存在或不属于当前用户 |
+
+- **规则**：
+  - 仅非默认清单可删除；默认清单不可删除。
+  - 清单内条目**迁移到默认清单**，不丢数据；若默认清单已存在同一茶品，则合并为一条，
+    默认清单已有笔记优先，否则继承被删清单的笔记。
+  - 该清单的分享令牌随清单级联删除，旧链接立即返回 `40410`。
+
+#### 4.4.6 保存品鉴笔记
+
+- **方法与路径**：`PUT /lists/{list_id}/notes/{tea_id}`
+- **权限**：登录用户（清单所有者）
+- **路径参数**：`list_id`、`tea_id` integer，必填
 - **请求体**：
 
 | 字段 | 类型 | 必填 | 约束 |
 |---|---|---|---|
-| `content` | string / null | 是 | 可为 `null`；上限 **20,000 字符**（超出返回 `40000`；对齐 SECURITY S-19/S-24，并为 MySQL `TEXT` 容量留出安全余量）；纯空白归一化为 `null` |
+| `content` | string / null | 是 | 可为 `null`；上限 **20,000 字符**；纯空白归一化为 `null` |
 
-- **请求示例**：
-
-```json
-{ "content": "第一泡豆香突出，第三泡回甘明显。" }
-```
-
-清空笔记：
+- **成功响应**：
 
 ```json
-{ "content": null }
-```
-
-- **成功响应**：HTTP 200，`code=0`
-
-```json
-{
-  "code": 0,
-  "message": "ok",
-  "data": { "tea_id": 1, "tasting_note": "第一泡豆香突出，第三泡回甘明显。" }
-}
+{ "code": 0, "message": "ok",
+  "data": { "tea_id": 1, "list_id": 7, "tasting_note": "第一泡豆香突出，第三泡回甘明显。" } }
 ```
 
 - **错误**：
 
 | HTTP | code | 触发 |
 |---|---|---|
-| 400 | 40000 | `content` 字段缺失、类型非 string/null，或超过 20,000 字符 |
+| 400 | 40000 | `content` 缺失/类型非法/超过 20,000 字符 |
 | 401 | 40100 | 未登录/会话过期 |
-| 404 | 40430 | 该茶品不在当前用户收藏中（未收藏无法写笔记） |
+| 404 | 40420 | 清单不存在或不属于当前用户 |
+| 404 | 40430 | 该茶品不在当前清单中 |
 
-- **规则**：
-  - 笔记写入 `favorite_items.tasting_note`，仅本人可读写；分享接口**不返回**笔记（PRD FR-5.3）。
-  - 笔记与茶品详情页“用户投稿”无关，MVP 不提供投稿。
-  - 清空笔记不删除收藏条目。
+- **规则**：笔记写入 `favorite_items.tasting_note`，仅本人可读写；分享接口**不返回**笔记；清空笔记不删除条目。
 
 ---
 
@@ -1108,7 +1291,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 
 - **方法与路径**：`POST /shares/generate`
 - **权限**：登录用户（清单所有者）
-- **请求体**：无（不再接收 `title`，标题取 `collection_lists.title`）
+- **请求体**（可选）：`{ "list_id": 9 }`；缺省或 `null` 时分享默认清单（不再接收 `title`，标题取 `collection_lists.title`）
 - **成功响应**：HTTP 200，`code=0`
 
 ```json
@@ -1135,10 +1318,13 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 
 | HTTP | code | 触发 |
 |---|---|---|
+| 400 | 40000 | 请求体结构非法 |
 | 401 | 40100 | 未登录/会话过期 |
+| 404 | 40420 | `list_id` 不存在或不属于当前用户 |
 
 - **规则**：
-  - 若清单已有 `is_active=1` 的令牌则**复用**，不产生重复令牌；否则新建。
+  - 按清单生成：每个清单最多一条生效令牌，不同清单令牌互相独立。
+  - 若目标清单已有 `is_active=1` 的令牌则**复用**，不产生重复令牌；否则新建。
   - 令牌无过期时间，永久有效，除非显式撤销（PRD FR-5.4）。
   - 撤销后旧令牌不可复活；再次生成必须新建令牌。
   - 生成前若默认清单不存在，先惰性创建。
@@ -1378,6 +1564,8 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | `tea_amount` | number | 是 | >0 且 ≤999.9，1 位小数 | `teas.tea_amount` |
 | `brew_time` | number | 是 | >0 且 ≤999.9，1 位小数 | `teas.brew_time` |
 | `main_image_url` | string | 是 | ≤500 字符；`http(s)://` 外链或 `/uploads/...` | `teas.main_image_url` |
+| `video_url` | string / null | 否 | ≤500 字符；**必须**为本站 `/uploads/` 路径（禁止第三方外链）；空/纯空白归一化为 `null` | `teas.video_url` |
+| `video_duration` | integer / null | 否 | 1–180 秒 | `teas.video_duration` |
 | `tips_history` | string / null | 否 | 空/纯空白归一化为 `null` | `tea_tips.history` |
 | `tips_suitable` | string / null | 否 | 同上 | `tea_tips.suitable` |
 | `tips_misconception` | string / null | 否 | 同上 | `tea_tips.misconception` |
@@ -1466,7 +1654,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 - **请求体**：与 §4.6.3 的茶品主体字段一致（全部必填/选填规则相同），但 **不接受 `tips_*`**：
 
   - 必填：`name`、`category`、`origin`、`shape_desc`、`soup_desc`、`aroma_desc`、`taste_desc`、`water_temp`、`tea_amount`、`brew_time`、`main_image_url`。
-  - 选填：`season`、`fermentation`、`price_range`、`representative_variety`；**省略或 `null` 均写为 `NULL`**（PUT 全量替换语义）。
+  - 选填：`season`、`fermentation`、`price_range`、`representative_variety`、`video_url`、`video_duration`；**省略或 `null` 均写为 `NULL`**（PUT 全量替换语义）。
   - 不可改：`id`、`is_active`（用 toggle）、`favorite_count`。
 - **请求示例**：
 
@@ -1671,7 +1859,278 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
   - 文件名使用 UUID，扩展名由服务端 MIME 决定；不保留原文件名落盘。
   - 图片访问见 §1.9：同源 `GET /uploads/...`，无需认证。
   - 写入 `operation_logs`：`action='upload_image'`、`target_type='tea'`、`target_id=null`、`detail` 为文件名/大小摘要。
-  - MVP 不提供图片删除接口，也不提供茶品删除接口。
+  - 不提供茶品删除接口；图片集条目的删除见 §4.6.11（v1.1 追加）。
+
+#### 4.6.9 视频上传
+
+- **方法与路径**：`POST /admin/media/video`
+- **权限**：管理员
+- **请求格式**：`multipart/form-data`
+- **表单字段**：
+
+| 字段 | 类型 | 必填 | 约束 |
+|---|---|---|---|
+| `file` | binary | 是 | MP4/MOV；≤50 MB；时长 ≤180 秒；非空 |
+
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `VideoUploadResult`：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "url": "/uploads/videos/2026/11/1a2b3c4d5e6f708192a3b4c5d6e7f8a9.mp4",
+    "original_filename": "intro.mp4",
+    "size": 20971520,
+    "content_type": "video/mp4",
+    "duration": 96
+  }
+}
+```
+
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | `file` 缺失、空文件、无法解析视频时长 |
+| 400 | 40000 | 时长超过 180 秒 |
+| 401 | 40100 | 未登录/会话过期 |
+| 403 | 40300 | 非管理员 |
+| 413 | 41300 | 文件超过 50 MB |
+| 415 | 41500 | 非 MP4/MOV 容器（`ftyp` 魔数不匹配） |
+| 500 | 50000 | 磁盘写入失败 |
+
+- **规则**：
+  - 容器与时长均由服务端解析，不信任客户端 `Content-Type` 与文件名。
+  - 落盘目录 `uploads/videos/{YYYY}/{MM}/`，文件名 UUID，同源访问 `GET /uploads/videos/...`。
+  - 写入 `operation_logs`：`action='upload_video'`。
+  - 本端点请求体上限单独放宽至 52 MB（其余端点仍为 6 MB）。
+
+#### 4.6.10 追加茶品图片
+
+- **方法与路径**：`POST /admin/teas/{tea_id}/images`
+- **权限**：管理员
+- **请求体**（JSON，`extra=forbid`）：
+
+| 字段 | 类型 | 必填 | 约束 |
+|---|---|---|---|
+| `image_url` | string | 是 | 必须为本站 `/uploads/` 路径；≤500 字符 |
+| `sort_order` | integer | 否 | ≥0；缺省时取当前最大值 + 1 |
+
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `{ "id": 1, "image_url": "...", "sort_order": 0 }`
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | 契约校验失败；单茶图片已达 9 张 |
+| 401 | 40100 | 未登录 |
+| 403 | 40300 | 非管理员 |
+| 404 | 40400 | 茶品不存在 |
+
+- **规则**：单茶上限 9 张（应用层校验）；写入 `operation_logs`：`action='add_tea_media'`。
+
+#### 4.6.11 删除茶品图片
+
+- **方法与路径**：`DELETE /admin/teas/{tea_id}/images/{image_id}`
+- **权限**：管理员
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `{ "deleted": 2 }`
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 401 | 40100 | 未登录 |
+| 403 | 40300 | 非管理员 |
+| 404 | 40400 | 茶品不存在，或图片不存在/不属于该茶品 |
+
+- **规则**：**物理删除**（ADR-0003 §6）；磁盘文件保留（同一 URL 可能被其他茶品复用），仅解除关联；写入 `operation_logs`：`action='delete_tea_media'`。
+
+---
+
+### 4.7 我的模块
+
+#### 4.7.1 用户统计与等级（S15）
+
+- **方法与路径**：`GET /me/stats`
+- **权限**：登录用户
+- **请求体**：无
+- **成功响应**：HTTP 200，`code=0`：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "favorite_count": 12,
+    "note_count": 3,
+    "share_count": 1,
+    "level": {
+      "name": "茶友",
+      "index": 2,
+      "next_name": "茶人",
+      "next_threshold": 20,
+      "remaining": 8
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `favorite_count` | integer | 收藏总数 |
+| `note_count` | integer | 非空品鉴笔记数 |
+| `share_count` | integer | 当前生效的分享数 |
+| `level.name` | string | 等级名：茶客 / 茶友 / 茶人 / 茶师 |
+| `level.index` | integer | 等级序号 1–4 |
+| `level.next_name` | string \| null | 下一等级名；已达茶师为 `null` |
+| `level.next_threshold` | integer \| null | 下一等级所需收藏数；已达茶师为 `null` |
+| `level.remaining` | integer | 距下一等级还差多少款收藏；已达茶师为 `0` |
+
+- **等级规则（按收藏数实时计算，不落库）**：
+
+| 等级 | 收藏数 |
+|---|---|
+| 茶客 | 0–4 |
+| 茶友 | 5–19 |
+| 茶人 | 20–49 |
+| 茶师 | ≥ 50 |
+
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 401 | 40100 | 未登录 |
+
+---
+
+### 4.8 用户贡献模块（S10–S13）
+
+> 双层校验：① 系统层校验表单完整性、名品-茶类映射、名称相似度查重；② 管理员人工审核。
+> 不接受富文本与图片上传（X7）；`payload` 由服务端生成，请求体 `extra=forbid`，无法伪造状态/审核人。
+
+#### 4.8.1 提交贡献
+
+- **方法与路径**：`POST /contributions`
+- **权限**：登录用户
+- **请求体**（JSON，`extra=forbid`，按 `type` 二选一）：
+
+| 字段 | 类型 | 必填 | 约束 |
+|---|---|---|---|
+| `type` | string | 是 | `new_tea` / `article` |
+| `tea` | object | `new_tea` 必填 | `ContributionTeaPayload`，见下表 |
+| `target_tea_id` | integer | `article` 必填 | 茶品须存在且 `is_active=1` |
+| `title` | string / null | 否 | ≤50 字符，仅 `article` |
+| `content` | string | `article` 必填 | 去空白后 3–500 字 |
+
+`ContributionTeaPayload`：
+
+| 字段 | 类型 | 必填 |
+|---|---|---|
+| `name` | string | 是（≤100） |
+| `category` | string | 是（六大茶类枚举） |
+| `origin` | string | 是（≤200） |
+| `season` / `fermentation` / `price_range` / `representative_variety` | string / null | 否 |
+| `shape_desc` / `soup_desc` / `aroma_desc` / `taste_desc` | string | 是 |
+| `water_temp` | number | 是（70.0–100.0） |
+| `tea_amount` / `brew_time` | number | 是（>0，≤999.9） |
+| `main_image_url` | string / null | 否（仅接受 `http(s)://` 或 `/uploads/`） |
+| `tips_history` / `tips_suitable` / `tips_misconception` / `tips_official_note` | string / null | 否 |
+
+- **校验规则**：
+  - `new_tea`：`tea_name_category_map` 命中名称时，茶类必须一致，否则 `40000`（如“「碧螺春」属于绿茶，与所选茶类不一致”）；
+  - `new_tea`：与现有茶品名称相似度 > 90%（含同名）时 `40000`，提示“与已有茶品「X」过于相似”；
+  - `article`：目标茶品不存在或已下架均 `40000`。
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `ContributionItem`（见 §4.8.4），`status=pending`。
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | 请求体结构/枚举/长度/数值越界；茶类矛盾；名称过于相似；目标茶品无效 |
+| 401 | 40100 | 未登录/会话过期 |
+
+#### 4.8.2 我的提交记录
+
+- **方法与路径**：`GET /contributions/mine`
+- **权限**：登录用户
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `ContributionItem[]`，按提交时间倒序；仅返回本人记录。
+- **错误**：`40100`。
+
+#### 4.8.3 删除待审核提交
+
+- **方法与路径**：`DELETE /contributions/{contribution_id}`
+- **权限**：登录用户（本人）
+- **规则**：仅 `pending` 可删除；`approved` / `rejected` 保留审计，返回 `40000`。
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `null`。
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | 提交已处理，不可删除 |
+| 401 | 40100 | 未登录 |
+| 404 | 40440 | 提交不存在或不属于当前用户（不泄露存在性） |
+
+#### 4.8.4 `ContributionItem`
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | integer | `contributions.id` |
+| `type` | string | `new_tea` / `article` |
+| `status` | string | `pending` / `approved` / `rejected` |
+| `target_tea_id` | integer / null | `article` 的目标茶品 |
+| `target_tea_name` | string / null | 目标茶品名称（派生） |
+| `payload` | object | `new_tea` 为茶品字段；`article` 为 `{title, content}` |
+| `reject_reason` | string / null | 拒绝理由（仅 `rejected`） |
+| `reviewer_id` | integer / null | 审核管理员 ID |
+| `reviewed_at` | datetime / null | 审核时间（UTC） |
+| `created_at` | datetime | 提交时间（UTC） |
+| `username` | string / null | 提交者用户名（仅管理端队列返回） |
+
+#### 4.8.5 审核队列（管理员）
+
+- **方法与路径**：`GET /admin/contributions`
+- **权限**：管理员
+- **查询参数**：
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `status` | string | `pending` | `pending` / `approved` / `rejected` |
+| `type` | string | 空 | `new_tea` / `article` |
+| `page` | integer | 1 | ≥1，越界夹取 |
+| `page_size` | integer | 12 | 1–50，越界夹取 |
+
+- **成功响应**：HTTP 200，`code=0`，`data` 为分页结构 `{items, total, page, page_size}`，`items` 为带 `username` 的 `ContributionItem`，时间倒序。
+- **错误**：`40000`（status/type 非法）、`40100`、`40300`。
+
+#### 4.8.6 审核通过（管理员）
+
+- **方法与路径**：`POST /admin/contributions/{contribution_id}/approve`
+- **权限**：管理员
+- **规则**：
+  - `new_tea`：按 `payload` 创建茶品并默认上架（`is_active=1`），附带的 `tips_*` 写入 `tea_tips`；
+  - `article`：记录置为 `approved`，随后出现在 `GET /teas/{tea_id}` 的 `contributed_articles`；
+  - 仅 `pending` 可操作；写入 `operation_logs`（`action='approve_contribution'`）。
+- **成功响应**：HTTP 200，`code=0`，`data` 为更新后的 `ContributionItem`。
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | 提交已处理 |
+| 401 | 40100 | 未登录 |
+| 403 | 40300 | 非管理员 |
+| 404 | 40440 | 提交记录不存在 |
+
+#### 4.8.7 审核拒绝（管理员）
+
+- **方法与路径**：`POST /admin/contributions/{contribution_id}/reject`
+- **权限**：管理员
+- **请求体**（JSON，`extra=forbid`）：
+
+| 字段 | 类型 | 必填 | 约束 |
+|---|---|---|---|
+| `reason` | string | 是 | 去空白后 1–200 字 |
+
+- **规则**：仅 `pending` 可操作；`reason` 回传用户端“我的提交”；写入 `operation_logs`（`action='reject_contribution'`）。
+- **成功响应**：HTTP 200，`code=0`，`data` 为更新后的 `ContributionItem`。
+- **错误**：`40000`（理由为空/超长、提交已处理）、`40100`、`40300`、`40440`。
 
 ---
 
@@ -1755,6 +2214,37 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 
 `target_type` 固定 `tea`；`target_id` 为弱引用（上传时为 `null`）；`detail` 仅存摘要，不存 JSON diff；不记录 GET 操作。
 
+### 5.8 `login_attempts`（S14 内部表）
+
+| 数据库列 | API 字段 |
+|---|---|
+| `id` | 内部主键，不暴露 |
+| `username` | 不暴露（登录失败时的输入值，含不存在的用户名） |
+| `ip` | 不暴露（`request.client.host`） |
+| `failed_at` | 不暴露；窗口计数与 24 小时清理依据 |
+
+### 5.9 `contributions`（S10–S13）
+
+| 数据库列 | API 字段 |
+|---|---|
+| `id` | `ContributionItem.id` |
+| `user_id` | 不直接暴露；管理端派生 `username` |
+| `type` | `ContributionItem.type` |
+| `target_tea_id` | `ContributionItem.target_tea_id`；派生 `target_tea_name` |
+| `payload` | `ContributionItem.payload`（JSON） |
+| `status` | `ContributionItem.status` |
+| `reject_reason` | `ContributionItem.reject_reason` |
+| `reviewer_id` | `ContributionItem.reviewer_id` |
+| `reviewed_at` | `ContributionItem.reviewed_at` |
+| `created_at` | `ContributionItem.created_at` |
+
+### 5.10 `tea_name_category_map`（S10 内部表）
+
+| 数据库列 | API 字段 |
+|---|---|
+| `name` | 不对外暴露；用于提交时茶类一致性校验 |
+| `category` | 不对外暴露；校验命中时生成 `40000` 提示 |
+
 ---
 
 ## 6. 一致性与实现注意事项
@@ -1763,11 +2253,12 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 
 | 接口 | 下架茶品行为 |
 |---|---|
-| `GET /teas`、`/teas/hot`、`/teas/random`、`/teas/categories`、`/teas/origins` | 完全过滤，不出现、不计数 |
+| `GET /teas`、`/teas/hot`、`/teas/random`、`/teas/recommended`、`/teas/categories`、`/teas/origins` | 完全过滤，不出现、不计数 |
+| `GET /teas/{tea_id}/related`、`GET /tips/latest` | 完全过滤，不出现 |
 | `GET /teas/{tea_id}` | `40401` 该茶品暂不可用 |
 | `POST /favorites/{tea_id}` | `40401`，不可新增收藏 |
 | `DELETE /favorites/{tea_id}`、`GET /favorites/{tea_id}/status` | 正常处理（允许从清单移除/查询） |
-| `GET /lists` | 条目保留，`is_available=false`，前端灰显 |
+| `GET /lists`、`GET /lists/{list_id}` | 条目保留，`is_available=false`，前端灰显 |
 | `GET /shares/{token}` | 条目保留，`is_available=false` |
 | `POST /shares/{token}/copy` | 跳过，计入 `skipped` |
 | `GET /admin/teas`、`GET /admin/teas/{tea_id}` | 正常展示，可编辑/重新上架 |
@@ -1813,8 +2304,8 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 | FR-4.2 登录 | `POST /auth/login` |
 | FR-4.3 30 天会话 | HttpOnly Cookie `tea_session` |
 | FR-5.1 收藏/取消 | `POST/DELETE /favorites/{tea_id}` |
-| FR-5.2 清单页与标题 | `GET /lists`、`PUT /lists/title` |
-| FR-5.3 品鉴笔记 | `PUT /lists/notes/{tea_id}` |
+| FR-5.2 清单页与标题 | `GET /lists`、`POST /lists`、`GET /lists/{list_id}`、`PUT /lists/{list_id}` |
+| FR-5.3 品鉴笔记 | `PUT /lists/{list_id}/notes/{tea_id}` |
 | FR-5.4 生成分享 | `POST /shares/generate`、`GET /shares/{token}` |
 | FR-5.5 撤销分享 | `POST /shares/revoke/{token}` |
 | FR-5.6 一键收藏全部 | `POST /shares/{token}/copy` |
@@ -1823,6 +2314,19 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 | FR-6.3 上下架 | `PATCH /admin/teas/{tea_id}/toggle` |
 | FR-6.4 官方小贴士 | `PUT /admin/teas/{tea_id}/tips` |
 | 管理员数据维护支撑 | `GET /admin/teas`、`GET /admin/stats`、`POST /admin/upload` |
+| S1 筛选 AND/OR | `GET /teas?filter_mode=` |
+| S2 发酵/价格筛选 | `GET /teas?fermentation=&price_min=&price_max=` |
+| S6 详情相关推荐 | `GET /teas/{tea_id}/related` |
+| S7 首页小贴士 | `GET /tips/latest` |
+| S14 登录失败锁定 | `POST /auth/login`（`42900`） |
+| S15 用户等级 | `GET /me/stats` |
+| S16 个性化推荐 | `GET /teas/recommended` |
+| S8 分享海报 | 纯前端生成，无 API 变更 |
+| S9 多收藏清单 | `GET/POST /lists`、`GET/PUT/DELETE /lists/{list_id}`；收藏/分享支持可选 `list_id` |
+| S10 用户贡献新茶 | `POST /contributions`（type=`new_tea`）；名品映射表 `tea_name_category_map` |
+| S11 用户投稿科普 | `POST /contributions`（type=`article`）；通过后进入 `TeaDetail.contributed_articles` |
+| S12 管理员审核后台 | `GET /admin/contributions`、`POST .../approve`、`POST .../reject` |
+| S13 我的提交记录 | `GET /contributions/mine`、`DELETE /contributions/{id}` |
 
 ---
 
@@ -1832,3 +2336,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 |---|---|---|
 | **v1.0** | 2026-11-06 | 首版 API 契约：统一 `/api/v1` 前缀、`{code,message,data}` 响应、PageSize 默认 12、HttpOnly Cookie 会话、ISO8601 UTC、图片上传与静态访问、收藏计数缓存语义；覆盖 29 个 MVP 业务接口 |
 | **v1.1** | 2026-11-07 | 全局一致性修订：① §4.4.3 品鉴笔记 `content` 增加 20,000 字符上限（对齐 SECURITY S-19/S-24、TEST_PLAN TC-NOTE-04）；② §1.8 分享短码示例更正为 8 位 `k7X9m2Qa` |
+| **v1.2** | 2026-11-09 | 内容扩展（ADR-0003）：`TeaDetail` 增 `video_url`/`video_duration`/`image_set`；新增 §4.2.7 图片集查询、§4.6.9 视频上传、§4.6.10 追加图片、§4.6.11 删除图片；错误码族不新增，复用 400/404/413/415 |
+| **v1.3** | 2026-11-09 | 批次一/二（PLAN_剩余功能）：新增 §4.2.8 相关推荐、§4.2.9 最新小贴士、§4.2.10 个性化推荐、§4.7.1 用户统计与等级；登录新增 `42900` 锁定；接口总览补齐至 37 个；新增 §5.8 `login_attempts` |
+| **v1.4** | 2026-11-09 | 批次三 S9 多收藏清单：清单拆分为 6 个端点；`FavoriteState` 增 `list_ids`，收藏/取消/分享支持可选 `list_id`；新增错误码 `40420`；`favorite_count` 改为跨清单去重；接口总览 37 → 40 个 |
+| **v1.5** | 2026-11-09 | 批次四 S10–S13 用户贡献：新增 §4.8 六个端点；`TeaDetail` 增 `contributed_articles`；新增错误码 `40440`；新增枚举 `contribution.type/status`；新增 §5.9 `contributions`、§5.10 `tea_name_category_map`；接口总览 40 → 46 个 |

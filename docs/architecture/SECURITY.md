@@ -2,18 +2,18 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.0** |
+| 文档版本 | **v1.2** |
 | 创建日期 | 2026-11-07 |
-| 分析依据 | [PRD.md](../product/PRD.md) v1.1 · [ARCHITECTURE.md](./ARCHITECTURE.md) v1.0 · [DATA_MODEL.md](./DATA_MODEL.md) v1.0 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.0 · [database/init.sql](../../database/init.sql) · `backend/app/` |
-| 适用范围 | **仅 MVP（PRD §2.1）**；第二阶段能力（S1–S17）只说明预留，不承诺控制已实现 |
-| 配套测试 | [TEST_PLAN.md](../testing/TEST_PLAN.md)（60 条用例，逐条回溯到本文控制编号 S-01–S-32） |
+| 分析依据 | [PRD.md](../product/PRD.md) v1.1 · [ARCHITECTURE.md](./ARCHITECTURE.md) v1.0 · [DATA_MODEL.md](./DATA_MODEL.md) v1.4 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.5 · [database/init.sql](../../database/init.sql) · `backend/app/` |
+| 适用范围 | **MVP（PRD §2.1）+ 已确认实现的 S1–S17 全项**；R1–R5 与 X1–X13 不实现 |
+| 配套测试 | [TEST_PLAN.md](../testing/TEST_PLAN.md)（用例逐条回溯到本文控制编号 S-01–S-34） |
 | 文档地位 | 安全控制的唯一依据；任何控制变更必须同步修改本文控制编号与对应测试用例 |
 
 ---
 
 ## 0. 结论摘要
 
-本方案把安全要求拆成 **32 个可验证控制项（S-01–S-32）**，每一项都落到具体层、具体文件或具体数据库约束，并在 [TEST_PLAN.md](../testing/TEST_PLAN.md) 中绑定测试用例。
+本方案把安全要求拆成 **34 个可验证控制项（S-01–S-34）**，每一项都落到具体层、具体文件或具体数据库约束，并在 [TEST_PLAN.md](../testing/TEST_PLAN.md) 中绑定测试用例。
 
 六条硬性目标与落点：
 
@@ -96,6 +96,8 @@ MySQL（不对公网暴露；最小权限账号）
 | **S-03** | 密码不得写入日志 | `services/auth.py` 不含任何 logger；`core/` 增加日志白名单（待补）；`main.py` 不记录请求体 | 禁止打印/记录 `request.body`、表单字段、`password`；uvicorn access log 只记录方法/路径/状态码，不记录 body 与 Cookie 头；错误日志只记录异常类型与堆栈，不记录入参 | AUTH-09、DEF-03 |
 | **S-04** | 登录失败提示统一，降低账号枚举 | `services/auth.py` [login](file:///d:/项目二/backend/app/services/auth.py#L21-L26)；`core/response.py` [BadCredentials](file:///d:/项目二/backend/app/core/response.py#L28-L36) | 用户名不存在与密码错误统一返回 `40110`“用户名或密码错误”；对不存在的用户也执行一次固定 bcrypt 比对（dummy hash），避免响应时间差暴露账号是否存在 | AUTH-05 |
 | **S-05** | 用户名唯一且大小写不敏感 | `database/init.sql` [uk_users_username](file:///d:/项目二/database/init.sql#L37)；`services/auth.py` [register 前置查询](file:///d:/项目二/backend/app/services/auth.py#L8-L18) | 应用层先查重给出友好提示；并发注册以唯一索引兜底，捕获 `IntegrityError` 转 `40910`，不得 500；`utf8mb4_unicode_ci` 使 `TeaFan ≡ teafan` | AUTH-02 |
+| **S-33** | 登录失败锁定（S14） | `services/auth.py` [login / _is_locked / _record_failure](file:///d:/项目二/backend/app/services/auth.py)；`repositories/login_attempt_repo.py`；`models/login_attempt.py`；`core/config.py` [LOGIN_*](file:///d:/项目二/backend/app/core/config.py) | 15 分钟窗口内同一用户名或同一 IP 失败 ≥ 5 次 → 锁定并返回 `42900` / HTTP 429；锁定判定先于账号校验，锁定期间正确密码同样拒绝，不泄露账号是否存在；只记录失败事件，不记录密码明文；每次登录清理 24 小时前记录，成功登录清空该用户名记录；阈值与窗口由配置项控制 | AUTH-10、AUTH-11、AUTH-12、AUTH-13 |
+| **S-34** | 用户贡献与审核门禁（S10–S13） | `routers/contributions.py`、`routers/admin.py`（依赖 `get_current_user` / `get_admin_user`）；`services/contributions.py`；`schemas/contribution.py`；`repositories/contribution_repo.py`；`models/contribution.py` | 提交必须登录；查询与删除仅限本人记录，非本人一律 `40440` 不泄露存在性；仅 `pending` 可删除/审核，已处理记录永久保留；审核队列与通过/拒绝仅管理员；`payload` 由服务端组装，请求体 `extra=forbid`，客户端无法伪造 `status`/`reviewer_id`/`reviewed_at`；新茶提交先经 `tea_name_category_map` 茶类一致性校验与名称相似度查重（>90% 拦截）；拒绝理由必填 1–200 字并回传用户端；审核动作写入 `operation_logs` | CONTRIB-01–CONTRIB-08 |
 
 ### 2.2 会话
 
@@ -181,10 +183,10 @@ MySQL（不对公网暴露；最小权限账号）
 | **A01 失效的访问控制** | 后端统一 `get_current_user` / `get_admin_user`；`/admin/**` 路由级依赖；Service 层归属校验；公开分享只读且不含笔记/所有者信息；收藏/笔记查询强制 `user_id` | 不做管理员 IP 白名单、不做二次因子；MVP 为单管理员、同源部署，收益低且增加运维复杂度。前端路由守卫不视为控制 | S-11–S-14、S-17 | PERM-01–04、NOTE-05、SHARE-07、SHARE-09 |
 | **A02 加密机制失效** | bcrypt 存密码；itsdangerous 签名 Cookie；生产 TLS；密钥走环境变量；响应/日志无密码 | **不做笔记字段级加密**：笔记为非身份类隐私文本，加密会引入密钥管理与检索代价；数据库不对公网暴露、访问账号最小化已覆盖主要风险。**不做密码明文哈希替代**（禁止 MD5/SHA1） | S-01–S-03、S-06、S-30 | AUTH-01、AUTH-09 |
 | **A03 注入** | 100% ORM 参数化；禁止 raw SQL/字符串拼接；`keyword` 绑定并转义 `%`/`_`；上传文件名服务端生成；Vue 默认转义、禁止 `v-html` 渲染笔记 | 不做 WAF/IPS；MVP 无复杂查询与命令执行面，ORM + 输入白名单已足够。SQL 注入的残余风险由只读/最小权限 DB 账号兜底 | S-19–S-23 | LIST-02、LIST-03、LIST-05、UPLOAD-03、NOTE-01 |
-| **A04 不安全设计** | 明确角色矩阵、单清单、软失效、撤销不可逆、幂等与事务边界；业务上限（分页 50、上传 5 MB、笔记 20,000 字符、keyword 50） | **不做登录失败锁定与验证码**：PRD FR-4.4 明确 MVP 不做，第二阶段 S14；**不做全站限流**：单机演示环境，Nginx `limit_req` 作为上线可选项记录在 §6。风险接受 | S-04、S-19、S-24–S-27 | AUTH-05、FAV-02、SHARE-02 |
+| **A04 不安全设计** | 明确角色矩阵、单清单、软失效、撤销不可逆、幂等与事务边界；业务上限（分页 50、上传 5 MB、笔记 20,000 字符、keyword 50）；**登录失败锁定（S14 → S-33）** | **不做验证码**：MVP 以失败锁定覆盖暴力破解；**不做全站限流**：单机演示环境，Nginx `limit_req` 作为上线可选项记录在 §6。风险接受 | S-04、S-33、S-19、S-24–S-27 | AUTH-05、AUTH-10–AUTH-13、FAV-02、SHARE-02 |
 | **A05 安全配置错误** | `DEBUG=False`、随机 `SECRET_KEY`、CORS 白名单、生产关闭文档页、统一 500 文案、MySQL 不对外、非 root 账号 | 不做自动化配置基线扫描/容器镜像加固：MVP 尚未容器化（X3 第二阶段）；以 §6 上线检查单替代 | S-30、S-31 | DEF-01–DEF-04 |
 | **A06 易受攻击和过时的组件** | 固定版本、`pip-audit`/`npm audit`、避免 `passlib` 兼容坑、直接使用官方 `bcrypt` | 不做自动化 SBOM/持续依赖机器人：课程项目无 CI 供应链流水线；上线前人工审计一次并记录 | S-32 | DEF-04（上线检查） |
-| **A07 身份识别与认证失败** | bcrypt、统一失败提示、30 天签名 Cookie、`HttpOnly`/`SameSite`、登出清 Cookie、角色实时读库 | **不做密码找回、邮箱/微信登录、失败锁定**：PRD FR-4.4 明确排除；**旧 Cookie 可重放**：无服务端会话表的设计取舍（S-10），MVP 接受。若上线后需要强制下线，须新增 `sessions` 表 | S-01–S-10 | AUTH-01–AUTH-09 |
+| **A07 身份识别与认证失败** | bcrypt、统一失败提示、**登录失败锁定（用户名 + IP 双维度）**、30 天签名 Cookie、`HttpOnly`/`SameSite`、登出清 Cookie、角色实时读库 | **不做密码找回、邮箱/微信登录**：PRD FR-4.4 明确排除；**旧 Cookie 可重放**：无服务端会话表的设计取舍（S-10），MVP 接受。若上线后需要强制下线，须新增 `sessions` 表 | S-01–S-10、S-33 | AUTH-01–AUTH-13 |
 | **A08 软件和数据完整性失效** | 不反序列化不可信二进制；仅 JSON/multipart；Alembic 版本化迁移；`operation_logs` 记录管理员写入；上传魔数校验 | 不做代码签名/镜像签名：无发布制品、无容器；依赖完整性由 S-32 兜底 | S-23、S-28、S-32 | TEA-01、UPLOAD-03 |
 | **A09 安全日志与监控失效** | uvicorn access log + 业务异常日志 + `operation_logs`；日志不含密码/Cookie/笔记正文；审计与账号生命周期解耦 | **不做集中日志、告警、SIEM**：单机 MVP 无运维平台；以“日志文件权限 + 保留 30 天 + 上线检查”替代。风险接受 | S-03、S-28、S-29 | AUTH-09、TEA-01、DEF-03 |
 | **A10 服务端请求伪造（SSRF）** | **不适用**：服务端从不根据用户输入发起 HTTP 请求；`main_image_url` 仅作为字符串返回浏览器，由浏览器直接加载；上传文件落本地磁盘，不做远程抓取 | 若未来增加“远程图片导入/代理”，必须增加域名/IP 白名单、禁止内网地址与重定向跟随；当前无此功能，不引入控制 | — | — |
@@ -257,3 +259,5 @@ MySQL（不对公网暴露；最小权限账号）
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | v1.0 | 2026-11-07 | 基于 PRD/ARCHITECTURE/DATA_MODEL/API_CONTRACT 建立 32 项安全控制、OWASP Top 10 对照、落地差距清单与上线检查单；配套 60 条测试用例 |
+| v1.1 | 2026-11-09 | 批次二：新增 S-33 登录失败锁定（S14，用户名 + IP 双维度、`42900`/HTTP 429、24 小时清理、不泄露账号存在性）；A04/A07 风险条目同步；用例增至 70 条 |
+| v1.2 | 2026-11-09 | 批次四：新增 S-34 用户贡献与审核门禁（S10–S13：提交需登录、仅本人可见/删除、仅 pending 可处理、审核仅管理员、映射与查重校验、拒绝理由必填、操作日志留痕）；适用范围改为 MVP + S1–S17 全项；配套用例增至 84 条 |

@@ -5,7 +5,10 @@ import { useUserStore } from '@/stores/user'
 import HomeView from '@/views/HomeView.vue'
 import TeaListView from '@/views/TeaListView.vue'
 import TeaDetailView from '@/views/TeaDetailView.vue'
+import CompareView from '@/views/CompareView.vue'
 import MyListView from '@/views/MyListView.vue'
+import ContributeView from '@/views/ContributeView.vue'
+import MyContributionsView from '@/views/MyContributionsView.vue'
 import ShareView from '@/views/ShareView.vue'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
@@ -16,13 +19,40 @@ const routes: RouteRecordRaw[] = [
   { path: '/', name: 'home', component: HomeView, meta: { title: '茶·图鉴' } },
   { path: '/teas', name: 'tea-list', component: TeaListView, meta: { title: '茶品列表' } },
   { path: '/teas/:id', name: 'tea-detail', component: TeaDetailView, meta: { title: '茶品详情' } },
+  { path: '/compare', name: 'compare', component: CompareView, meta: { title: '六大茶类对比' } },
   {
     path: '/my',
     name: 'my-list',
     component: MyListView,
     meta: { title: '我的收藏', requiresAuth: true },
   },
+  {
+    path: '/contribute',
+    name: 'contribute',
+    component: ContributeView,
+    meta: { title: '投稿', requiresAuth: true },
+  },
+  {
+    path: '/my/contributions',
+    name: 'my-contributions',
+    component: MyContributionsView,
+    meta: { title: '我的提交', requiresAuth: true },
+  },
   { path: '/c/:shareId', name: 'share', component: ShareView, meta: { title: '分享清单' } },
+
+  // —— 内容板块（批次五 R1–R5）——
+  {
+    path: '/contents/:code',
+    name: 'content-list',
+    component: () => import('@/views/ContentListView.vue'),
+    meta: { title: '茶文化' },
+  },
+  {
+    path: '/contents/:code/:id',
+    name: 'content-detail',
+    component: () => import('@/views/ContentDetailView.vue'),
+    meta: { title: '内容详情' },
+  },
 
   // —— 认证 ——
   { path: '/login', name: 'login', component: LoginView, meta: { title: '登录' } },
@@ -63,6 +93,31 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-tea-edit',
         component: () => import('@/views/admin/AdminTeaEdit.vue'),
         meta: { title: '编辑茶品' },
+      },
+      {
+        path: 'contributions',
+        name: 'admin-contributions',
+        component: () => import('@/views/admin/AdminContributions.vue'),
+        meta: { title: '投稿审核' },
+      },
+      // —— 批次五 R1–R5 内容管理 ——
+      {
+        path: 'contents',
+        name: 'admin-contents',
+        component: () => import('@/views/admin/AdminContents.vue'),
+        meta: { title: '内容管理' },
+      },
+      {
+        path: 'contents/new',
+        name: 'admin-content-new',
+        component: () => import('@/views/admin/AdminContentEdit.vue'),
+        meta: { title: '新增内容' },
+      },
+      {
+        path: 'contents/:id/edit',
+        name: 'admin-content-edit',
+        component: () => import('@/views/admin/AdminContentEdit.vue'),
+        meta: { title: '编辑内容' },
       },
     ],
   },

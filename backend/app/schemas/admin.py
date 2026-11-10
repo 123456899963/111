@@ -95,3 +95,9 @@ class UploadResult(BaseModel):
     original_filename: str
     size: int
     content_type: str
+
+
+class VideoUploadResult(UploadResult):
+    """视频上传结果（ADR-0003 S5）：duration 为服务端解析的秒数。"""
+
+    duration: int

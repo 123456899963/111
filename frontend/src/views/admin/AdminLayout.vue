@@ -26,6 +26,9 @@ async function handleLogout() {
         <el-menu-item index="/admin">数据概览</el-menu-item>
         <el-menu-item index="/admin/teas">茶品管理</el-menu-item>
         <el-menu-item index="/admin/teas/new">新增茶品</el-menu-item>
+        <el-menu-item index="/admin/contributions">投稿审核</el-menu-item>
+        <el-divider class="admin-menu__divider" />
+        <el-menu-item index="/admin/contents">内容管理</el-menu-item>
       </el-menu>
 
       <div class="admin-sidebar-footer">

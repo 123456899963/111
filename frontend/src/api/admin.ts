@@ -5,6 +5,10 @@
 
 import request from './request'
 import type {
+  AdminContentCreatePayload,
+  AdminContentListData,
+  AdminContentListParams,
+  AdminContentUpdatePayload,
   AdminStatsData,
   AdminTeaCreatePayload,
   AdminTeaListData,
@@ -14,8 +18,13 @@ import type {
   AdminTipsPayload,
   AdminToggleData,
   AdminUploadData,
+  AdminVideoUploadData,
   ApiEnvelope,
+  ContributionItem,
+  ContributionListData,
+  ContributionListParams,
   Tea,
+  TeaMediaItem,
 } from '@/types'
 
 /** GET /admin/stats 仪表盘统计 */
@@ -58,4 +67,67 @@ export function uploadAdminImage(file: File) {
   const formData = new FormData()
   formData.append('file', file)
   return request.post<unknown, ApiEnvelope<AdminUploadData>>('/admin/upload', formData)
+}
+
+/** POST /admin/media/video 视频上传（MP4/MOV ≤ 50MB、≤ 3 分钟） */
+export function uploadAdminVideo(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post<unknown, ApiEnvelope<AdminVideoUploadData>>('/admin/media/video', formData)
+}
+
+/** POST /admin/teas/{id}/images 追加图片集条目（单茶上限 9 张） */
+export function addAdminTeaImage(teaId: number, imageUrl: string) {
+  return request.post<unknown, ApiEnvelope<TeaMediaItem>>(`/admin/teas/${teaId}/images`, {
+    image_url: imageUrl,
+  })
+}
+
+/** DELETE /admin/teas/{id}/images/{imageId} 删除图片集条目（物理删除） */
+export function deleteAdminTeaImage(teaId: number, imageId: number) {
+  return request.delete<unknown, ApiEnvelope<{ deleted: number }>>(
+    `/admin/teas/${teaId}/images/${imageId}`,
+  )
+}
+
+/** GET /admin/contributions 审核队列（默认 pending） */
+export function getAdminContributions(params: ContributionListParams) {
+  return request.get<unknown, ApiEnvelope<ContributionListData>>('/admin/contributions', { params })
+}
+
+/** POST /admin/contributions/{id}/approve 审核通过 */
+export function approveContribution(id: number) {
+  return request.post<unknown, ApiEnvelope<ContributionItem>>(
+    `/admin/contributions/${id}/approve`,
+  )
+}
+
+/** POST /admin/contributions/{id}/reject 审核拒绝（附理由 1–200 字） */
+export function rejectContribution(id: number, reason: string) {
+  return request.post<unknown, ApiEnvelope<ContributionItem>>(
+    `/admin/contributions/${id}/reject`,
+    { reason },
+  )
+}
+
+// —— 批次五 R1–R5 内容管理 ——
+
+/** GET /admin/contents 后台内容列表（含下架） */
+export function getAdminContents(params: AdminContentListParams) {
+  return request.get<unknown, ApiEnvelope<AdminContentListData>>('/admin/contents', { params })
+}
+
+/** POST /admin/contents 创建内容条目 */
+export function createAdminContent(payload: AdminContentCreatePayload) {
+  return request.post<unknown, ApiEnvelope<unknown>>('/admin/contents', payload)
+}
+
+/** PUT /admin/contents/{id} 更新内容条目（全量替换） */
+export function updateAdminContent(id: number, payload: AdminContentUpdatePayload) {
+  return request.put<unknown, ApiEnvelope<unknown>>(`/admin/contents/${id}`, payload)
+}
+
+/** DELETE /admin/contents/{id} 软删除 */
+export function deleteAdminContent(id: number) {
+  return request.delete<unknown, ApiEnvelope<{ deleted: number }>>(`/admin/contents/${id}`)
 }

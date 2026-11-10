@@ -2,13 +2,13 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.0** |
+| 文档版本 | **v1.3** |
 | 创建日期 | 2026-11-07 |
-| 测试对象 | MVP 后端 29 个 REST 端点 + 7 张表约束 + 安全控制 S-01–S-32 |
-| 依据 | [PRD.md](../product/PRD.md) v1.1 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.0 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.0 · [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) v1.0 · [SECURITY.md](../architecture/SECURITY.md) v1.0 |
-| 用例总数 | **60 条**（高 32 / 中 25 / 低 3） |
+| 测试对象 | MVP 后端 46 个 REST 端点 + 11 张表约束 + 安全控制 S-01–S-34 |
+| 依据 | [PRD.md](../product/PRD.md) v1.1 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.5 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.4 · [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) v1.0 · [SECURITY.md](../architecture/SECURITY.md) v1.2 |
+| 用例总数 | **84 条**（高 47 / 中 34 / 低 3） |
 | 覆盖类型 | 正向、反向、边界；含越权、并发重复提交、超长字段、非法枚举 |
-| 交付边界 | 本文只交付测试方案；**不包含测试代码**（pytest 脚本在开发阶段另行落地） |
+| 交付边界 | 用例按模块在 `backend/tests/`（pytest）与 `frontend/src/utils/*.spec.ts`（Vitest 纯函数）落地 |
 
 ---
 
@@ -17,7 +17,7 @@
 ### 1.1 目的
 
 1. 验证 MVP 六模块（茶品列表/首页/详情/注册登录/收藏清单与分享/管理员后台）的业务闭环。
-2. 验证 [SECURITY.md](../architecture/SECURITY.md) 中 32 项安全控制是否真实生效，尤其是密码、越权、管理员门禁、分享撤销、下架隐藏、上传限制、重复提交。
+2. 验证 [SECURITY.md](../architecture/SECURITY.md) 中 34 项安全控制是否真实生效，尤其是密码、越权、管理员门禁、分享撤销、下架隐藏、上传限制、重复提交、登录锁定、贡献审核门禁。
 3. 为每条用例提供可回溯的接口路径 / 安全控制编号，便于对照 API 契约与 SECURITY.md。
 
 ### 1.2 范围内
@@ -25,11 +25,12 @@
 - 认证与会话：注册、登录、登出、当前用户、Cookie 有效期与篡改。
 - 茶品：列表、筛选、搜索、排序、分页、分类/产地计数、热门、随机、详情。
 - 收藏：收藏、取消、状态查询、计数一致性。
-- 清单与笔记：默认清单、标题、品鉴笔记读写。
+- 清单与笔记：默认清单、多清单（新建/改名/删除/迁移）、品鉴笔记读写。
 - 分享：生成、复用、撤销、游客查看、一键收藏、撤销后语义。
 - 管理员：茶品新增/编辑/上下架/小贴士/统计/上传。
+- 用户贡献：新茶提交（映射 + 查重）、科普投稿、我的提交、管理员审核队列与通过/拒绝。
 - 数据库约束：唯一索引、外键、枚举、软失效状态。
-- 安全控制：S-01–S-32（逐条在用例“对应接口/安全项”列标注）。
+- 安全控制：S-01–S-34（逐条在用例“对应接口/安全项”列标注）。
 
 ### 1.3 范围外
 
@@ -44,9 +45,9 @@
 
 | 层 | 方式 | 说明 |
 |---|---|---|
-| API 集成测试 | pytest + httpx / FastAPI `TestClient`，每个用例携带独立 Cookie Jar | 覆盖 29 个端点；记录 HTTP 状态码、`code`、`data` 与数据库状态 |
+| API 集成测试 | pytest + httpx / FastAPI `TestClient`，每个用例携带独立 Cookie Jar | 覆盖 40 个端点；记录 HTTP 状态码、`code`、`data` 与数据库状态 |
 | 数据库断言 | 用例步骤中直接查询 `users` / `teas` / `favorite_items` / `share_tokens` / `collection_lists` / `operation_logs` | 不仅看响应，还要看落库结果 |
-| 并发测试 | `ThreadPoolExecutor` 20 线程，每线程独立 Session/客户端 | 仅用于 FAV-02、FAV-04、SHARE-02、SHARE-10 |
+| 并发测试 | `ThreadPoolExecutor` 20 线程，每线程独立 Session/客户端 | 仅用于 FAV-02、FAV-04、MLIST-01、SHARE-02、SHARE-10 |
 | 日志检查 | 采集后端 stdout/日志文件 | AUTH-09、DEF-03、DEF-04 使用 |
 | 手工/脚本辅助 | 上传文件构造、角色改库、密码轮换脚本 | 上传用真实文件字节；角色与密码用 SQL/运维脚本 |
 
@@ -113,7 +114,7 @@
 
 > 列说明：“对应接口/安全项”同时给出 API 路径与 SECURITY 控制编号；“前置条件”只列本用例额外依赖，公共基线见 §3。
 
-### 5.1 认证与会话（9 条）
+### 5.1 认证与会话（13 条）
 
 | 编号 | 模块 | 优先级 | 对应接口/安全项 | 前置条件 | 操作步骤 | 预期结果 |
 |---|---|---|---|---|---|---|
@@ -122,10 +123,14 @@
 | **TC-AUTH-03** | 认证 | 中 | `POST /api/v1/auth/register`；S-19/S-24 | 准备互不重复的用户名 | ① 用户名 2 字符；② 3 字符；③ 20 字符；④ 21 字符；⑤ 密码 5 字符；⑥ 6 字符；⑦ 64 字符；⑧ 65 字符；⑨ 1000 字符；⑩ 用户名前后空格 `"  ab  "` | ①④⑨ 返回 400/`40000`；②③⑥⑦ 返回 200/`code=0`；⑤⑧ 返回 400/`40000`；⑩ trim 后 2 字符 → `40000`；全程无 500、无 DB 截断 |
 | **TC-AUTH-04** | 认证 | 高 | `POST /api/v1/auth/login`、`GET /api/v1/auth/me`；S-01/S-02/S-08 | 种子 `admin` 与 `user_a` 存在 | ① 登录 `admin/admin123`；② 登录 `user_a/Tea1234`；③ 分别用返回 Cookie 调 `/auth/me` | ① 两次均 200/`code=0`，`data.role` 分别为 `admin`、`user`；② 均下发 `tea_session`；③ `/auth/me` 返回同一 `id/username/role`；所有响应不含 `password_hash` |
 | **TC-AUTH-05** | 认证 | 高 | `POST /api/v1/auth/login`；S-04/S-03 | 准备 `ghost` 不存在 | ① 登录 `ghost/Any123`；② 登录 `user_a/WrongPwd`；③ 对比两次响应 | ① ② 均 HTTP 401、`code=40110`、message 完全相同“用户名或密码错误”；③ 不区分用户名不存在/密码错误，不设置 Cookie，响应时间差不超过 100 ms |
-| **TC-AUTH-06** | 认证 | 高 | `GET /auth/me`、`POST /favorites/1`、`GET /lists`、`PUT /lists/title`、`POST /shares/generate`、`POST /shares/TB/copy`；S-08/S-09/S-11 | 无 Cookie / 无有效会话 | ① 逐个调用上述接口；② 查 `favorite_items`、`collection_lists`、`share_tokens` | ① 全部 HTTP 401、`code=40100`；② 数据库无任何新增/修改；③ 不返回业务数据 |
+| **TC-AUTH-06** | 认证 | 高 | `GET /auth/me`、`POST /favorites/1`、`GET /lists`、`PUT /lists/1`、`POST /shares/generate`、`POST /shares/TB/copy`；S-08/S-09/S-11 | 无 Cookie / 无有效会话 | ① 逐个调用上述接口；② 查 `favorite_items`、`collection_lists`、`share_tokens` | ① 全部 HTTP 401、`code=40100`；② 数据库无任何新增/修改；③ 不返回业务数据 |
 | **TC-AUTH-07** | 认证 | 中 | `GET /api/v1/auth/me`；S-06/S-09 | 已有合法 `tea_session` | ① 篡改 Cookie 最后一个字符后请求；② 用另一 `SECRET_KEY` 签发的同结构 Cookie 请求；③ 用 `verify_session_token(token, max_age_days=0)` 验证过期分支 | ① ② ③ 均判定无效 → HTTP 401/`code=40100`；不泄露“签名错误/过期/用户不存在”的具体原因 |
 | **TC-AUTH-08** | 认证 | 中 | `POST /api/v1/auth/logout`；S-07/S-10 | `user_a` 已登录 | ① 调登出；② 记录 `Set-Cookie`；③ 用未携带旧 Cookie 的客户端调 `/auth/me`；④（风险观察）手工重放旧 Cookie | ① 200/`code=0`、`data=null`；② 删除 Cookie：`Max-Age=0`、Path=/、HttpOnly、SameSite=Lax；③ 401/`40100`；④ 旧 Cookie 仍有效——属 S-10 已知限制，仅记录风险，不计入本用例失败 |
 | **TC-AUTH-09** | 认证 | 高 | 注册/登录/`/auth/me`；S-02/S-03/S-29 | 可读取后端日志文件 | ① 依次执行注册、登录、`/auth/me`；② 递归遍历响应 JSON 的 key 与 value；③ 在后端日志中检索本次密码明文与 `password` 关键字 | ① 响应中不存在 `password`/`password_hash` 字段或明文值；② 日志中无密码明文、无 Cookie 值；③ 错误日志只含异常类型/堆栈，不含请求体 |
+| **TC-AUTH-10** | 认证 | 高 | `POST /api/v1/auth/login`；S-33/S-14 | 同一用户名 15 分钟内无失败记录 | ① 用错误密码连续登录 5 次；② 第 6 次改用**正确**密码登录 | ① 前 5 次均 401/`40110`；② 第 6 次 HTTP 429、`code=42900`、message“尝试过于频繁，请 15 分钟后再试”，不下发 Cookie；`login_attempts` 有 5 行记录 |
+| **TC-AUTH-11** | 认证 | 高 | `POST /api/v1/auth/login`；S-33 | 已触发 AUTH-10 的锁定 | ① 锁定期内用正确密码登录；② 锁定期内用错误密码登录；③ 查响应体 | ① ② 均 429/`42900`；③ 两者 message 完全一致，不暴露账号是否存在、不返回密码校验结果 |
+| **TC-AUTH-12** | 认证 | 中 | `POST /api/v1/auth/login`；S-33 | 已有 5 条失败记录 | ① 将 `login_attempts.failed_at` 前移 16 分钟（窗口 15 分钟）；② 用正确密码登录；③ 查记录 | ① 登录成功 200/`code=0` 并下发 Cookie；② 该用户名失败记录被清空 |
+| **TC-AUTH-13** | 认证 | 高 | `POST /api/v1/auth/login`；S-33/S-04 | 使用**不存在**的用户名 | ① 用不存在用户名失败 5 次；② 第 6 次再失败 | ① 前 5 次均 401/`40110`；② 第 6 次 429/`42900`，与真实账号锁定响应一致，无法据此枚举账号 |
 
 ### 5.2 茶品录入与上下架（7 条）
 
@@ -157,9 +162,9 @@
 
 | 编号 | 模块 | 优先级 | 对应接口/安全项 | 前置条件 | 操作步骤 | 预期结果 |
 |---|---|---|---|---|---|---|
-| **TC-FAV-01** | 收藏 | 高 | `POST /api/v1/favorites/2`；S-25/S-08/S-18 | A 未收藏 `tea 2`；记录当前 `favorite_count` | ① A 调收藏；② 查 `favorite_items` 与 `teas.favorite_count`；③ 调状态查询 | ① 200/`code=0`，`is_favorited=true`，`favorite_count=原值+1`；② 新增 1 行 `user_id=A, tea_id=2`；③ 状态接口返回 `true` 与同一计数 |
-| **TC-FAV-02** | 收藏/并发 | 高 | `POST /api/v1/favorites/3`；S-25/S-26 | A 未收藏 `tea 3`；准备 20 个独立客户端 | ① 同一客户端连续 POST 两次；② 重置后 20 线程并发 POST 同一 `tea 3`；③ 查行数与计数 | ① 两次均 200、`is_favorited=true`，仅 1 行，计数只 +1；② 20 次均 200/`code=0`（或幂等成功），无 409/500；③ 最终 `favorite_items` 仅 1 行，`favorite_count` 只 +1 |
-| **TC-FAV-03** | 收藏 | 高 | `DELETE /api/v1/favorites/1`；S-25 | A 已收藏 `tea 1`；记录计数 | ① A 调取消；② 查行、计数、清单；③ 调状态查询 | ① 200/`code=0`，`is_favorited=false`，计数 −1；② 行被删除，清单不再含 `tea 1`；③ 状态接口返回 `false` 与同一计数 |
+| **TC-FAV-01** | 收藏 | 高 | `POST /api/v1/favorites/2`；S-25/S-08/S-18 | A 未收藏 `tea 2`；记录当前 `favorite_count` | ① A 调收藏；② 查 `favorite_items` 与 `teas.favorite_count`；③ 调状态查询 | ① 200/`code=0`，`is_favorited=true`，`favorite_count=原值+1`，`list_ids` 含默认清单；② 新增 1 行 `list_id=默认清单, user_id=A, tea_id=2`；③ 状态接口返回 `true`、同一计数与 `list_ids` |
+| **TC-FAV-02** | 收藏/并发 | 高 | `POST /api/v1/favorites/3`；S-25/S-26 | A 未收藏 `tea 3`；准备 20 个独立客户端 | ① 同一客户端连续 POST 两次；② 重置后 20 线程并发 POST 同一 `tea 3`；③ 查行数与计数 | ① 两次均 200、`is_favorited=true`，仅 1 行，计数只 +1；② 20 次均 200/`code=0`（或幂等成功），无 409/500；③ 最终 `favorite_items` 仅 1 行（`UNIQUE(list_id, tea_id)`），`favorite_count` 只 +1 |
+| **TC-FAV-03** | 收藏 | 高 | `DELETE /api/v1/favorites/1`；S-25 | A 已收藏 `tea 1`；记录计数 | ① A 调取消；② 查行、计数、清单；③ 调状态查询 | ① 200/`code=0`，`is_favorited=false`，计数 −1，`list_ids=[]`；② 行被删除，默认清单不再含 `tea 1`；③ 状态接口返回 `false` 与同一计数 |
 | **TC-FAV-04** | 收藏/并发 | 中 | `DELETE /api/v1/favorites/3`；S-25/S-26 | A 已收藏 `tea 3` | ① 连续 DELETE 两次；② 10 线程并发 DELETE；③ 查计数 | ① ② 均 200/`code=0`，幂等；③ 计数只在首次 −1，后续不变，最终不为负 |
 | **TC-FAV-05** | 收藏 | 高 | `POST /api/v1/favorites/99`、`POST /api/v1/favorites/7`；S-18/S-25 | `tea 99` 不存在；`tea 7` 已下架 | ① 收藏 `tea 99`；② 收藏 `tea 7`；③ 查行与计数 | ① 404/`code=40400`；② 404/`code=40401`；③ 均无新增行、计数不变 |
 | **TC-FAV-06** | 收藏 | 中 | `GET /api/v1/favorites/1/status`、`/favorites/3/status`、`/favorites/7/status`；S-12/S-18 | A 收藏 `tea 1`、`tea 7`；C 未收藏 `tea 1` | ① A 查 `tea 1`；② C 查 `tea 1`；③ A 查已下架 `tea 7`；④ 查 `tea 99` | ① `true`；② `false`；③ 200/`code=0`，返回 `true` 与缓存计数（允许下架茶状态查询）；④ 404/`40400`；所有响应不含其他用户信息 |
@@ -169,17 +174,17 @@
 
 | 编号 | 模块 | 优先级 | 对应接口/安全项 | 前置条件 | 操作步骤 | 预期结果 |
 |---|---|---|---|---|---|---|
-| **TC-NOTE-01** | 笔记 | 高 | `PUT /api/v1/lists/notes/1`、`GET /lists`、`GET /shares/TA`；S-12/S-17/S-19 | A 收藏 `tea 1`；TA 有效 | ① A 写入笔记 `第一泡豆香突出`；② A 调 `GET /lists`；③ 游客与 B 分别调 `GET /shares/TA` | ① 200/`code=0`，`tasting_note` 为写入值；② 清单条目含笔记；③ 分享响应 `items` 中**无** `tasting_note`、无所有者身份，游客 `is_owner=false` |
-| **TC-NOTE-02** | 笔记 | 高 | `PUT /api/v1/lists/notes/2`；S-12 | A 未收藏 `tea 2` | ① A 写入 `tea 2` 笔记；② 查 `favorite_items` | ① 404/`code=40430`；② 不创建收藏行、不落笔记；返回不泄露 B 是否收藏 |
-| **TC-NOTE-03** | 笔记 | 中 | `PUT /api/v1/lists/notes/1`；S-19 | A 收藏 `tea 1` 且有笔记 | ① 提交 `{"content":null}`；② 提交 `{"content":"   "}`；③ 查清单与收藏行 | ① ② 均 200/`code=0`，`tasting_note=null`；③ 收藏行保留，仅笔记被清空，条目不删除 |
-| **TC-NOTE-04** | 笔记/边界 | 中 | `PUT /api/v1/lists/notes/1`；S-24/S-19 | A 收藏 `tea 1`；应用层已启用 20,000 字符上限 | ① 提交 20,000 字符；② 提交 20,001 字符；③ 提交 70,000 字节（超过 TEXT 上限）；④ 查 DB 与响应 | ① 200/`code=0`；② ③ 400/`40000`“笔记过长”；④ 不出现 500/“Data too long”；原笔记未被截断或破坏 |
-| **TC-NOTE-05** | 笔记/越权 | 高 | `PUT /api/v1/lists/notes/1`、`GET /lists`、`GET /shares/TB`；S-12/S-13 | A、B 均收藏 `tea 1`，各有独立笔记 | ① B 写入 `tea 1` 笔记 `B-新笔记`；② A 调 `GET /lists`；③ B 调 `GET /lists`；④ 查 `favorite_items` 两行 | ① 200/`code=0`；② A 的笔记仍为 `A-原始笔记`，未被覆盖；③ B 显示 `B-新笔记`；④ 两行独立，`user_id` 分别正确；分享仍不返回任何笔记 |
+| **TC-NOTE-01** | 笔记 | 高 | `PUT /api/v1/lists/{list_id}/notes/1`、`GET /lists/{list_id}`、`GET /shares/TA`；S-12/S-17/S-19 | A 收藏 `tea 1`；TA 有效 | ① A 写入笔记 `第一泡豆香突出`；② A 调 `GET /lists/{list_id}`；③ 游客与 B 分别调 `GET /shares/TA` | ① 200/`code=0`，返回 `tea_id`/`list_id`/`tasting_note`；② 清单条目含笔记；③ 分享响应 `items` 中**无** `tasting_note`、无所有者身份，游客 `is_owner=false` |
+| **TC-NOTE-02** | 笔记 | 高 | `PUT /api/v1/lists/{list_id}/notes/2`；S-12 | A 未收藏 `tea 2` | ① A 写入 `tea 2` 笔记；② 查 `favorite_items` | ① 404/`code=40430`；② 不创建收藏行、不落笔记；返回不泄露 B 是否收藏 |
+| **TC-NOTE-03** | 笔记 | 中 | `PUT /api/v1/lists/{list_id}/notes/1`；S-19 | A 收藏 `tea 1` 且有笔记 | ① 提交 `{"content":null}`；② 提交 `{"content":"   "}`；③ 查清单与收藏行 | ① ② 均 200/`code=0`，`tasting_note=null`；③ 收藏行保留，仅笔记被清空，条目不删除 |
+| **TC-NOTE-04** | 笔记/边界 | 中 | `PUT /api/v1/lists/{list_id}/notes/1`；S-24/S-19 | A 收藏 `tea 1`；应用层已启用 20,000 字符上限 | ① 提交 20,000 字符；② 提交 20,001 字符；③ 提交 70,000 字节（超过 TEXT 上限）；④ 查 DB 与响应 | ① 200/`code=0`；② ③ 400/`40000`“笔记过长”；④ 不出现 500/“Data too long”；原笔记未被截断或破坏 |
+| **TC-NOTE-05** | 笔记/越权 | 高 | `PUT /api/v1/lists/{list_id}/notes/1`、`GET /lists/{list_id}`、`GET /shares/TB`；S-12/S-13 | A、B 均收藏 `tea 1`，各有独立笔记 | ① B 写入 `tea 1` 笔记 `B-新笔记`；② A 调 `GET /lists/{A_list}`；③ B 调 `GET /lists/{B_list}`；④ 查 `favorite_items` 两行 | ① 200/`code=0`；② A 的笔记仍为 `A-原始笔记`，未被覆盖；③ B 显示 `B-新笔记`；④ 两行独立，`user_id` 分别正确；分享仍不返回任何笔记 |
 
 ### 5.6 分享链路（10 条）
 
 | 编号 | 模块 | 优先级 | 对应接口/安全项 | 前置条件 | 操作步骤 | 预期结果 |
 |---|---|---|---|---|---|---|
-| **TC-SHARE-01** | 分享 | 高 | `POST /api/v1/shares/generate`、`GET /lists`；S-15/S-16 | `user_c` 已登录且无有效令牌 | ① 第一次生成；② 第二次生成；③ 查 `share_tokens` 与 `/lists` | ① 200/`code=0`，`token` 为 8 位 URL-safe、`url=/c/{token}`、`is_new=true`；② 返回同一 token、`is_new=false`；③ DB 仅 1 条 `is_active=1`；`/lists.share` 非空 |
+| **TC-SHARE-01** | 分享 | 高 | `POST /api/v1/shares/generate`、`GET /lists/{list_id}`；S-15/S-16 | `user_c` 已登录且无有效令牌 | ① 第一次生成；② 第二次生成；③ 查 `share_tokens` 与清单详情 | ① 200/`code=0`，`token` 为 8 位 URL-safe、`url=/c/{token}`、`is_new=true`；② 返回同一 token、`is_new=false`；③ DB 仅 1 条 `is_active=1`；清单详情 `share` 非空 |
 | **TC-SHARE-02** | 分享/并发 | 高 | `POST /api/v1/shares/generate`；S-26/S-15 | `user_c` 无令牌；准备 20 个独立客户端 | ① 20 线程并发生成；② 查该清单的 `is_active=1` 行数；③ 汇总响应 token 与 `is_new` | ① 全部 200/`code=0`，无 500；② 有效令牌恰好 1 行；③ 所有响应 token 相同，仅 1 个 `is_new=true`，其余 `false`；旧/重复行不产生 |
 | **TC-SHARE-03** | 分享 | 中 | `POST /api/v1/shares/revoke/TA`；S-16/S-17 | A 有有效令牌 TA | ① 撤销 TA；② 再次撤销 TA；③ 查 `share_tokens` | ① 200/`code=0`，`is_active=false`、`revoked_at` 非空；② 409/`code=40900`；③ 行仍保留，无物理删除，未新增令牌 |
 | **TC-SHARE-04** | 分享/撤销 | 高 | `GET /api/v1/shares/TR`、`POST /shares/generate`、`GET /shares/TR`；S-16/S-17 | A 的 TR 已撤销；A 已登录 | ① 游客访问 TR；② A 重新生成分享；③ 游客再次访问旧 TR；④ 游客访问新 token | ① HTTP 200、`code=0`、`revoked=true`、`items=[]`、`tea_count=0`；② 返回**新 token**、`is_new=true`；③ 旧 TR 仍 `revoked=true`、空列表，**不可复活**；④ 新 token 正常返回内容、`revoked=false` |
@@ -196,7 +201,7 @@
 |---|---|---|---|---|---|---|
 | **TC-PERM-01** | 权限 | 高 | `GET/POST/PUT/PATCH /api/v1/admin/**` 共 8 个端点；S-11/S-12 | `user_a` 已登录 | ① 依次调用 `GET /admin/teas`、`GET /admin/teas/1`、`POST /admin/teas`（合法体）、`PUT /admin/teas/1`、`PATCH /admin/teas/1/toggle`、`PUT /admin/teas/1/tips`、`GET /admin/stats`、`POST /admin/upload`（合法 JPEG）；② 查 `teas`、`operation_logs`、`uploads/` | ① 8 个全部 403/`code=40300`；② 无新增/修改茶品，无新增 `operation_logs`，无文件落盘；③ 不因“带合法 body”而先执行业务逻辑 |
 | **TC-PERM-02** | 权限 | 高 | `/api/v1/admin/**`；S-11/S-08 | 无 Cookie | ① 调用 `GET /admin/teas`、`GET /admin/stats`、`POST /admin/upload`；② 查副作用 | ① 全部 401/`code=40100`，优先于参数校验；② 无数据/文件副作用；不返回管理端数据结构 |
-| **TC-PERM-03** | 权限/越权 | 高 | `GET /lists`、`PUT /lists/notes/2`、`POST /shares/revoke/TB`；S-12/S-13 | A、B 各登录；A 未收藏 `tea 2`，B 已收藏；TB 属 B | ① A 调 `GET /lists`；② B 调 `GET /lists`；③ A 写 `tea 2` 笔记；④ A 撤销 TB；⑤ 查两用户数据 | ① 只返回 A 的条目；② 只返回 B 的条目（含 `tea 2`）；③ 404/`code=40430`，B 的笔记不变；④ 403/`code=40300`，TB 仍有效；⑤ 无跨用户读写 |
+| **TC-PERM-03** | 权限/越权 | 高 | `GET /lists`、`GET /lists/{other_list_id}`、`PUT /lists/{list_id}/notes/2`、`POST /shares/revoke/TB`；S-12/S-13 | A、B 各登录；A 未收藏 `tea 2`，B 已收藏；TB 属 B | ① A 调 `GET /lists`；② B 调 `GET /lists`；③ A 读 B 的清单与写 `tea 2` 笔记；④ A 撤销 TB；⑤ 查两用户数据 | ① 只返回 A 的清单；② 只返回 B 的清单（含 `tea 2`）；③ `GET /lists/{B_list}` → 404/`40420`，写笔记 → 404/`40430`，B 的笔记不变；④ 403/`code=40300`，TB 仍有效；⑤ 无跨用户读写 |
 | **TC-PERM-04** | 权限/角色 | 中 | `POST /favorites/1`、`GET /admin/stats`；S-08/S-11/S-12 | `admin` 已登录 | ① admin 调用户端收藏；② SQL 将 `admin.role` 改为 `user`；③ 不重新登录，立即调 `/admin/stats`；④ 改回 `admin` 后再调；⑤ 核对已收藏状态 | ① 200/`code=0`（管理员可执行用户侧能力）；② 改库成功；③ 403/`code=40300`（角色实时读库，不受旧 Cookie 影响）；④ 200/`code=0`；⑤ 管理员会话未被强制退出，仅权限随角色变化 |
 
 ### 5.8 文件上传（5 条）
@@ -218,6 +223,41 @@
 | **TC-DEF-03** | 异常/错误处理 | 高 | `GET /api/v1/teas`；S-30/S-03 | 测试环境可模拟数据库/Repository 抛出 `RuntimeError` | ① 注入运行时异常；② 调 `GET /teas`；③ 检查响应与服务端日志；④ 恢复后再次调用 | ① HTTP 500、`code=50000`、message 为通用“服务器内部错误”；② 响应无堆栈、无 SQL、无表名/文件路径；③ 服务端日志有完整堆栈但无密码/Cookie；④ 恢复后返回 200，服务未崩溃 |
 | **TC-DEF-04** | 上线检查 | 高 | 种子管理员与密码轮换；S-31/S-02 | 演练环境执行 `init.sql`；准备轮换脚本 `app.scripts.rotate_admin_password` | ① 用 `admin/admin123` 登录；② 执行轮换脚本设置新密码 `Str0ng!Admin#2026`；③ 用旧密码登录；④ 用新密码登录；⑤ 查 `users.password_hash`、脚本输出与日志 | ① 200/`code=0`（仅开发/演练环境允许）；② 脚本执行成功；③ 401/`code=40110`；④ 200/`code=0`；⑤ `password_hash` 以 `$2b$10$` 开头；脚本/日志无明文密码；仓库生产配置中检索不到 `admin123` |
 
+### 5.10 我的与个性化（6 条）
+
+| 编号 | 模块 | 优先级 | 对应接口/安全项 | 前置条件 | 操作步骤 | 预期结果 |
+|---|---|---|---|---|---|---|
+| **TC-ME-01** | 我的 | 中 | `GET /api/v1/me/stats`；S-11 | 无 Cookie | ① 未登录调用；② 用普通用户 Cookie 调用 | ① 401/`40100`；② 200/`code=0`，返回 `favorite_count/note_count/share_count/level` |
+| **TC-ME-02** | 我的 | 高 | `GET /api/v1/me/stats`；S-15 | 用户已收藏 1 款、写 1 条笔记、生成 1 个有效分享 | ① 调用统计接口；② 核对返回值 | ① `favorite_count=1`、`note_count=1`、`share_count=1`；② `level.name=茶客`、`index=1`、`next_name=茶友`、`next_threshold=5`、`remaining=4` |
+| **TC-ME-03** | 我的 | 中 | `GET /api/v1/me/stats`；S-15 | 可构造不同收藏数 | ① 收藏数 0/4/5/19/20/49/50/120 分别计算等级 | ① 依次为 茶客/茶客/茶友/茶友/茶人/茶人/茶师/茶师；② 茶师 `next_name=null`、`remaining=0`；其余 `remaining` 与阈值差值一致 |
+| **TC-REC-01** | 推荐 | 中 | `GET /api/v1/teas/recommended`；S-16 | 游客无 Cookie | ① 调用 `?limit=1`；② 检查返回茶品 | ① 200/`code=0`，`data` 为 1 条列表项；② 茶品 `is_active=1`（下架茶不出现） |
+| **TC-REC-02** | 推荐 | 中 | `GET /api/v1/teas/recommended`；S-16 | 登录用户无收藏 | ① 调用 `?limit=1`；② 与游客结果对比 | ① 200/`code=0` 且返回 1 条；② 退化为完全随机，不报错 |
+| **TC-REC-03** | 推荐 | 高 | `GET /api/v1/teas/recommended`；S-16 | 用户已收藏 1 款绿茶，库中另有未收藏绿茶 | ① 调用 `?limit=1`；② 核对推荐结果 | ① 200/`code=0`；② 推荐茶品 `category=green` 且 `id != 已收藏茶`；③ 已下架茶不出现 |
+
+### 5.11 多清单（6 条）
+
+| 编号 | 模块 | 优先级 | 对应接口/安全项 | 前置条件 | 操作步骤 | 预期结果 |
+|---|---|---|---|---|---|---|
+| **TC-MLIST-01** | 多清单 | 高 | `GET /api/v1/lists`、`POST /api/v1/lists`；S-11/S-15 | 新用户无任何清单 | ① 调 `GET /lists` 触发默认清单惰性创建；② 连续创建 9 个普通清单；③ 再创建第 10 个；④ 核对摘要字段 | ① 200/`code=0`，返回 1 条默认清单（`is_default=true`、`tea_count=0`）；② 每次 200/`code=0`，`is_default=false`；③ 400/`40000`，提示已达 10 个上限；④ 列表按默认清单置顶、其余 `created_at ASC`；每项含 `id/title/is_default/tea_count/created_at/updated_at/share` |
+| **TC-MLIST-02** | 多清单 | 高 | `DELETE /api/v1/lists/{id}`；S-11/S-27 | A 有默认清单与普通清单 L2（含 2 款茶），L2 已生成有效分享令牌 | ① 删除 L2；② 删除默认清单；③ 查 `favorite_items`、`collection_lists`、`share_tokens` | ① 200/`code=0`；L2 条目迁移到默认清单（茶品不丢），默认清单 `tea_count` 相应增加；② 默认清单返回 400/`40000`（不可删除）；③ 迁移后 `favorite_items.list_id` 全部指向默认清单，无孤儿行 |
+| **TC-MLIST-03** | 多清单 | 高 | `DELETE /api/v1/lists/{id}`；S-27 | 默认清单含 `tea 1`（笔记“默认笔记”），普通清单 L3 也含 `tea 1`（笔记“L3 笔记”） | ① 删除 L3；② 查默认清单中 `tea 1` 的条目 | ① 200/`code=0`；② 不产生重复条目（仍为 1 条），默认清单非空笔记优先保留“默认笔记”，若默认笔记为空则保留“L3 笔记”；无唯一键冲突、无 500 |
+| **TC-MLIST-04** | 多清单 | 中 | `DELETE /api/v1/lists/{id}`、`GET /api/v1/shares/{token}`；S-18 | 普通清单 L4 已生成有效分享令牌 T4 | ① 删除 L4；② 游客访问 T4；③ 查 `share_tokens` | ① 200/`code=0`；② 404/`code=40410`（分享不存在或已失效）；③ T4 随清单级联删除，无悬挂令牌 |
+| **TC-MLIST-05** | 多清单 | 中 | `POST /api/v1/shares/generate`、`GET /api/v1/shares/{token}`；S-15/S-18 | A 有默认清单与普通清单 L5（各含不同茶） | ① 生成默认清单分享；② 生成 L5 分享（body 传 `list_id`）；③ 游客分别查看两个 token；④ 再次为同一清单生成分享 | ① ② 200/`code=0`；③ 两个分享分别只含各自清单的条目，互不串数据；④ 复用同一有效令牌，不新建行 |
+| **TC-MLIST-06** | 多清单 | 高 | `POST /api/v1/favorites`；S-27 | A 已收藏 `tea 1`；茶 `tea 1` 初始 `favorite_count` 已知 | ① 把 `tea 1` 加入第二个清单（body 传 `list_id`）；② 从默认清单移除 `tea 1`；③ 再从第二个清单移除 | ① 200/`code=0`，`favorite_count` **不变**（同一用户 × 茶品只计一次），`list_ids` 含两个清单；② `favorite_count` 仍不变（其他清单仍保留）；③ 最后一条移除后 `favorite_count` 减 1，最小为 0，绝不为负 |
+
+### 5.12 用户贡献与审核（8 条）
+
+| 编号 | 模块 | 优先级 | 对应接口/安全项 | 前置条件 | 操作步骤 | 预期结果 |
+|---|---|---|---|---|---|---|
+| **TC-CONTRIB-01** | 贡献 | 高 | `POST /contributions`；S-34 | 用户已登录；提交名称不与现有茶品冲突 | ① 以 `type=new_tea` 提交完整茶品字段；② 查 `GET /contributions/mine`；③ 查 DB | ① 200/`code=0`，`status=pending`、`payload.name` 正确、`target_tea_id=null`；② 仅返回本人记录且倒序；③ `contributions` 新增 1 行，`type=new_tea` |
+| **TC-CONTRIB-02** | 贡献 | 高 | `POST /contributions`；S-34 | `tea_name_category_map` 含“碧螺春→green” | ① 提交名称“碧螺春”、茶类 `red`；② 查提交记录 | ① 400/`code=40000`，message 含“绿茶”与“不一致”；② 不产生 pending 记录 |
+| **TC-CONTRIB-03** | 贡献 | 高 | `POST /contributions`；S-34 | 已有茶品“大红袍” | ① 提交同名“大红袍”（茶类正确）；② 提交“大红袍茶”；③ 查记录 | ① 400/`code=40000`，“过于相似”；② 相似度 >90% 同样拦截；③ 均未落库 |
+| **TC-CONTRIB-04** | 贡献 | 中 | `POST /contributions`；S-34 | 存在在架茶 `tea 1` 与不存在 ID | ① `type=article` 内容 2 字；② 目标茶品不存在；③ 目标茶品已下架；④ 合法内容 3–500 字 | ①–③ 400/`code=40000`（长度/茶品无效）；④ 200/`code=0`、`status=pending`、`payload` 含 `title/content`，`target_tea_name` 正确 |
+| **TC-CONTRIB-05** | 贡献/越权 | 高 | `GET /contributions/mine`、`DELETE /contributions/{id}`；S-34 | A 有 pending 提交；B 已登录 | ① B 查我的提交；② B 删除 A 的提交；③ A 删除自己的 pending；④ A 删除已处理记录 | ① 不含 A 的记录；② 404/`code=40440`（不泄露存在性）；③ 200/`code=0` 且记录消失；④ 400/`code=40000`，已处理记录保留 |
+| **TC-CONTRIB-06** | 贡献/审核 | 高 | `GET /admin/contributions`、`POST .../approve`；S-34 | A 提交新茶 pending；管理员已登录 | ① 管理员按 `status=pending&type=new_tea` 查队列；② 通过该提交；③ 查 `teas`；④ 再次通过 | ① 列表含该记录且带 `username`；② 200/`code=0`、`status=approved`、`reviewer_id/reviewed_at` 非空；③ 生成同名茶品且 `is_active=1`；④ 400/`code=40000`（不可重复审核） |
+| **TC-CONTRIB-07** | 贡献/审核 | 中 | `POST .../reject`；S-34 | A 有 pending 提交 | ① 管理员以“信息不完整”拒绝；② A 查我的提交；③ A 删除该记录；④ 管理员再通过 | ① 200/`code=0`、`status=rejected`、`reject_reason` 正确；② 返回同理由；③ 400/`code=40000`；④ 400/`code=40000`；`operation_logs` 有 `reject_contribution` |
+| **TC-CONTRIB-08** | 贡献/权限 | 高 | `POST /contributions`、`GET /admin/contributions`、`GET /teas/{id}`；S-34 | 游客、普通用户、管理员各一；存在在架茶 | ① 游客提交；② 普通用户访问审核队列；③ 普通用户提交科普并由管理员通过；④ 游客查茶详情 | ① 401/`40100`；② 403/`40300`；③ 200/`code=0`；④ `contributed_articles` 含该条（`contributor` 为提交者），未通过内容不出现 |
+
 ---
 
 ## 6. 覆盖矩阵与统计
@@ -226,7 +266,7 @@
 
 | 模块 | 用例数 | 编号区间 | 高 | 中 | 低 |
 |---|---:|---|---:|---:|---:|
-| 认证与会话 | 9 | TC-AUTH-01–09 | 6 | 3 | 0 |
+| 认证与会话 | 13 | TC-AUTH-01–13 | 9 | 4 | 0 |
 | 茶品录入与上下架 | 7 | TC-TEA-01–07 | 3 | 4 | 0 |
 | 筛选、搜索与分页 | 9 | TC-LIST-01–09 | 2 | 5 | 2 |
 | 收藏与取消收藏 | 7 | TC-FAV-01–07 | 4 | 2 | 1 |
@@ -235,22 +275,25 @@
 | 权限校验 | 4 | TC-PERM-01–04 | 3 | 1 | 0 |
 | 文件上传 | 5 | TC-UPLOAD-01–05 | 3 | 2 | 0 |
 | 异常与防御 | 4 | TC-DEF-01–04 | 2 | 2 | 0 |
-| **合计** | **60** | — | **32** | **25** | **3** |
+| 我的与个性化 | 6 | TC-ME-01–03、TC-REC-01–03 | 2 | 4 | 0 |
+| 多清单 | 6 | TC-MLIST-01–06 | 4 | 2 | 0 |
+| 用户贡献与审核 | 8 | TC-CONTRIB-01–08 | 6 | 2 | 0 |
+| **合计** | **84** | — | **47** | **34** | **3** |
 
 ### 6.2 正向 / 反向 / 边界覆盖（按主要目的归类）
 
 | 类型 | 数量 | 代表用例 |
 |---|---:|---|
-| 正向 | 23 | AUTH-01/04、TEA-01/05/07、LIST-01/02/05/08/09、FAV-01/03/06、NOTE-01/03、SHARE-01/05/08、PERM-04、UPLOAD-01/04、DEF-04 |
-| 反向 | 24 | AUTH-02/05/06/07、TEA-02/06、LIST-04、FAV-05、NOTE-02/05、SHARE-03/04/06/07/09、PERM-01/02/03、UPLOAD-02/03/05、DEF-01/03 |
-| 边界/并发 | 13 | AUTH-03、TEA-03/04、LIST-06/07、FAV-02/04/07、NOTE-04、SHARE-02/10、DEF-02 |
+| 正向 | 32 | AUTH-01/04、TEA-01/05/07、LIST-01/02/05/08/09、FAV-01/03/06、NOTE-01/03、SHARE-01/05/08、PERM-04、UPLOAD-01/04、DEF-04、ME-02、REC-01/03、MLIST-01/05、CONTRIB-01/04/06/08 |
+| 反向 | 31 | AUTH-02/05/06/07/10/11/13、TEA-02/06、LIST-04、FAV-05、NOTE-02/05、SHARE-03/04/06/07/09、PERM-01/02/03、UPLOAD-02/03/05、DEF-01/03、ME-01、REC-02、MLIST-02/04、CONTRIB-02/03 |
+| 边界/并发 | 21 | AUTH-03/12、TEA-03/04、LIST-06/07、FAV-02/04/07、NOTE-04、SHARE-02/10、DEF-02、ME-03、MLIST-03/06、CONTRIB-05/07 |
 
 ### 6.3 强制覆盖项检查
 
 | 要求 | 覆盖用例 | 是否覆盖 |
 |---|---|---|
-| 越权访问 | PERM-01、PERM-02、PERM-03、NOTE-05、SHARE-07、SHARE-09 | ✅ |
-| 并发重复提交 | FAV-02、FAV-04、SHARE-02、SHARE-10 | ✅ |
+| 越权访问 | PERM-01、PERM-02、PERM-03、NOTE-05、SHARE-07、SHARE-09、MLIST-02 | ✅ |
+| 并发重复提交 | FAV-02、FAV-04、SHARE-02、SHARE-10、MLIST-01、MLIST-06 | ✅ |
 | 超长字段 | AUTH-03、TEA-04、LIST-06、NOTE-04、DEF-02 | ✅ |
 | 非法枚举值 | TEA-02（category/season）、LIST-04（category/season/sort） | ✅ |
 | 游客未登录访问分享 | SHARE-05（有效）、SHARE-04（撤销后） | ✅ |
@@ -259,6 +302,8 @@
 | 下架茶不可收藏、不出现在列表/搜索 | TEA-06、TEA-07、FAV-05 | ✅ |
 | 密码不落响应/日志 | AUTH-01、AUTH-04、AUTH-09 | ✅ |
 | 上传类型与大小 | UPLOAD-01、UPLOAD-02、UPLOAD-03 | ✅ |
+| 贡献越权与重复审核 | CONTRIB-05、CONTRIB-06、CONTRIB-07、CONTRIB-08 | ✅ |
+| 茶类矛盾与名称查重 | CONTRIB-02、CONTRIB-03 | ✅ |
 
 ### 6.4 与 SECURITY.md 控制编号的回溯
 
@@ -272,6 +317,8 @@
 | S-25–S-27 一致性/重复提交 | FAV-01–FAV-04、FAV-07、SHARE-02、SHARE-08、SHARE-10、LIST-01 |
 | S-28–S-29 审计/日志 | TEA-01、TEA-05、AUTH-09、DEF-03、UPLOAD-01 |
 | S-30–S-32 配置/上线/供应链 | DEF-01–DEF-04 |
+| S-33 登录失败锁定 | AUTH-10–AUTH-13 |
+| S-34 用户贡献与审核门禁 | CONTRIB-01–CONTRIB-08 |
 
 ---
 
@@ -282,19 +329,23 @@
 1. **安全门禁批次（P0）**：PERM-01、PERM-02、AUTH-06、AUTH-09、UPLOAD-02、UPLOAD-03、SHARE-04、DEF-03、DEF-04。全部通过后才进入功能批次。
 2. **认证主链路**：AUTH-01–AUTH-08。
 3. **茶品与列表**：TEA-01–TEA-07、LIST-01–LIST-09。
-4. **收藏/笔记**：FAV-01–FAV-07、NOTE-01–NOTE-05。
+4. **收藏/笔记/多清单**：FAV-01–FAV-07、NOTE-01–NOTE-05、MLIST-01–MLIST-06。
 5. **分享链路**：SHARE-01–SHARE-10。
 6. **上传与异常**：UPLOAD-01–UPLOAD-05、DEF-01–DEF-02。
-7. **回归**：所有“高”优先级用例 + 本次变更涉及的模块用例。
+7. **我的与个性化**：ME-01–ME-03、REC-01–REC-03。
+8. **用户贡献与审核**：CONTRIB-01–CONTRIB-08。
+9. **回归**：所有“高”优先级用例 + 本次变更涉及的模块用例。
 
 ### 7.2 每轮回归最小集
 
-- 认证：AUTH-01、AUTH-05、AUTH-06。
+- 认证：AUTH-01、AUTH-05、AUTH-06、AUTH-10。
 - 权限：PERM-01、PERM-02、PERM-03。
-- 数据归属：NOTE-05、SHARE-07。
+- 数据归属：NOTE-05、SHARE-07、MLIST-02。
+- 多清单：MLIST-01、MLIST-02、MLIST-06。
 - 分享状态机：SHARE-03、SHARE-04、SHARE-05。
 - 下架链路：TEA-06、FAV-05。
 - 上传：UPLOAD-02、UPLOAD-03。
+- 用户贡献：CONTRIB-02、CONTRIB-05、CONTRIB-06、CONTRIB-08。
 - 上线检查：DEF-04。
 
 ---
@@ -319,8 +370,9 @@
 | 项 | 说明 |
 |---|---|
 | API_CONTRACT §1.12 / PRD §2.3 明确不在范围内的能力 | 不设用例；契约中也不存在对应接口 |
-| 第二阶段 S1–S17 | 不设用例；仅在 SECURITY §3/§6 记录预留与风险 |
-| 密码找回、邮箱/微信登录、失败锁定 | PRD FR-4.4 明确 MVP 不做；AUTH-05 仅验证“不做锁定”的现状 |
+| 第二阶段 S1–S17（S14/S15/S16 已提前实现，见 5.1/5.10） | 未实现项不设用例；仅在 SECURITY §3/§6 记录预留与风险 |
+| 密码找回、邮箱/微信登录 | PRD FR-4.4 明确 MVP 不做 |
+| S14 登录失败锁定 | 已提前实现，用例见 AUTH-10–AUTH-13（S-33） |
 | 旧 Cookie 重放 | AUTH-08 步骤④记录为已知限制（无 `sessions` 表），不作为失败判定 |
 | 性能/吞吐/长时间稳定性 | 不在本方案内；并发用例只验证唯一性与幂等 |
 | 前端 UI/兼容性/无障碍 | 不在本方案内；前端仅保留“守卫不是安全边界”的说明 |
@@ -333,3 +385,5 @@
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | v1.0 | 2026-11-07 | 建立 60 条可执行用例，覆盖 9 个模块、正向/反向/边界、越权/并发/超长/非法枚举；逐条回溯 API 契约与 SECURITY 控制编号 |
+| v1.1 | 2026-11-09 | 批次二：新增 AUTH-10–13（S14 登录锁定 / S-33）与 5.10 我的与个性化（ME-01–03、REC-01–03）；合计 70 条 |
+| v1.2 | 2026-11-09 | 批次三 S9 多清单：新增 5.11 多清单（MLIST-01–06）；FAV-01/02/03、NOTE-01–05、PERM-03、SHARE-01 更新为多清单路径与断言；端点覆盖 40 个；合计 76 条（高 41 / 中 32 / 低 3） |

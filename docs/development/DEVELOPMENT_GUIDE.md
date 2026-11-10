@@ -44,7 +44,7 @@
 1. 属于 MVP 范围吗？            否 → D 类（不开发）
 2. 触碰任何"冻结规则"吗？        是 → C 类（人工确认）
    （PRD 业务规则、权限矩阵、字段约束、API 契约、数据库结构、
-     安全控制 S-01–S-32、架构分层、技术栈）
+     安全控制 S-01–S-33、架构分层、技术栈）
 3. 需要跨层/跨模块改动吗？       是 → B 类（先出方案）
    （≥2 层，或前后端同时改，或涉及 ≥3 个文件）
 4. 其余                         → A 类（直接编码）
@@ -98,7 +98,7 @@
 | **权限矩阵** | 管理员是否可一键收藏、游客可见字段范围、注册用户可执行的操作边界 |
 | **API 契约** | 新增/删除端点，改请求或响应字段、错误码、分页默认值（`page_size=12`）、排序规则（`id DESC`） |
 | **数据库结构** | 增删表/列/索引/ENUM、改字符集或排序规则、任何 Alembic 迁移 |
-| **安全控制** | 增删改 S-01–S-32 任一项；实现方式与 SECURITY.md 冲突时的取舍（如 bcrypt cost） |
+| **安全控制** | 增删改 S-01–S-33 任一项；实现方式与 SECURITY.md 冲突时的取舍（如 bcrypt cost） |
 | **架构分层** | 允许 Router 直查库、合并/新增层、改变模块边界、跨层调用 |
 | **技术栈/依赖** | 新增运行时依赖（如 openapi-typescript、APScheduler）、替换 UI 库、改变构建工具 |
 | **上线配置** | 轮换 `SECRET_KEY`、关闭 `DEBUG`、修改种子管理员密码策略 |
@@ -261,7 +261,7 @@ PRD §6 的 S1–S17 与暂不实现项 X1–X13 **一律不开发**，包括多
 
 **现状与前置条件**（进入开发前须知）：
 
-- 已建立 `backend/tests/`（当前仅健康检查）、前端 ESLint / Prettier / Vitest 脚本与 `.github/workflows/ci.yml`；TEST_PLAN 的 60 条用例仍未落地，新增业务代码须同步新增或补跑对应用例。
+- `backend/tests/` 已按模块落地 TEST_PLAN 用例（2026-11-09 全量 139 passed），前端 ESLint / Prettier / Vitest 脚本与 `.github/workflows/ci.yml` 已建立；新增业务代码须同步新增或补跑对应用例。
 - 本地最低验证：`python scripts/check_all.py`；后端 `cd backend; python -m ruff check app tests; python -m pytest -q`；前端 `cd frontend; npm run lint; npm run typecheck; npm run test:run`。
 
 **证据记录格式**（写入任务总结）：

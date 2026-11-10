@@ -54,7 +54,7 @@
 
 - 核心闭环：**发现茶 → 查看详情 → 收藏/写笔记/分享**
 - 三角色：游客（只读）/ 注册用户（收藏、笔记、分享）/ 管理员（茶品与小贴士维护）
-- MVP 边界：单一默认收藏清单"我的收藏"；3 维筛选（茶类/产地/季节，AND 逻辑）；链接分享；不做用户贡献与审核
+- MVP 边界：多收藏清单（默认清单 + 最多 9 个普通清单）；3 维筛选（茶类/产地/季节，AND 逻辑）；链接分享；不做用户贡献与审核
 - 权威需求文档：[PRD.md](docs/product/PRD.md) v1.1（功能分级以此为准）
 
 ## 2. 技术栈（已定稿，不更换）
@@ -101,8 +101,8 @@ d:\项目二\
 | Element Plus 前台使用（已修复） | 前台 `AppToast` 自研；`main.ts` 仅在 `/admin` 路由按需加载 Element Plus | 前台禁止再引入；后台保持按需加载 |
 | Service 直连查询（已修复） | 查询已全部下沉到 `repositories/`；`check_layers.py` 基线为空 | 保持五层边界，禁止回流 |
 | Router/Service 返回 ORM（已修复） | 端点统一经 Schema 序列化后返回 | 保持统一响应体，禁止直接返回 ORM |
-| 业务端点未实现（已修复） | 29 个业务端点已按 API_CONTRACT 实现 | 新增端点必须同步契约与测试 |
-| 测试未覆盖 TEST_PLAN（已修复） | TEST_PLAN 60 条用例已落地，后端全量 106 条测试通过 | 新增业务代码必须同步补测 |
+| 业务端点未实现（已修复） | 53 个业务端点已按 API_CONTRACT 实现 | 新增端点必须同步契约与测试 |
+| 测试未覆盖 TEST_PLAN（已修复） | TEST_PLAN 84 条用例已落地，后端全量 153 条测试通过 | 新增业务代码必须同步补测 |
 | 例外登记 | 运行 `python scripts/check_layers.py` / `check_frontend.py` 查看最新列表 | 修复后同步更新脚本基线 |
 
 ## 4. 前端开发规范
@@ -129,26 +129,26 @@ d:\项目二\
 - `core/` 为横向支撑（config / database / security / response / auth_deps）
 - 统一响应体 `{ code, message, data }`，业务异常经 `core/response.py` 映射
 - 代码规范：Ruff（`ruff check` + `ruff format --check`）
-- 安全控制共 32 项（S-01–S-32），变更必须同步 [SECURITY.md](docs/architecture/SECURITY.md) 与测试用例
+- 安全控制共 34 项（S-01–S-34），变更必须同步 [SECURITY.md](docs/architecture/SECURITY.md) 与测试用例
 - 静态检查：`python scripts/check_layers.py`
 
 详见 [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) §3、[SECURITY.md](docs/architecture/SECURITY.md)。
 
 ## 6. 数据库规范
 
-- 共 **7 张表**：`users` / `teas` / `tea_tips` / `collection_lists` / `favorite_items` / `share_tokens` / `operation_logs`
+- 共 **13 张表**：`users` / `teas` / `tea_tips` / `collection_lists` / `favorite_items` / `share_tokens` / `operation_logs` / `tea_media` / `login_attempts` / `contributions` / `tea_name_category_map` / `content_types` / `content_items`
 - **一切结构变更走 Alembic 迁移，禁止手工 ALTER TABLE**
 - MySQL 5.7 无有效 CHECK：枚举用 ENUM，数值/长度范围由 Pydantic + Service 层校验
 - 时间统一 `DATETIME` + UTC，API 输出 ISO8601 带 `Z`，前端按 Asia/Shanghai 渲染
 - 软失效：茶下架（`is_active=0`）、分享撤销（`is_active=0` + `revoked_at`）均**不物理删除**
 - `share_tokens.token` 用 `utf8mb4_bin`（大小写敏感）；`teas.favorite_count` 为冗余计数，同事务维护
-- 收藏防重复靠 `UNIQUE(user_id, tea_id)`；单清单靠 `UNIQUE(collection_lists.user_id)`
+- 收藏防重复靠 `UNIQUE(list_id, tea_id)`；默认清单唯一靠 `UNIQUE(user_id, is_default)`（普通清单 `is_default=NULL`）；`favorite_count` 按「用户 × 茶品」跨清单去重
 
 详见 [DATA_MODEL.md](docs/architecture/DATA_MODEL.md) v1.0、[database/init.sql](database/init.sql)。
 
 ## 7. API 接口规范
 
-- 统一前缀 `/api/v1`；共 **29 个业务端点**（auth 5 / teas 6 / favorites 3 / lists 3 / shares 4 / admin 8）
+- 统一前缀 `/api/v1`；共 **53 个业务端点**（auth 5 / me 1 / teas 9 / tips 1 / favorites 3 / lists 6 / shares 4 / admin 14 / contributions 3 / contents 3 / admin-contents 4）
 - 统一响应 `{ code, message, data }`；成功判定只看 `code === 0`；成功 HTTP 状态统一 **200**；业务失败 `HTTP status = code // 100`；FastAPI 422 必须重映射为 400/`40000`
 - 认证：**HttpOnly Cookie `tea_session`**（itsdangerous 签名，30 天，`SameSite=Lax`），不使用 Token / Authorization 头；角色每次从 `users.role` 实时读库
 - JSON 字段 `snake_case`，与数据库列名一致；空值用 `null`
@@ -169,11 +169,11 @@ d:\项目二\
 
 ## 9. 测试要求
 
-- 测试方案：[TEST_PLAN.md](docs/testing/TEST_PLAN.md) v1.0 —— **60 条用例**（高 32 / 中 25 / 低 3），覆盖 29 端点 + 7 表约束 + 32 项安全控制
+- 测试方案：[TEST_PLAN.md](docs/testing/TEST_PLAN.md) v1.3 —— **84 条用例**（高 47 / 中 34 / 低 3），覆盖 46 端点 + 11 表约束 + 34 项安全控制
 - 后端：pytest + httpx（TestClient），断言同时检查 HTTP 状态码、业务 `code`、数据库最终状态
 - 前端：Vitest，仅覆盖纯函数（筛选/格式化/URL 组装）
 - 高优先级用例任一失败 = 阻断发布；错误响应不得泄露堆栈/SQL/表名
-- **当前测试骨架仅健康检查，TEST_PLAN 用例尚未落地**；新增业务代码必须同步新增或补跑对应用例，未运行写「未运行」
+- TEST_PLAN 用例已按模块落地；新增业务代码必须同步新增或补跑对应用例，未运行写「未运行」
 - 完成任务后必须执行与改动相关的测试，并如实报告结果；用户豁免需在 build-log 记录原因与风险
 
 ## 10. 文档维护要求
@@ -186,7 +186,7 @@ d:\项目二\
 | [MODULE_DESIGN.md](docs/architecture/MODULE_DESIGN.md) | 模块与端点映射 |
 | [DATA_MODEL.md](docs/architecture/DATA_MODEL.md) + [init.sql](database/init.sql) | 数据库定稿 |
 | [API_CONTRACT.md](docs/api/API_CONTRACT.md) + [openapi.yaml](docs/api/openapi.yaml) | 前后端联调唯一依据 |
-| [SECURITY.md](docs/architecture/SECURITY.md) | 安全控制唯一依据（S-01–S-32） |
+| [SECURITY.md](docs/architecture/SECURITY.md) | 安全控制唯一依据（S-01–S-34） |
 | [DESIGN_SYSTEM.md](docs/design/DESIGN_SYSTEM.md) / [PAGE_SPECS.md](docs/design/PAGE_SPECS.md) | 视觉与页面规范 |
 | [TEST_PLAN.md](docs/testing/TEST_PLAN.md) | 测试用例唯一依据 |
 | [DEVELOPMENT_GUIDE.md](docs/development/DEVELOPMENT_GUIDE.md) | SDD 流程、任务分级与各阶段产出 |
@@ -269,5 +269,5 @@ B 类输出技术方案后即可编码；C 类必须等用户明确答复。
 - [x] `SECRET_KEY` / `DEBUG` 代码默认值已收紧（2026-11-09，缺失 `SECRET_KEY` 拒绝启动）；生产部署仍需注入随机密钥与种子管理员密码 —— 安全 P0
 - [x] bcrypt 已统一为 `cost=10`（`_BCRYPT_ROUNDS`，对齐 SECURITY S-01）
 - [x] `routers/admin.py` 等端点已按 API_CONTRACT 补齐
-- [x] TEST_PLAN 60 条用例已落地；后端全量 106 条测试通过
+- [x] TEST_PLAN 84 条用例已落地；后端全量 153 条测试通过（2026-11-09）
 - [x] §3.1 基线遗留已在 2026-11-09 审查中清理（五层 / 前台 UI 遗留均为 0）

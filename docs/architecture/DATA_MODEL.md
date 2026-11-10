@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.0（已确认）** |
+| 文档版本 | **v1.4（已确认）** |
 | 创建日期 | 2026-11-06 |
 | 修订记录 | v1.0（2026-11-06）：基于 PRD v1.1 与已确认技术架构完成数据模型定稿；确认 7 张表、清单独立建表、`share_tokens` 改挂 `list_id`、`operation_logs` 最小留痕、不建 `sessions` 表 |
 | 分析依据 | [PRD.md](../product/PRD.md) v1.1 · [TECH_STACK.md](TECH_STACK.md) v1.0 · [ARCHITECTURE.md](ARCHITECTURE.md) · [MODULE_DESIGN.md](MODULE_DESIGN.md) · `backend/app/models/` |
@@ -52,10 +52,16 @@
 | 1 | `users` | 用户账号与角色 | < 1,000 | 模块 4（§4.3） |
 | 2 | `teas` | 茶品图鉴卡片 | 30–50（初版） | 模块 1/2/3/6（§4.1） |
 | 3 | `tea_tips` | 官方小贴士 4 区块 | ≈ `teas` | 模块 3/6（§4.1） |
-| 4 | `collection_lists` | 用户默认清单 | ≈ `users` | 模块 5（§4.2） |
+| 4 | `collection_lists` | 用户清单（多清单） | ≈ `users` | 模块 5（§4.2） |
 | 5 | `favorite_items` | 收藏条目 + 私有笔记 | < 5,000 | 模块 5（§4.2） |
 | 6 | `share_tokens` | 分享令牌（有效/撤销） | < 1,000 | 模块 5（FR-5.4/5.5） |
 | 7 | `operation_logs` | 管理员写操作留痕 | < 1,000/年 | 模块 6 |
+| 8 | `tea_media` | 茶品图片集（S4，v1.1 新增） | ≈ `teas` × 3–5 | 模块 3（§4.1 + S4） |
+| 9 | `login_attempts` | 登录失败记录（S14，v1.2 新增） | 低（24 小时清理） | 模块 4（S14 锁定） |
+| 10 | `contributions` | 用户贡献提交与审核状态（S10–S13，v1.4 新增） | < 1,000 | S10/S11/S12/S13 |
+| 11 | `tea_name_category_map` | 名品-茶类映射（S10 第一层校验，v1.4 新增） | 20–200 | S10 |
+
+> v1.4 起共 **11 张表**（批次四新增 `contributions`、`tea_name_category_map`，S10–S13 用户贡献与审核）。§1.1 基线核对为 v1.0 时点的历史记录，保留不改。
 
 ---
 
@@ -63,10 +69,12 @@
 
 ```mermaid
 erDiagram
-    users ||--|| collection_lists : "1:1 默认清单"
+    users ||--o{ collection_lists : "1:N 清单（含默认）"
     users ||--o{ favorite_items : "1:N 收藏"
+    collection_lists ||--o{ favorite_items : "1:N 条目"
     teas ||--o{ favorite_items : "1:N 被收藏"
     teas ||--|| tea_tips : "1:1 小贴士"
+    teas ||--o{ tea_media : "1:N 图片集（S4）"
     collection_lists ||--o{ share_tokens : "1:N 分享令牌"
     users ||--o{ operation_logs : "1:N 操作"
     teas ||--o{ operation_logs : "1:N 弱引用"
@@ -86,6 +94,8 @@ erDiagram
         enum season "选填"
         enum fermentation "选填"
         varchar price_range "选填"
+        int price_min "S2 选填"
+        int price_max "S2 选填"
         varchar representative_variety "选填"
         text shape_desc
         text soup_desc
@@ -95,10 +105,19 @@ erDiagram
         decimal tea_amount
         decimal brew_time
         varchar main_image_url
+        varchar video_url "S5 选填"
+        int video_duration "秒，选填"
         tinyint is_active
         int favorite_count
         datetime created_at
         datetime updated_at
+    }
+    tea_media {
+        int id PK
+        int tea_id FK
+        varchar image_url
+        int sort_order
+        datetime created_at
     }
     tea_tips {
         int id PK
@@ -107,6 +126,8 @@ erDiagram
         text suitable
         text misconception
         text official_note
+        datetime created_at
+        datetime updated_at
     }
     collection_lists {
         int id PK
@@ -176,13 +197,17 @@ erDiagram
 | `origin` | VARCHAR(200) | 否 | — | "省 市 产区"；省级筛选用前缀匹配 |
 | `season` | ENUM(6 值) | 是 | NULL | 明前/雨前/春茶/夏茶/秋茶/冬茶 |
 | `fermentation` | ENUM(5 值) | 是 | NULL | 不发酵/微发酵/半发酵/全发酵/后发酵 |
-| `price_range` | VARCHAR(32) | 是 | NULL | 5 档，文案未定稿 → 应用层校验 |
+| `price_range` | VARCHAR(32) | 是 | NULL | 价格档位文案（展示用） |
+| `price_min` | INT UNSIGNED | 是 | NULL | 价格下限（元/斤，S2）；NULL 表示未维护，不命中价格筛选 |
+| `price_max` | INT UNSIGNED | 是 | NULL | 价格上限（元/斤，S2）；应用层校验 `price_min ≤ price_max` |
 | `representative_variety` | VARCHAR(100) | 是 | NULL | 代表品类 |
 | `shape_desc` / `soup_desc` / `aroma_desc` / `taste_desc` | TEXT | 否 | 应用写 `''` | 5.7 中 TEXT 不能有 DB 默认值 |
 | `water_temp` | DECIMAL(4,1) | 是 | NULL | 70.0–100.0，应用校验 |
 | `tea_amount` | DECIMAL(4,1) | 是 | NULL | 克 |
 | `brew_time` | DECIMAL(4,1) | 是 | NULL | 秒 |
 | `main_image_url` | VARCHAR(500) | 是 | NULL | PRD 必填，由 Pydantic 强制；DB 放宽避免种子/迁移阻塞 |
+| `video_url` | VARCHAR(500) | 是 | NULL | S5 视频介绍（ADR-0003，0002 迁移新增）；同源 mp4；≤3 分钟/≤50MB 由应用层校验 |
+| `video_duration` | INT UNSIGNED | 是 | NULL | 视频时长（秒，≤180，应用层校验） |
 | `is_active` | TINYINT(1) | 否 | 1 | 1 上架 / 0 下架 |
 | `favorite_count` | INT UNSIGNED | 否 | 0 | 冗余计数（§6.2） |
 | `created_at` | DATETIME | 否 | CURRENT_TIMESTAMP | 最新上架排序依据 |
@@ -191,18 +216,29 @@ erDiagram
 - **主/外键**：PK `id`；无外键。
 - **索引**：`idx_teas_active_category`(is_active, category)、`idx_teas_active_created`(is_active, created_at)、`idx_teas_active_favorite`(is_active, favorite_count)，见 §5。
 - **状态枚举**：`is_active` 0/1；`category` 六值；`season`/`fermentation` 见上。
-- **关系**：1:1 `tea_tips`；1:N `favorite_items`。
+- **关系**：1:1 `tea_tips`；1:N `favorite_items`；1:N `tea_media`（图片集，S4）。
 
 ### 4.3 `tea_tips` — 官方小贴士
 
 - **业务用途**：PRD §4.1 小贴士区 4 区块；FR-6.4 独立编辑/清空。
-- **字段**：`id` INT UNSIGNED PK；`tea_id` INT UNSIGNED NOT NULL；`history` / `suitable` / `misconception` / `official_note` TEXT NULL。
+- **字段**：`id` INT UNSIGNED PK；`tea_id` INT UNSIGNED NOT NULL；`history` / `suitable` / `misconception` / `official_note` TEXT NULL；`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP；`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP（S7 最新小贴士排序）。
 - **主/外键**：PK `id`；FK `tea_id → teas.id`，`ON DELETE CASCADE ON UPDATE CASCADE`。理由：小贴士是茶的从属内容，脱离茶无意义；MVP 不物理删茶，级联仅作防御。
 - **索引**：`uk_tea_tips_tea_id`（唯一 tea_id）→ 详情页 1:1 查询，同时固化 1:1 基数。
 - **状态**：无；NULL 表示该区块未发布 → 前端隐藏。
 - **关系**：1:1 `teas`。
 
-### 4.4 `collection_lists` — 用户默认清单
+### 4.3.1 `tea_media` — 茶品图片集（S4，ADR-0003）
+
+- **业务用途**：PRD S4 详情页图片集；一款茶多张实拍图，详情页缩略图行切换主图。
+- **字段**：`id` INT UNSIGNED PK；`tea_id` INT UNSIGNED NOT NULL；`image_url` VARCHAR(500) NOT NULL（同源 `/uploads/...`）；`sort_order` INT NOT NULL DEFAULT 0；`created_at` DATETIME。
+- **主/外键**：PK `id`；FK `tea_id → teas.id`，`ON DELETE CASCADE ON UPDATE CASCADE`。
+- **索引**：`idx_tea_media_tea`（tea_id, sort_order）→ 按茶查询 + 排序一次完成。
+- **删除策略**：**物理删除**（不做软失效）——图片是茶品的附属素材，删除即移除；删除动作写入 `operation_logs`。
+- **上限**：单茶最多 9 张，由应用层校验（MySQL 5.7 无有效 CHECK）。
+- **关系**：N:1 `teas`。
+- **迁移**：`0002_content_expansion`（2026-11-09）。
+
+### 4.4 `collection_lists` — 用户收藏清单（S9 多清单）
 
 - **业务用途**：PRD §4.2 清单标题/可见性/创建者/创建时间；FR-5.1 自动创建默认清单、标题可编辑；FR-5.2 清单页标题。
 - **字段**：
@@ -210,16 +246,20 @@ erDiagram
 | 字段 | 类型 | NULL | 默认 | 约束/说明 |
 |---|---|---|---|---|
 | `id` | INT UNSIGNED | 否 | AUTO_INCREMENT | 主键 |
-| `user_id` | INT UNSIGNED | 否 | — | 一用户一清单 |
+| `user_id` | INT UNSIGNED | 否 | — | 清单所有者 |
 | `title` | VARCHAR(50) | 否 | '我的收藏' | 2–20 字由 Pydantic 校验 |
+| `is_default` | TINYINT(1) | 是 | NULL | 1 = 默认清单；NULL = 普通清单（每用户仅一个默认） |
 | `created_at` | DATETIME | 否 | CURRENT_TIMESTAMP | PRD §4.2 创建时间 |
 | `updated_at` | DATETIME | 否 | CURRENT_TIMESTAMP ON UPDATE | 标题修改时间 |
 
-- **主/外键**：PK `id`；FK `user_id → users.id`，`ON DELETE CASCADE`；`UNIQUE(user_id)`。
-- **删除策略理由**：清单与用户 1:1 从属，删用户后清单无独立价值；MVP 不做用户删除（X8），级联为防御。
-- **索引**：`uk_list_user`（唯一 user_id）→ 按用户取清单 / 首次自动创建，兼作单清单约束。
-- **状态**：无独立状态列。PRD §4.2 的"可见性"**由 `share_tokens.is_active` 派生**（有生效令牌 = 链接可见），避免两处状态漂移。
-- **关系**：1:1 `users`；1:N `share_tokens`；逻辑 1:N `favorite_items`（经 `user_id` 代理）。
+- **主/外键**：PK `id`；FK `user_id → users.id`，`ON DELETE CASCADE`。
+- **唯一约束技巧**：`UNIQUE(user_id, is_default)`——默认行 `is_default=1`，普通行 `is_default=NULL`，
+  MySQL 唯一索引允许多个 NULL，因此同一用户可建多个普通清单，但默认清单只能有一个。
+- **删除策略理由**：清单与用户从属，删用户后清单无独立价值；MVP 不做用户删除（X8），级联为防御。
+  业务删除仅允许非默认清单，条目先迁入默认清单再删清单（API §4.4.5）。
+- **索引**：`idx_list_user`(user_id) → 按用户取清单，兼作外键索引；`uk_list_user_default`(user_id, is_default) → 每用户唯一默认清单。
+- **状态**：无独立状态列。PRD §4.2 的"可见性"**由 `share_tokens.is_active` 派生**。
+- **关系**：N:1 `users`；1:N `share_tokens`；1:N `favorite_items`（经 `list_id`）。
 
 ### 4.5 `favorite_items` — 收藏条目 + 品鉴笔记
 
@@ -229,16 +269,18 @@ erDiagram
 | 字段 | 类型 | NULL | 默认 | 约束/说明 |
 |---|---|---|---|---|
 | `id` | INT UNSIGNED | 否 | AUTO_INCREMENT | 主键 |
-| `user_id` | INT UNSIGNED | 否 | — | 收藏人 |
+| `list_id` | INT UNSIGNED | 否 | — | 所属清单（S9） |
+| `user_id` | INT UNSIGNED | 否 | — | 收藏人（冗余，跨清单去重与统计） |
 | `tea_id` | INT UNSIGNED | 否 | — | 被收藏茶 |
-| `tasting_note` | TEXT | 是 | NULL | 私有笔记，NULL = 未写 |
+| `tasting_note` | TEXT | 是 | NULL | 私有笔记，NULL = 未写（按清单条目独立） |
 | `created_at` | DATETIME | 否 | CURRENT_TIMESTAMP | 收藏时间（FR-5.2 排序） |
 
-- **主/外键**：PK `id`；FK `user_id → users.id` CASCADE；FK `tea_id → teas.id` CASCADE。理由：关联事实依赖双方存在；MVP 不物理删用户/茶，级联不触发。
-- **索引**：`uk_favorite_user_tea`（唯一 user_id+tea_id）→ 防重复与状态查询；`idx_favorite_user_created`(user_id, created_at) → 清单按时间倒序；`idx_favorite_tea`(tea_id) → 外键级联与按茶重算。
-- **状态**：无（行存在即已收藏）。
-- **关系**：N:1 `users`；N:1 `teas`；即 `users` ↔ `teas` 的 N:N 关联表。
-- **MVP 取舍**：不挂 `list_id`。一人一清单时 `user_id` 与清单一一对应，可省一次 join 与前置查询；S9 多清单时再补列并回填（有意延后，非遗漏）。
+- **主/外键**：PK `id`；FK `list_id → collection_lists.id` CASCADE；FK `user_id → users.id` CASCADE；FK `tea_id → teas.id` CASCADE。
+  删清单时 DB 级联清空残留条目（业务层已先迁移，正常路径不会触发）。
+- **索引**：`uk_favorite_list_tea`（唯一 list_id+tea_id）→ 防同一清单内重复；`idx_favorite_list_created`(list_id, created_at) → 清单条目倒序；`idx_favorite_user_created`(user_id, created_at) → 用户维度查询；`idx_favorite_tea`(tea_id) → 外键级联与按茶重算；`idx_favorite_created_tea`(created_at, tea_id) → S17 近 7 天热度统计。
+- **状态**：无（行存在即在清单中）。
+- **关系**：N:1 `collection_lists`；N:1 `users`；N:1 `teas`。
+- **跨清单去重**：同一茶品可加入多个清单（多条行），但 `teas.favorite_count` 只在用户首次收藏时 +1、最后一条移除时 −1。
 
 ### 4.6 `share_tokens` — 分享令牌
 
@@ -284,6 +326,66 @@ erDiagram
 
 ---
 
+### 4.8 `login_attempts` — 登录失败记录（S14）
+
+- **业务用途**：登录失败锁定依据（用户名 + IP 双维度），不参与任何对外接口输出。
+- **字段**：
+
+| 字段 | 类型 | NULL | 默认 | 约束/说明 |
+|---|---|---|---|---|
+| `id` | INT UNSIGNED | 否 | AUTO_INCREMENT | 主键 |
+| `username` | VARCHAR(32) | 否 | — | 失败尝试的输入值（含不存在的用户名） |
+| `ip` | VARCHAR(45) | 否 | — | 客户端 IP（`request.client.host`，兼容 IPv6） |
+| `failed_at` | DATETIME | 否 | CURRENT_TIMESTAMP | 失败时间 |
+
+- **主/外键**：PK `id`；**不建外键**（用户名可能是任意输入，且记录需独立于账号生命周期）。
+- **索引**：`idx_login_attempt_username`(username, failed_at) → 用户名维度窗口计数；`idx_login_attempt_ip`(ip, failed_at) → IP 维度窗口计数。
+- **状态与清理**：只记录失败，不记录密码明文；每次登录顺带删除 24 小时前记录；成功登录删除该用户名的记录（IP 维度保留至自然过期）。
+- **锁定规则**：15 分钟窗口内同一用户名或同一 IP 失败 ≥ 5 次 → 拒绝登录并返回 `42900`；窗口滚动过期后自动解锁。
+
+---
+
+### 4.9 `contributions` — 用户贡献提交与审核（S10–S13）
+
+- **业务用途**：保存用户提交的新茶 / 科普投稿及其审核状态，是审核后台与“我的提交”的唯一数据源。
+- **字段**：
+
+| 字段 | 类型 | NULL | 默认 | 约束/说明 |
+|---|---|---|---|---|
+| `id` | INT UNSIGNED | 否 | AUTO_INCREMENT | 主键 |
+| `user_id` | INT UNSIGNED | 否 | — | 提交者，FK `users.id` ON DELETE CASCADE |
+| `type` | ENUM('new_tea','article') | 否 | — | 提交类型 |
+| `target_tea_id` | INT UNSIGNED | 是 | NULL | 科普投稿目标茶品，FK `teas.id` ON DELETE SET NULL；new_tea 为 NULL |
+| `payload` | JSON | 否 | — | 结构化内容：new_tea 存茶品字段；article 存 `{title, content}` |
+| `status` | ENUM('pending','approved','rejected') | 否 | 'pending' | 单向流转，不回流 |
+| `reject_reason` | VARCHAR(200) | 是 | NULL | 仅 rejected 有值，回传用户端 |
+| `reviewer_id` | INT UNSIGNED | 是 | NULL | 审核管理员，FK `users.id` ON DELETE SET NULL |
+| `reviewed_at` | DATETIME | 是 | NULL | 审核时间（UTC） |
+| `created_at` | DATETIME | 否 | CURRENT_TIMESTAMP | 提交时间（UTC） |
+
+- **主/外键**：PK `id`；FK `user_id`、`reviewer_id`、`target_tea_id`。
+- **索引**：`idx_contrib_user_status`(user_id, status) → “我的提交”与用户在审数；`idx_contrib_status_created`(status, created_at) → 审核队列默认 pending 倒序。
+- **状态规则**：仅 `pending` 可被删除、通过、拒绝；`approved` / `rejected` 永久保留审计，不物理删除。
+- **审核副作用**：new_tea 通过时在**同一事务**内创建 `teas`（默认上架）与可选 `tea_tips`；article 通过后由 `GET /teas/{id}` 聚合展示；两种动作均写 `operation_logs`。
+
+---
+
+### 4.10 `tea_name_category_map` — 名品-茶类映射（S10）
+
+- **业务用途**：用户提交新茶时做第一层茶类矛盾校验（如“碧螺春”必须为绿茶）。
+- **字段**：
+
+| 字段 | 类型 | NULL | 默认 | 约束/说明 |
+|---|---|---|---|---|
+| `id` | INT UNSIGNED | 否 | AUTO_INCREMENT | 主键 |
+| `name` | VARCHAR(100) | 否 | — | 名品名称，唯一 |
+| `category` | ENUM(六大茶类) | 否 | — | 该名品应有茶类 |
+
+- **索引**：`uk_name_category_name`(name) → 提交时按名称精确命中。
+- **校验规则**：命中且与用户所选茶类不一致 → `40000`；未命中则进入管理员人工审核。名称相似度查重（>90%）在应用层完成，不依赖本表。
+
+---
+
 ## 5. 索引清单
 
 | 索引名 | 表 | 字段 | 类型 | 服务的具体查询 |
@@ -293,14 +395,22 @@ erDiagram
 | `idx_teas_active_created` | teas | (is_active, created_at) | 普通 | 列表默认"最新上架"+分页 |
 | `idx_teas_active_favorite` | teas | (is_active, favorite_count) | 普通 | 首页热门前 8、列表"收藏最多" |
 | `uk_tea_tips_tea_id` | tea_tips | tea_id | 唯一 | 详情页 1:1 查询；固化 1:1 |
-| `uk_favorite_user_tea` | favorite_items | (user_id, tea_id) | 唯一 | 防重复收藏、收藏状态 |
-| `idx_favorite_user_created` | favorite_items | (user_id, created_at) | 普通 | 我的清单按收藏时间倒序 |
+| `uk_favorite_list_tea` | favorite_items | (list_id, tea_id) | 唯一 | 同一清单内防重复、清单条目查询 |
+| `idx_favorite_list_created` | favorite_items | (list_id, created_at) | 普通 | 清单条目按收藏时间倒序 |
+| `idx_favorite_user_created` | favorite_items | (user_id, created_at) | 普通 | 用户维度收藏查询、外键索引 |
 | `idx_favorite_tea` | favorite_items | tea_id | 普通 | 外键级联、按茶重算计数 |
-| `uk_list_user` | collection_lists | user_id | 唯一 | 取用户清单、首次创建；固化单清单 |
+| `idx_favorite_created_tea` | favorite_items | (created_at, tea_id) | 普通 | S17 近 7 天收藏热度统计 |
+| `uk_list_user_default` | collection_lists | (user_id, is_default) | 唯一 | 每用户唯一默认清单（普通行 is_default=NULL） |
+| `idx_list_user` | collection_lists | user_id | 普通 | 取用户全部清单、外键索引 |
 | `uk_share_token` | share_tokens | token | 唯一 | `/c/{token}`、撤销定位 |
 | `idx_share_list_active` | share_tokens | (list_id, is_active) | 普通 | 清单是否已有生效分享 |
 | `idx_oplog_created` | operation_logs | created_at | 普通 | 后台最近操作倒序 |
 | `idx_oplog_user` | operation_logs | user_id | 普通 | 外键；按操作人过滤 |
+| `idx_login_attempt_username` | login_attempts | (username, failed_at) | 普通 | S14 用户名维度窗口计数 |
+| `idx_login_attempt_ip` | login_attempts | (ip, failed_at) | 普通 | S14 IP 维度窗口计数 |
+| `idx_contrib_user_status` | contributions | (user_id, status) | 普通 | 我的提交、用户在审数量 |
+| `idx_contrib_status_created` | contributions | (status, created_at) | 普通 | 审核队列按状态倒序分页 |
+| `uk_name_category_name` | tea_name_category_map | name | 唯一 | 提交时按名称精确命中茶类 |
 
 **明确不建的索引**：
 
@@ -318,13 +428,13 @@ erDiagram
 
 ## 6. 关键机制
 
-### 6.1 单清单与收藏数量
+### 6.1 多清单与收藏数量
 
-- 一个用户 **1 个清单**（MVP）、**收藏数不设上限**（实际上限 = 在架茶品数）。
-- 单清单采用**双保险**：
-  - DB：`UNIQUE(collection_lists.user_id)` 是硬约束，并发"首次创建"只有一次成功；
-  - 服务层：`get_or_create` 幂等创建默认清单，唯一冲突转为"已存在"而非 500。
-- 只靠任一方都有缺口：无索引会并发双写；无服务层则首次访问直接抛 409。
+- 一个用户 **1 个默认清单 + 最多 9 个普通清单**（共 10 个，服务层校验）；**收藏数不设上限**（实际上限 = 在架茶品数）。
+- 默认清单采用**双保险**：
+  - DB：`UNIQUE(user_id, is_default)` 是硬约束（普通行 `is_default=NULL`），并发"首次创建"只有一次成功；
+  - 服务层：`get_or_create_default_list` 幂等创建，唯一冲突/死锁回滚后重查，转为"已存在"而非 500。
+- 删除普通清单时，条目先迁入默认清单并合并重复茶品笔记，再删除清单；默认清单不可删除。
 
 ### 6.2 收藏计数（`teas.favorite_count`）
 
@@ -332,15 +442,16 @@ erDiagram
   - 卡片 ❤️ N 需逐条聚合；"收藏最多"要求聚合值参与排序；MySQL 5.7 无窗口函数，只能子查询/临时表，代价更高；
   - 冗余列可直接走 `(is_active, favorite_count)` 索引取前 N 条。
 - 一致性维护：
-  1. 收藏/取消与计数变更**同事务**；新增 +1，删除 −1，递减做下限保护；
-  2. 唯一索引保证重复点击不重复计数；
-  3. 提供**对账重算**能力（按 `favorite_items` 分组重算），作为运维脚本/后台命令，**不进请求链路**。
+  1. 收藏/取消与计数变更**同事务**；`favorite_count` 按「用户 × 茶品」跨清单去重：首次收藏 +1、最后一条移除 −1，递减做下限保护；
+  2. 唯一索引 `(list_id, tea_id)` 保证同一清单内重复点击不重复计数；
+  3. 提供**对账重算**能力（按 `favorite_items` 去重分组重算），作为运维脚本/后台命令，**不进请求链路**。
 
 ### 6.3 防重复收藏与一键收藏
 
-- 硬约束 `UNIQUE(user_id, tea_id)`；并发下只有一个写入成功。
-- 单条：服务层先查状态决定 toggle 方向，写入撞唯一冲突时按"已存在"幂等处理。
-- 一键收藏（FR-5.6）：取分享清单在架茶品 → 查当前用户已收藏集合 → **求差集 → 批量插入 → 只对差集计数 +N** → 返回 `added` / `skipped`。
+- 硬约束 `UNIQUE(list_id, tea_id)`；同一清单内并发只有一个写入成功。
+- 单条：服务层先查清单内状态决定 toggle 方向，写入撞唯一冲突时按"已存在"幂等处理。
+- 同一茶品可存在于多个清单，但跨清单只计一次 `favorite_count`（首次 +1、最后一条移除 −1）。
+- 一键收藏（FR-5.6）：取分享清单在架茶品 → 查当前用户**跨全部清单**已收藏集合 → **求差集 → 批量插入默认清单 → 只对差集计数 +N** → 返回 `added` / `skipped`。
 - 不使用 `INSERT IGNORE`：它会把外键缺失等错误一并降级为警告。先差集 + 唯一索引兜底最清晰。
 - 所有者不得一键收藏自己的清单（服务层按 `list.user_id != current_user.id` 判断）。
 
@@ -380,7 +491,7 @@ erDiagram
 **不建"茶类字典表"的理由**：
 1. 六大茶类是**不变的产品契约**，字典表的核心价值（后台可维护选项）不存在；
 2. 需要额外 join、CRUD 界面与缓存，而展示名/颜色本来就由前端 token 控制，字典表无法替代；
-3. 会突破 TECH_STACK §2.1 的 8 张表基线（新增 PRD 没有的业务表）；
+3. 会突破当前 11 张表基线（v1.4 起，新增 PRD 没有且未经确认的业务表）；
 4. MySQL 5.7 无有效 CHECK，ENUM 是**唯一能落地的 DB 级枚举约束**；字典表仍需应用层校验，并不更强；
 5. 代价（如实承认）：ENUM 加值需 DDL，但上述集合预期变更频率≈0；价格档位已用 VARCHAR 规避。
 
@@ -395,7 +506,7 @@ erDiagram
 | **DATETIME vs TIMESTAMP** | 统一 DATETIME：无 2038 限制、无会话时区隐式转换；TIMESTAMP 会与 UTC 写入叠加造成双重转换 |
 | **数值精度** | 三个冲泡参考值用 DECIMAL(4,1)，避免 FLOAT 的二进制近似导致的展示误差 |
 | **主键/引擎** | INT UNSIGNED AUTO_INCREMENT；InnoDB（事务、外键、行锁） |
-| **JSON** | 5.7 支持，但 MVP 不需要；`detail` 用 VARCHAR 摘要，避免把文档字段当结构用 |
+| **JSON** | 5.7 支持；`contributions.payload` 为结构化投稿内容，是**有意使用 JSON** 的唯一场景（字段随 type 变化，不参与索引与 join）；其余表仍避免把文档字段当结构用 |
 | **大小写** | `username` 大小写不敏感（uni_ci）是期望行为（"TeaFan" ≡ "teafan"）；`token` 必须敏感 |
 
 ### 7.3 时间字段策略
@@ -432,9 +543,14 @@ erDiagram
 | C9 | 新增模型 | `CollectionList`、`OperationLog` 并注册到 `models/__init__.py` | 新增表 |
 | C10 | `favorite_items` | 结构不变（保留 `user_id` + `tasting_note`） | 无 |
 | C11 | `tea_tips` | 不变 | 无 |
-| C12 | `users` | 不新增 `level` | 无（S15 第二阶段） |
+| C12 | `users` | 不新增 `level` | 无（S15 改为实时计算，见 v1.2） |
+| C13 | `login_attempts` | 新增表（S14，0004 迁移） | 登录服务 + 认证路由；API 契约新增 `42900` |
+| C14 | `teas` / `tea_tips` / `favorite_items` | 批次一字段与索引（S2/S7/S17，0003 迁移） | 列表筛选/小贴士/热度查询 |
+| C15 | `collection_lists` / `favorite_items` | S9 多清单：增 `is_default` 与 `list_id`，唯一键改为清单内唯一（0005 迁移） | 清单 CRUD、收藏归属、跨清单去重 |
+| C16 | `contributions` | 新增表（S10–S13，0006 迁移）：JSON payload + 三态审核 | 贡献提交、审核后台、我的提交、详情科普聚合 |
+| C17 | `tea_name_category_map` | 新增表（S10，0006 迁移）：名品-茶类映射种子 22 条 | 提交时第一层茶类矛盾校验 |
 
-**注意**：`share_tokens` 与 `favorite_items` 的所有者关系不同——分享挂 `list_id`，收藏挂 `user_id`。前者因分享是"清单"的外部能力；后者因 MVP 单清单可用 `user_id` 代理，减少一次 join。二者并非不一致，而是有意取舍。
+**注意**：`share_tokens` 与 `favorite_items` 均通过 `list_id` 归属到具体清单，`favorite_items.user_id` 作为冗余列保留，用于跨清单去重与用户维度统计（S15/S16/S17）；`teas.favorite_count` 按「用户 × 茶品」去重维护。
 
 ---
 
@@ -446,6 +562,7 @@ erDiagram
 | 示例茶品 | 6 | 六大茶类各一款，字段完整，主图使用外链 CDN |
 | 官方小贴士 | 6 组 | 按 FR-6.4，未写的区块留 NULL 供前端隐藏 |
 | 清单 / 收藏 / 令牌 / 日志 | 0 | 由运行时行为产生；默认清单在用户首次访问时自动创建 |
+| 名品-茶类映射 | 22 | 六大茶类常见名品，供 S10 第一层校验；由 0006 迁移与 `init.sql` 同步写入 |
 
 > `teas.favorite_count` 种子值为**演示热度**（取自原型 mock），与 `favorite_items` 实际行数不相等。正式环境可由对账重算归零，或在后台维护时逐步校准。这是有意的演示数据取舍，不是约束缺陷。
 
@@ -459,7 +576,9 @@ erDiagram
 | S10/S11 用户投稿 | 新建 `tea_submissions`（表外），`teas` 增 `source`/`created_by` | 不动现有表语义 |
 | S12 管理员审核 | 新建审核队列表，或 `tea_submissions` 加状态机 | 不与 `operation_logs` 混用 |
 | S7 小贴士预览 / 富文本 | `tea_tips` 文本列扩展为富文本存储 | 列类型不变 |
-| 等级 S15 | `users` 增 `level` 列 | MVP 不建 |
+| ~~等级 S15~~ | ✅ **已落地**（v1.2）：按收藏数实时计算，**不建 `level` 列** | 见 §4.1 注释与 API §4.7.1 |
+| ~~S4 图片集~~ | ✅ **已落地**（v1.1，`tea_media` 表，0002 迁移） | 见 §4.3.1 |
+| ~~S5 详情页视频~~ | ✅ **已落地**（v1.1，`teas.video_url`/`video_duration`，0002 迁移） | 见 §4.2 |
 
 ---
 
@@ -469,3 +588,7 @@ erDiagram
 |---|---|---|
 | v0.1（方案稿） | 2026-11-06 | 基线核查 + 7 表方案 + 5 条重点检查 + 12 项待确认 |
 | **v1.0** | 2026-11-06 | 确认全部推荐项；产出 `init.sql`；同步 ORM 模型与 ARCHITECTURE / MODULE_DESIGN |
+| **v1.1** | 2026-11-09 | ADR-0003 内容扩展落地：`teas` 增 `video_url`/`video_duration`（S5）；新增 `tea_media` 表（S4 图片集）；Alembic 接管版本链（0001 基线 + 0002 迁移） |
+| **v1.2** | 2026-11-09 | 批次一/二：`teas` 增 `price_min`/`price_max`（S2）、`tea_tips` 增时间戳（S7）、新增 `favorite_items(created_at, tea_id)` 索引（S17）；新增 `login_attempts` 表（S14，0004 迁移）；共 9 张表 |
+| **v1.3** | 2026-11-09 | 批次三 S9 多收藏清单（0005 迁移）：`collection_lists` 去 `uk_list_user`、增 `is_default` + `uk_list_user_default` + `idx_list_user`；`favorite_items` 增 `list_id`，唯一键改 `uk_favorite_list_tea`，新增 `idx_favorite_list_created` 与清单外键；`favorite_count` 改为跨清单去重 |
+| **v1.4** | 2026-11-09 | 批次四 S10–S13（0006 迁移）：新增 `contributions`（JSON payload + pending/approved/rejected）与 `tea_name_category_map`（22 条种子）；共 11 张表 |

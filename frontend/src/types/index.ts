@@ -38,6 +38,23 @@ export interface RegisterPayload {
   password: string
 }
 
+/** 用户等级（S15 / API_CONTRACT §4.7.1）：四档，按收藏数实时计算 */
+export interface UserLevel {
+  name: '茶客' | '茶友' | '茶人' | '茶师'
+  index: number // 1-4
+  next_name: string | null
+  next_threshold: number | null
+  remaining: number
+}
+
+/** 当前用户统计（S15） */
+export interface UserStats {
+  favorite_count: number
+  note_count: number
+  share_count: number
+  level: UserLevel
+}
+
 // ===== 茶品 =====
 export type TeaCategory = 'green' | 'white' | 'yellow' | 'red' | 'oolong' | 'dark'
 
@@ -50,6 +67,9 @@ export interface Tea {
   season?: string | null
   fermentation?: string | null
   price_range?: string | null
+  /** 价格区间数值（S2 五档筛选）：元/斤，null 表示未维护 */
+  price_min?: number | null
+  price_max?: number | null
   representative_variety?: string | null
 
   shape_desc: string
@@ -62,6 +82,12 @@ export interface Tea {
   brew_time?: number | null
 
   main_image_url?: string | null
+  /** 视频介绍（ADR-0003 S5）：null 时详情页隐藏视频区 */
+  video_url?: string | null
+  /** 视频时长（秒，≤180） */
+  video_duration?: number | null
+  /** 图片集（ADR-0003 S4）：按 sort_order 升序，最多 9 条 */
+  image_set?: string[]
   is_active: boolean
   favorite_count: number
 
@@ -70,8 +96,20 @@ export interface Tea {
   tips_misconception?: string | null
   tips_official_note?: string | null
 
+  /** 已通过审核的用户科普投稿（S11 / S12），空数组由前端隐藏 */
+  contributed_articles?: TeaArticle[]
+
   created_at: string // ISO8601 UTC 带 Z
   updated_at: string
+}
+
+/** 用户科普投稿（茶品详情内展示） */
+export interface TeaArticle {
+  id: number
+  title: string | null
+  content: string
+  contributor: string
+  created_at: string
 }
 
 /** 公开列表卡片（API_CONTRACT §2.2 TeaListItem） */
@@ -111,10 +149,26 @@ export interface TeaListParams {
   category?: string // 逗号分隔多选
   origin?: string
   season?: string
+  /** 发酵程度（S2）：逗号分隔多选，枚举与后端一致 */
+  fermentation?: string
+  /** 价格下限 / 上限（元/斤，S2）：区间交集匹配 */
+  price_min?: number
+  price_max?: number
+  /** 跨维度组合方式（S1）：默认 and */
+  filter_mode?: 'and' | 'or'
   sort?: TeaSort
   keyword?: string
   page?: number
   page_size?: number
+}
+
+/** 首页最新小贴士（S7 / API_CONTRACT §4.2.9） */
+export interface LatestTipItem {
+  tea_id: number
+  tea_name: string
+  category: TeaCategory
+  summary: string
+  updated_at: string // ISO8601 UTC 带 Z
 }
 
 // ===== 收藏 =====
@@ -123,6 +177,8 @@ export interface FavoriteState {
   tea_id: number
   is_favorited: boolean
   favorite_count: number
+  /** S9 多清单：该茶所在清单 ID 列表 */
+  list_ids: number[]
 }
 
 // ===== 清单与笔记 =====
@@ -147,10 +203,22 @@ export interface ListItem {
   favorited_at: string
 }
 
-/** 我的默认清单（API_CONTRACT §4.4.1） */
+/** 清单摘要（API_CONTRACT §4.4.1） */
+export interface ListSummary {
+  id: number
+  title: string
+  is_default: boolean
+  tea_count: number
+  created_at: string
+  updated_at: string
+  share?: ListShareBrief | null
+}
+
+/** 清单详情（API_CONTRACT §4.4.2） */
 export interface ListData {
   id: number
   title: string
+  is_default: boolean
   tea_count: number
   created_at: string
   updated_at: string
@@ -161,11 +229,13 @@ export interface ListData {
 export interface TitleUpdateData {
   id: number
   title: string
+  is_default: boolean
   updated_at: string
 }
 
 export interface NoteUpdateData {
   tea_id: number
+  list_id: number
   tasting_note: string | null
 }
 
@@ -259,6 +329,9 @@ export interface AdminTeaPayload {
   tea_amount: number
   brew_time: number
   main_image_url: string
+  /** 视频（ADR-0003 S5）：仅本站 /uploads/ 路径 */
+  video_url?: string | null
+  video_duration?: number | null
 }
 
 export interface AdminTeaCreatePayload extends AdminTeaPayload {
@@ -301,4 +374,166 @@ export interface AdminUploadData {
   original_filename: string
   size: number
   content_type: string
+}
+
+/** 视频上传结果（ADR-0003 S5）：duration 为服务端解析秒数 */
+export interface AdminVideoUploadData extends AdminUploadData {
+  duration: number
+}
+
+/** 茶品图片集条目（ADR-0003 S4） */
+export interface TeaMediaItem {
+  id: number
+  image_url: string
+  sort_order: number
+}
+
+// ===== 用户贡献（S10–S13 / API_CONTRACT §4.8） =====
+export type ContributionType = 'new_tea' | 'article'
+export type ContributionStatus = 'pending' | 'approved' | 'rejected'
+
+/** 用户提交的新茶字段（主图选填，X7 不开放图片投稿） */
+export interface ContributionTeaPayload {
+  name: string
+  category: TeaCategory
+  origin: string
+  season: string | null
+  fermentation: string | null
+  price_range: string | null
+  representative_variety: string | null
+  shape_desc: string
+  soup_desc: string
+  aroma_desc: string
+  taste_desc: string
+  water_temp: number
+  tea_amount: number
+  brew_time: number
+  main_image_url: string | null
+  tips_history: string | null
+  tips_suitable: string | null
+  tips_misconception: string | null
+  tips_official_note: string | null
+}
+
+export interface ContributionCreatePayload {
+  type: ContributionType
+  tea?: ContributionTeaPayload
+  target_tea_id?: number
+  title?: string | null
+  content?: string
+}
+
+export interface ContributionItem {
+  id: number
+  type: ContributionType
+  status: ContributionStatus
+  target_tea_id: number | null
+  target_tea_name: string | null
+  payload: Record<string, unknown>
+  reject_reason: string | null
+  reviewer_id: number | null
+  reviewed_at: string | null
+  created_at: string
+  username?: string | null
+}
+
+export interface ContributionListData {
+  items: ContributionItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface ContributionListParams {
+  status?: ContributionStatus
+  type?: ContributionType
+  page?: number
+  page_size?: number
+}
+
+// ===== 内容板块（批次五 R1–R5 / API_CONTRACT §4.2.10–11） =====
+export type ContentTypeCode = 'teaware' | 'origin' | 'culture' | 'brand' | 'knowledge'
+
+/** 板块分类（API_CONTRACT §4.2.10） */
+export interface ContentTypeItem {
+  id: number
+  code: ContentTypeCode
+  name: string
+  icon: string | null
+  description: string | null
+  sort_order: number
+}
+
+/** 内容条目（前台列表/详情共用） */
+export interface ContentItem {
+  id: number
+  type_id: number
+  type_code: ContentTypeCode
+  title: string
+  summary: string | null
+  body: string | null
+  cover_image: string | null
+  meta: Record<string, unknown> | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ContentListParams {
+  type?: ContentTypeCode
+  page?: number
+  page_size?: number
+}
+
+export interface ContentListData {
+  items: ContentItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+/** 后台列表条目（含下架） */
+export interface AdminContentListItem {
+  id: number
+  type_code: ContentTypeCode
+  title: string
+  summary: string | null
+  is_active: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminContentListData {
+  items: AdminContentListItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface AdminContentListParams {
+  type?: ContentTypeCode
+  is_active?: boolean
+  page?: number
+  page_size?: number
+}
+
+export interface AdminContentCreatePayload {
+  type_code: ContentTypeCode
+  title: string
+  summary?: string | null
+  body?: string | null
+  cover_image?: string | null
+  meta?: Record<string, unknown> | null
+  sort_order?: number
+}
+
+export interface AdminContentUpdatePayload {
+  title?: string
+  summary?: string | null
+  body?: string | null
+  cover_image?: string | null
+  meta?: Record<string, unknown> | null
+  sort_order?: number
+  is_active?: boolean
 }

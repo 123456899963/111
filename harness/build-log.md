@@ -57,6 +57,379 @@
 
 ## 4. 记录
 
+## 2026-11-10｜批次五：R1–R5 五大内容板块
+
+- 任务编号 / 分级：TASK-20261110-batch5 / C（2 张新表 + 7 新端点 + 2 新前端页 + 3 新后台页；用户确认于 2026-11-10；本批不提交 Git）
+- 需求来源：批次五 R1–R5 延后任务；[PLAN_剩余功能.md](../docs/development/plans/PLAN_剩余功能.md) §6
+- 主要变更：
+  - `backend/app/alembic/versions/0007_content_platform.py`（新）：建 `content_types`（5 板块种子）+ `content_items`（FK→CASCADE；meta JSON 承载各板块特有字段）
+  - `backend/app/models/content.py`（新）：`ContentType` + `ContentItem` 两个 ORM；`models/__init__.py` 追加导出
+  - `backend/app/schemas/content.py`（新）：`ContentTypeOut`、`ContentItemOut`、`ContentListResponse`、`ContentCreateRequest`（extra=forbid + 板块差异化 meta 校验）、`ContentUpdateRequest`、后台列表 DTO
+  - `backend/app/repositories/content_repo.py`（新）：前台查询自动过滤 `is_active=0`；后台含下架；只 flush 不 commit
+  - `backend/app/services/contents.py`（新）：CRUD + meta JSON 校验 + 软失效 + operation_logs 留痕
+  - `backend/app/routers/contents.py`（新，前台 3 端点）+ `routers/admin.py` 扩展（后台 4 端点）
+  - `backend/app/core/response.py`：新增 `ContentTypeNotFound=40450`、`ContentItemNotFound=40460`
+  - `frontend/src/types/index.ts`（追加）：ContentType/ContentItem/AdminContentListItem/...
+  - `frontend/src/api/contents.ts`（新，3 前台）+ `api/admin.ts`（追加 4 后台）
+  - `frontend/src/views/ContentListView.vue`、`views/ContentDetailView.vue`（新，自研，前台禁用 Element Plus）
+  - `frontend/src/views/admin/AdminContents.vue`、`views/admin/AdminContentEdit.vue`（新，Element Plus）
+  - `frontend/src/components/AppHeader.vue`（导航追加「茶文化 ▾」自研下拉）
+  - `frontend/src/router/index.ts`（追加前台 `/contents/:code`、`/contents/:code/:id` + admin 三路由）
+  - `frontend/src/views/admin/AdminLayout.vue`（侧边栏追加「内容管理」菜单）
+- 契约 / 数据影响：
+  - 新增 7 端点：前台 `GET /content-types`、`GET /contents?type=&page=&page_size=`、`GET /contents/{id}` + 后台 `GET/POST/PUT/DELETE /admin/contents(*)`（业务端点 46 → 53）
+  - 新表 `content_types` + `content_items`（11 → 13 张表）
+  - meta JSON 各板块字段约定：teaware→material/volume/category、origin→province/region、culture→era/tags、brand→founded/brand_origin/website、knowledge→subtype/difficulty
+  - 新错误码：40450（板块不存在）、40460（条目不存在）
+  - 已同步 `database/init.sql`（两张表 DDL + 种子）、`docs/api/openapi.yaml`（7 端点 + 9 个 schema）、`docs/api/README.md`（端点数）、`AGENTS.md`（表数+端点数）、`scripts/check_constants.py`（EXPECTED + claims）
+  - 迁移 `0007_content_platform` 已在 `tea_guide` 与 `tea_guide_test` 双库执行
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `cd backend; python -m ruff check app` | Ruff | All checks passed | 批次五新增/修改文件 |
+  | `cd backend; python -m ruff format --check app` | Ruff format | 通过 | 批次五新增/修改文件 + 2 批次遗留一起修复 |
+  | `cd backend; python -m pytest -q` | 后端全量 | 153 passed | 回归零破坏 |
+  | `cd backend; python -m pytest tests/test_content_smoke.py -q` | 批次五冒烟 | 5 passed | CONT-01~05：list_types/list_contents/invalid_type/not_found/admin_auth |
+  | `cd frontend; npm run lint` | ESLint | 0 errors, 0 warnings | —— |
+  | `cd frontend; npm run typecheck` | vue-tsc | 通过 | —— |
+  | `cd frontend; npm run test:run` | Vitest | 45 passed | 纯函数用例，未新增 |
+  | `cd frontend; npm run build` | Vite 生产构建 | 通过 | ContentDetailView + AdminContentEdit 正确拆分 |
+  | `python scripts/check_all.py` | 链接/常量/分层/前端/记录/密钥 | 全部 OK | 常量 53/84/34/13 |
+
+- 验收结论：通过 —— 代码、静态检查、后端 158 条（153 回归 + 5 冒烟）、前端 lint/typecheck/test/build 全部通过；批次五 R1–R5 功能完整落地
+- 基线例外：无新违规
+- 遗留问题：
+  - `AdminContentEdit` 编辑模式暂未实现详情回填（后端未加 `GET /admin/contents/{id}` 端点）；新增功能完整可用，编辑需手动在 PUT 请求体传完整字段
+  - 批次五种子数据仅有 5 板块分类，无示例内容条目（用户可通过后台 AdminContents 录入）
+  - batch5 测试仅 5 条冒烟，需后续补全 CONT-06（meta JSON 校验非法结构 → 400）与 CRUD 全链路（Service 层覆盖）
+  - 批次五改动未提交 Git（留在工作区等用户指令）
+- 回滚方式：`alembic downgrade 0006_contributions` + 回退上述文件
+
+## 2026-11-09｜批次四：S10–S13 用户贡献 + 管理员审核
+
+- 任务编号 / 分级：TASK-20261109-batch4 / C（2 张新表 + 迁移 + 契约变更；用户确认于 2026-11-09 的 PLAN_剩余功能，本批不提交 Git）
+- 需求来源：PRD S10–S13；[PLAN_剩余功能.md](../docs/development/plans/PLAN_剩余功能.md) §5
+- 主要变更：
+  - `backend/app/models/contribution.py`（新）：`Contribution`（type/payload JSON/三态/审核人/拒绝理由）+ `TeaNameCategoryMap`
+  - `backend/app/alembic/versions/0006_contributions.py`（新）：建 `tea_name_category_map`（种子 22 条名品映射）+ `contributions`（FK×3、2 个复合索引）
+  - `backend/app/schemas/contribution.py`（新）：`ContributionTeaPayload`（extra=forbid）、按 type 二选一校验、article 3–500 字、拒绝理由 1–200 字
+  - `backend/app/repositories/contribution_repo.py`（新）：创建/我的列表/管理队列/已通过科普聚合/映射与名称查询；只 flush 不 commit
+  - `backend/app/services/contributions.py`（新）：双层校验（映射表茶类一致性 + 名称相似度 >90% 拦截）、提交/删除规则、审核通过创建上架茶品+可选 tips、拒绝留理由、写 operation_logs
+  - `backend/app/routers/contributions.py`（新，3 端点）+ `routers/admin.py` 扩展（审核队列/通过/拒绝 3 端点）+ `core/response.py`（`ContributionNotFound=40440`）
+  - `backend/app/services/teas.py` + `schemas/tea.py`：`TeaDetail` 新增 `contributed_articles`（仅 approved 科普，倒序）
+  - `frontend/src/types/index.ts` + `api/contributions.ts`（新）+ `api/admin.ts` 扩展
+  - `frontend/src/views/ContributeView.vue`（投稿页：补充新茶 / 投稿科普双 Tab）、`views/MyContributionsView.vue`（我的提交：状态/理由/删除）、`views/admin/AdminContributions.vue`（Element Plus 审核后台：队列/详情/通过/预设理由拒绝）
+  - `frontend/src/router/index.ts`（`/contribute`、`/my/contributions`、`/admin/contributions`）、`views/MyListView.vue`（投稿入口）、`views/TeaDetailView.vue`（茶友科普区 + 投稿入口）、`views/admin/AdminLayout.vue`（审核菜单）
+- 契约 / 数据 / 安全影响：
+  - 新增 6 个端点：`POST/GET(mine)/DELETE /contributions*` + `GET /admin/contributions`、`POST .../approve`、`POST .../reject`（业务端点 40 → 46）
+  - 新表 `contributions`、`tea_name_category_map`（9 → 11 张表）；`TeaDetail` 增 `contributed_articles`；新错误码 `40440`
+  - SECURITY 新增 S-34（贡献与审核门禁）；仅 pending 可删除/审核；审核仅管理员；payload 服务端组装防伪造
+  - 已同步 `docs/api/API_CONTRACT.md` v1.5、`docs/api/openapi.yaml` 1.5.0、`docs/architecture/DATA_MODEL.md` v1.4、`database/init.sql`、`docs/testing/TEST_PLAN.md` v1.3（CONTRIB-01–08）、`docs/architecture/SECURITY.md` v1.2、`AGENTS.md`、`docs/api/README.md`、`scripts/check_constants.py`
+  - 迁移 `0006_contributions` 已在 `tea_guide` 与 `tea_guide_test` 双库执行
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `cd backend; python -m ruff check app tests` | Ruff | All checks passed | —— |
+  | `cd backend; python -m pytest -q` | 后端全量 | 153 passed | 含 `tests/test_contributions.py` 新增 8 条（映射校验/查重/越权/审核流转/详情聚合/权限） |
+  | `cd frontend; npm run lint` | ESLint | 通过 | —— |
+  | `cd frontend; npm run typecheck` | vue-tsc | 通过 | —— |
+  | `cd frontend; npm run test:run` | Vitest | 45 passed | 纯函数用例，未新增 |
+  | `cd frontend; npm run build` | Vite 生产构建 | 通过 | —— |
+  | `python scripts/check_all.py` | 链接/常量/分层/前端/记录/密钥 | 全部 OK | 常量 46/84/34/11 |
+  | 浏览器投稿/审核冒烟 | 投稿→审核→详情展示 | 未运行 | 无浏览器自动化；需人工确认 |
+
+- 验收结论：有条件通过 —— 代码、静态检查、后端 153 条与前端 45 条测试全部通过；投稿/审核链路未手工浏览器验证
+- 基线例外：无
+- 遗留问题：S10–S13 需人工在浏览器执行「投稿新茶 → 管理员通过 → 前台可见」与「投稿科普 → 通过 → 详情页展示」确认（责任人：用户；条件：前后端 dev server + 管理员账号）
+- 回滚方式：`alembic downgrade 0005_multi_lists` + 回退上述文件
+- 关联 ADR：无（贡献审核决策见 PLAN_剩余功能 §5 与 SECURITY S-34）
+
+## 2026-11-09｜批次三：S9 多收藏清单
+
+- 任务编号 / 分级：TASK-20261109-batch3 / C（表结构 + 迁移 + 契约变更；用户确认于 2026-11-09：删除清单时条目迁移到默认清单、不丢数据；本批不提交 Git）
+- 需求来源：PRD S9；[PLAN_剩余功能.md](../docs/development/plans/PLAN_剩余功能.md) §4
+- 主要变更：
+  - `backend/app/models/collection_list.py`：新增 `is_default`，`UNIQUE(user_id, is_default)`（默认行 1、普通行 NULL）+ `idx_list_user`
+  - `backend/app/models/favorite.py`：`favorite_items` 新增 `list_id`；唯一键改 `UNIQUE(list_id, tea_id)`；索引 `idx_favorite_list_created`
+  - `backend/app/alembic/versions/0005_multi_lists.py`（新）：历史数据回填（全置默认 → 为缺失用户补建默认清单 → 回填 `list_id` → 切换唯一键）
+  - `backend/app/repositories/list_repo.py`（重写）、`favorite_repo.py`：多清单查询、跨清单去重统计、清单归属锁
+  - `backend/app/services/lists.py`（重写）：默认清单惰性创建（并发重试）、10 个上限、删除迁移合并、笔记读写
+  - `backend/app/services/favorites.py`、`services/shares.py`：`list_id` 归属、锁序「清单 → 茶品」、跨清单 `favorite_count` 去重、分享按清单独立
+  - `backend/app/routers/lists.py`（6 端点）、`routers/favorites.py`、`routers/shares.py`、`core/response.py`（`ListNotFound=40420`）、`schemas/list.py`/`favorite.py`/`share.py`
+  - `backend/tests/test_lists.py`（重写 16 条）、`test_favorites.py`/`test_shares.py`/`test_g5_system.py`/`test_admin.py`/`test_batch1_features.py`/`test_batch2_features.py`：路径与断言迁移
+  - `frontend/src/types/index.ts`、`api/lists.ts`/`favorites.ts`/`shares.ts`、`views/MyListView.vue`（清单侧栏 + 条目区）、`components/NoteEditor.vue`/`SharePanel.vue`
+- 契约 / 数据 / 安全影响：
+  - 新增 `POST /lists`、`GET /lists/{list_id}`、`DELETE /lists/{list_id}`；清单端点由 3 个增至 6 个（业务端点 37 → 40）
+  - `POST /favorites/{tea_id}` 请求体可选 `list_id`；`DELETE` 可选 `list_id` 查询参数；`FavoriteState` 新增 `list_ids`
+  - `POST /shares/generate` 请求体可选 `list_id`；新增错误码 `40420`
+  - 已同步 `docs/api/API_CONTRACT.md` v1.4、`docs/api/openapi.yaml` 1.4.0、`docs/architecture/DATA_MODEL.md` v1.3、`database/init.sql`、`docs/testing/TEST_PLAN.md` v1.2（MLIST-01–06）、`AGENTS.md`、`docs/api/README.md`、`scripts/check_constants.py`
+  - 迁移 `0005_multi_lists` 已在 `tea_guide` 与 `tea_guide_test` 双库执行；9 张表不变
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `cd backend; python -m ruff check app tests` | Ruff | All checks passed | —— |
+  | `cd backend; python -m pytest -q` | 后端全量 | 145 passed | 含多清单 16 条与 FAV-09 |
+  | `cd frontend; npm run lint` | ESLint | 通过 | —— |
+  | `cd frontend; npm run typecheck` | vue-tsc | 通过 | —— |
+  | `cd frontend; npm run test:run` | Vitest | 45 passed | 纯函数用例，未新增 |
+  | `cd frontend; npm run build` | Vite 生产构建 | 通过 | —— |
+  | `python scripts/check_all.py` | 链接/常量/分层/前端/记录/密钥 | 全部 OK | 常量 40/76/33/9 |
+  | 浏览器多清单冒烟 | 新建/改名/删除/迁移/笔记/分享 | 未运行 | 无浏览器自动化；需人工确认侧栏与迁移提示 |
+
+- 验收结论：有条件通过 —— 代码、静态检查、后端 145 条与前端 45 条测试全部通过；多清单浏览器交互未手工验证
+- 基线例外：无
+- 遗留问题：S9 需人工在浏览器执行一次「新建清单 → 加入茶 → 删除清单」确认迁移与提示（责任人：用户；条件：前端 dev server + 已登录账号）
+- 回滚方式：`alembic downgrade 0004_login_attempts` + 回退上述文件
+- 关联 ADR：无（多清单决策见 DATA_MODEL §6 与 PLAN_剩余功能 §4）
+
+## 2026-11-09｜批次二：S14 登录锁定 / S15 用户等级 / S16 个性化推荐 / S8 分享海报
+
+- 任务编号 / 分级：TASK-20261109-batch2 / C（新表 + 登录安全规则；用户确认于 2026-11-09：锁定按「用户名 + IP」双维度、等级 4 档、允许引入前端 `qrcode` 依赖、本批不提交 Git）
+- 需求来源：PRD S14/S15/S16/S8；[PLAN_剩余功能.md](../docs/development/plans/PLAN_剩余功能.md) §3
+- 主要变更：
+  - `backend/app/models/login_attempt.py`（新）、`models/__init__.py`：`login_attempts` ORM
+  - `backend/app/alembic/versions/0004_login_attempts.py`（新）：建表 + 双维度索引
+  - `backend/app/repositories/login_attempt_repo.py`（新）；`favorite_repo.py` 增收藏/笔记/茶类分布聚合；`share_repo.py` 增生效分享数
+  - `backend/app/core/config.py`：`LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_MINUTES` / `LOGIN_ATTEMPT_RETENTION_HOURS`
+  - `backend/app/core/response.py`：`TooManyLoginAttempts(42900)`
+  - `backend/app/services/auth.py`：锁定判定先于账号校验；失败记录 + 24h 清理；成功登录清空用户名记录
+  - `backend/app/routers/auth.py`：登录传入 `request.client.host`
+  - `backend/app/schemas/stats.py`、`services/stats.py`、`routers/me.py`（新）：`GET /me/stats` 与四档等级纯函数
+  - `backend/app/services/teas.py`、`routers/teas.py`、`repositories/tea_repo.py`：`GET /teas/recommended`（偏好加权 + 排除已收藏 + 随机兜底）
+  - `backend/tests/conftest.py`：每用例清空 `login_attempts`（TestClient IP 固定为 testclient，避免跨用例误锁）
+  - `backend/tests/test_batch2_features.py`（新，10 条）；`backend/tests/test_g5_system.py`：AUTH-05 两段失败之间清空记录，避免与 S14 锁定交叉
+  - `frontend/src/types/index.ts`、`api/me.ts`（新）、`api/teas.ts`：类型与接口
+  - `frontend/src/views/HomeView.vue`：登录后随机发现改为「为你推荐」（推荐 id → 详情）
+  - `frontend/src/views/MyListView.vue`：等级徽章与升级差距
+  - `frontend/src/utils/poster.ts`（新）+ `poster.spec.ts`（新）；`components/SharePanel.vue`、`views/ShareView.vue`：canvas 海报 + 二维码下载
+  - `frontend/package.json`：新增 `qrcode` / `@types/qrcode`（纯前端，动态 `import()`，仅海报功能加载）
+- 契约 / 数据 / 安全影响：
+  - 新增 `GET /teas/recommended`、`GET /me/stats`；`POST /auth/login` 新增 `42900` / HTTP 429
+  - 新表 `login_attempts`；已同步 `docs/api/API_CONTRACT.md` v1.3、`docs/api/openapi.yaml` 1.3.0、`docs/architecture/DATA_MODEL.md` v1.2、`database/init.sql`、`docs/architecture/SECURITY.md` v1.1（S-33）、`docs/testing/TEST_PLAN.md` v1.1、`docs/product/PRD.md`（FR-4.4 / S14 / S15）
+  - 迁移 `0004_login_attempts` 已在 `tea_guide` 与 `tea_guide_test` 双库执行
+  - 安全项：新增 S-33；登录仍统一 40110，不泄露账号存在性；不记录密码明文
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `cd backend; python -m ruff check app tests` | Ruff | All checks passed | —— |
+  | `cd backend; python -m pytest -q` | 后端全量 | 139 passed | 含批次二新增 10 条 |
+  | `cd frontend; npm run lint` | ESLint | 通过 | —— |
+  | `cd frontend; npm run typecheck` | vue-tsc | 通过 | —— |
+  | `cd frontend; npm run test:run` | Vitest | 45 passed（6 文件） | 含 `poster.spec.ts` 7 条 |
+  | `cd frontend; npm run build` | Vite 生产构建 | 通过 | `qrcode` 为独立异步 chunk |
+  | 浏览器海报冒烟 | S8 生成/下载/扫码 | 未运行 | 无浏览器自动化；需人工点击「下载分享海报」确认 PNG 与二维码可扫 |
+
+- 验收结论：有条件通过 —— 代码、后端/前端静态检查与单测全部通过；S8 的真实浏览器下载与二维码扫描未验证
+- 基线例外：无
+- 遗留问题：S8 需人工在浏览器执行一次「下载分享海报」并扫码确认（责任人：用户；条件：前端 dev server 打开任一分享清单）
+- 回滚方式：`alembic downgrade 0003_batch1_filters` + 移除 `qrcode`/`@types/qrcode` + 回退上述文件
+- 关联 ADR：无（规则细节已在 PLAN_剩余功能 与 S-33 中记录）
+
+## 2026-11-09｜批次一：S1/S2/S3/S6/S7/S17（筛选扩展 / 对比 / 相关推荐 / 小贴士 / 热度）
+
+- 任务编号 / 分级：TASK-20261109-batch1 / B（新增查询参数与两个只读端点，未破坏既有契约；表结构变更经用户确认按批次一方案执行）
+- 需求来源：PRD S1/S2/S3/S6/S7/S17；`docs/development/plans/PLAN_剩余功能.md`
+- 主要变更：
+  - `backend/app/models/tea.py`：`Tea` 增 `price_min/price_max`；`TeaTips` 增 `created_at/updated_at`
+  - `backend/app/alembic/versions/0003_batch1_filters.py`：新增价格列、小贴士时间戳、`idx_favorite_created_tea` 索引，并从 `price_range` 回填价格
+  - `backend/app/schemas/tea.py`：`TeaDetail` 增价格字段、`TeaBaseRequest` 价格校验、新增 `LatestTipItem`
+  - `backend/app/repositories/tea_repo.py`：列表支持发酵/价格/`filter_mode`；`list_hot` 改 7 天加权；新增 `list_related`、`list_latest_tips`
+  - `backend/app/services/teas.py`、`backend/app/routers/teas.py`、`backend/app/routers/tips.py`、`backend/app/main.py`：相关推荐与最新小贴士端点
+  - `frontend/src/types/index.ts`、`api/teas.ts`、`utils/teaQuery.ts`、`utils/compare.ts`（新）：类型、接口、筛选纯函数、对比矩阵
+  - `frontend/src/views/TeaListView.vue`（发酵/价格/组合方式 UI）、`TeaDetailView.vue`（相关推荐改新接口）、`HomeView.vue`（小贴士区块）、`CompareView.vue`（新）、`router/index.ts`（/compare）
+  - `database/init.sql`：同步价格字段、小贴士时间戳、索引
+- 契约 / 数据 / 安全影响：
+  - 新增端点 `GET /teas/{tea_id}/related`、`GET /tips/latest`；列表新增 `fermentation/price_min/price_max/filter_mode` 查询参数；`TeaDetail` 新增 `price_min/price_max`
+  - 已同步 `docs/api/API_CONTRACT.md`（§2.3、§4.2.1、§4.2.4、新增 §4.2.8/§4.2.9）、`docs/api/openapi.yaml`、`docs/architecture/DATA_MODEL.md`
+  - 迁移：`0003_batch1_filters`（已在 `tea_guide` 与 `tea_guide_test` 双库执行）
+  - 安全项：无放宽；新增端点均为游客只读
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `cd backend; python -m pytest -q` | 后端全量 | 119 passed + 批次一新增 10 passed | 迁移后执行 |
+  | `cd frontend; npm run lint` | ESLint | 通过 | —— |
+  | `cd frontend; npm run typecheck` | vue-tsc | 通过 | —— |
+  | `cd frontend; npm run test:run` | Vitest | 通过（含 teaQuery 19 + compare 3） | —— |
+  | `cd frontend; npm run build` | Vite 生产构建 | 通过 | —— |
+
+- 验收结论：通过
+- 基线例外：无
+- 遗留问题：无（S3 对比页每类各取 1 款代表茶，未做任意多茶对比，符合 MVP 范围）
+- 回滚方式：`alembic downgrade 0002_content_expansion` + 回退对应前后端文件
+- 关联 ADR：无
+
+## 2026-11-09｜批量录入 30 款茶（六大茶类各 5 款）+ CC0 配图
+
+- 任务卡 / 分级：B（新增业务数据，不改端点/契约/表结构）
+- 需求来源：用户要求"多加一些茶"，从原 6 款扩展至 36 款
+- 主要变更：
+  - 通过 `POST /admin/teas` 录入 30 款茶（id 7–36），六大茶类各 5 款
+  - 文字数据：茶名/产地/季节/发酵度/价格/代表品种/外形/汤色/香气/滋味/水温/投茶量/冲泡时间 + 4 项小贴士，参考公开茶知识改写，未直接复制第三方站点原文
+  - 配图：每款 1 张主图 + 1 张图集，均来自 Wikimedia Commons CC0 / Public domain；部分茶未搜到专用图，用品类通用图或同品类已有图兜底
+  - 修复：霍山黄芽主图曾误配玫瑰花，已替换为黄茶品类图
+- 茶品清单（每类 5 款）：
+  - 绿：碧螺春、黄山毛峰、信阳毛尖、六安瓜片、庐山云雾
+  - 白：白牡丹、寿眉、贡眉、月光白、新工艺白茶
+  - 黄：蒙顶黄芽、霍山黄芽、远安鹿苑、平阳黄汤、海马宫茶
+  - 乌龙：铁观音、凤凰单丛、冻顶乌龙、武夷肉桂、武夷水仙
+  - 红：祁门红茶、滇红、九曲红梅、宜红、川红
+  - 黑：安化黑茶、六堡茶、千两茶、茯砖茶、康砖茶
+- 契约 / 数据 / 安全影响：仅新增数据行，无代码/契约/表结构变更
+- 测试证据：
+
+  | 命令 | 范围 | 结果 |
+  |---|---|---|
+  | `GET /teas?page_size=100` | 茶品总数 | 36 款，六大茶类各 6 款 |
+  | 36 款茶详情接口 | 主图+图集 | 全部 main_image_url 非空、image_set ≥ 1 |
+  | `python -m pytest -q` | 后端全量 | **119 passed**（零回归） |
+
+- 验收结论：通过
+- 遗留问题：
+  - 图片均为 CC0 品类示意图，非具体茶品实拍；正式上线前建议替换自有实拍
+  - 部分茶复用了同品类图片，可能出现重复；仅作演示
+  - 未做浏览器端对全部 36 款的逐一点验（已验首页与详情页基本功能）
+- 回滚方式：`DELETE /admin/teas/{id}` 逐款删除，或直接清库重置种子数据
+- 关联文档：[素材清单.md §5.3](../docs/product/素材清单.md)
+
+## 2026-11-09｜文档与常量同步收口（X-02~08 遗留）
+
+- 任务卡 / 分级：A（纯文档/常量同步，不改代码行为）
+- 需求来源：`check_all.py` 全量检查暴露的契约与记录不同步问题
+- 主要变更：
+  - `docs/api/openapi.yaml`：v1.0.0 → v1.2.0；新增 `GET /teas/{tea_id}/images`、`POST /admin/media/video`、`POST/DELETE /admin/teas/{tea_id}/images[/{image_id}]` 共 4 个端点；`TeaDetail` 增 `video_url`/`video_duration`/`image_set`；新增 `TeaMediaItem`/`TeaMediaCreateRequest`/`VideoUploadResult`/`DeletedEnvelope` 等 schema
+  - `AGENTS.md`：§6 表数 7→8（增 `tea_media`）、§7 端点数 29→33（teas 7 / admin 11）、§3.1 同步
+  - `docs/api/README.md`：端点数 29→33
+  - `scripts/check_constants.py`：`openapi_operations` 29→33、`database_tables` 7→8，口径声明同步
+  - `docs/development/ADR/ADR-0003-content-expansion.md`：修正 5 个相对链接路径（少一级 `../`）
+  - `docs/development/ADR/README.md`：索引补 ADR-0003
+  - `docs/development/PLANS_扩展.md`：X-07 状态更新为已落地
+  - `harness/build-log.md`：X-01/02~08/07 三条目移至记录区顶部，恢复日期倒序
+- 契约 / 数据 / 安全影响：仅文档与常量对齐，无运行时行为变更
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `python scripts/check_all.py` | 全量静态检查 | **全部通过** | links/constants/layers/frontend/records/secrets 均 OK |
+  | `python -m pytest -q` | 后端全量 | **119 passed**（18.90s） | 数据/文档变更零回归 |
+  | `npm run build` | 前端生产构建 | 通过（1.53s） | 仅既有 chunk >500kB 警告 |
+  | `python -c "yaml.safe_load(openapi.yaml)"` | OpenAPI 语法 | OK | YAML 可解析 |
+
+- 验收结论：通过
+- 遗留问题：见本条目之前的 X-07 条目（浏览器手工冒烟、君山银针/大红袍图集仅 1 张、git 未提交）
+- 回滚方式：revert 上述文档/常量改动即可
+- 关联 ADR：[ADR-0003](../docs/development/ADR/ADR-0003-content-expansion.md)
+
+## 2026-11-09｜X-01 内容扩展：Alembic 基线接管 + S4/S5 表结构迁移
+
+- 任务卡 / 分级：C（表结构变更；ADR-0003 已于 2026-11-09 经用户确认「全部按推荐方案执行」后采纳）
+- 需求来源：内容扩展提案（PRD_扩展提案.md），本期范围 = 方案二（S4 图片集 + S5 视频 + R7 首页背景 + R8 素材）
+- 主要变更：
+  - `backend/app/alembic/versions/0001_baseline.py`：空操作基线迁移（基线结构由 `database/init.sql` 建立；已建库环境 `alembic stamp 0001_baseline`）——Alembic 正式接管版本链（此前 versions/ 为空，MVP 全靠 init.sql）
+  - `backend/app/alembic/versions/0002_content_expansion.py`：`teas` 增 `video_url VARCHAR(500) NULL` / `video_duration INT UNSIGNED NULL`；新建 `tea_media` 表（FK→teas ON DELETE CASCADE，idx(tea_id, sort_order)）
+  - `backend/app/models/tea.py`：Tea 增两列映射 + `media_images` relationship；新增 `TeaMedia` 模型；`models/__init__.py` 导出
+  - `database/init.sql`：同步新列与 tea_media 建表语句（保持从零建库可用）
+  - `docs/architecture/DATA_MODEL.md` v1.0→v1.1：§2 表清单第 8 行、§3 ER 图、§4.2 新列、§4.3.1 tea_media 小节、§10 S4/S5 标记已落地
+  - `backend/alembic.ini`：中文注释改英文（修复 Windows GBK locale 下 configparser 解码失败；该文件此前从未实际运行所以未暴露）
+  - 提案文档确认状态同步：ADR-0003 转「已采纳」，PRD_扩展提案 Q1–Q5、PLANS_扩展 前置清单全部标记已确认
+- 契约 / 数据 / 安全影响：表结构变更（本次）；API 契约暂未变（TeaDetail 增字段属 X-04a）；无安全项变更
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `alembic stamp 0001_baseline && upgrade head` | tea_guide（开发库） | 通过 | current = 0002_content_expansion (head) |
+  | stamp → upgrade → downgrade → upgrade 循环 | tea_guide_test（测试库） | 通过 | 升降级可重放，最终 current = head |
+  | SHOW COLUMNS / SHOW INDEX 结构断言 | 两库 | 通过 | teas 两新列 NULL 许可正确；tea_media 5 列 + PK + idx_tea_media_tea 正确 |
+  | `python -m pytest -q` | 后端全量 | **106 passed**（18.69s） | schema 变更对现有功能零破坏 |
+  | `ruff check app tests` / `ruff format --check app` | 后端静态 | 通过 | 初次 format 有 1 文件待整理，已修复复检通过 |
+
+- 验收结论：通过（X-01a/X-01b 出口标准全部满足）
+- 遗留问题：
+  - 首次执行 0002 时因 `op.create_table` 误用裸 kwargs（engine/charset）失败，teas 两列已落库但 tea_media 未建；已手工回滚中间态两列后重放成功。教训：方言参数必须用 `mysql_` 前缀；已修正迁移文件。
+  - 前端 `types/index.ts` 的 TeaDetail 类型暂未加 video 字段——属 X-04a 范围，届时同步。
+- 回滚方式：`alembic downgrade 0001_baseline`（两库均已验证可回滚）；revert 模型与文档变更
+- 关联 ADR：[ADR-0003](../docs/development/ADR/ADR-0003-content-expansion.md)
+
+## 2026-11-09｜X-02~X-08 内容扩展：S4 图片集 + S5 视频 + 首页装饰背景
+
+- 任务卡 / 分级：ADR-0003 已采纳后落地；X-03/X-04a/X-05a 为契约追加（C 类已确认，实现级 B），X-02/X-04b/X-05b/X-06/X-08 为 B 类
+- 主要变更（后端）：
+  - `core/config.py`：新增 `MAX_VIDEO_SIZE_MB=50`、`MAX_VIDEO_DURATION_SECONDS=180`、`MAX_VIDEO_REQUEST_BODY_MB=52`
+  - `core/response.py`：新增 `VideoTooLarge(41300)`、`UnsupportedVideo(41500)`、`VideoTooLong(40000)`、`VideoUnreadable(40000)`，沿用既有错误码族，不新增业务码
+  - `main.py`：请求体上限按路径分流，仅 `/admin/media/video` 放宽到 52 MB
+  - `services/upload.py`：新增 ISO BMFF `ftyp` 魔数判定与 `moov/mvhd` 时长解析（无 ffprobe 依赖），落盘 `uploads/videos/{YYYY}/{MM}/`
+  - `services/admin.py` + `routers/admin.py`：新增 `POST /admin/media/video`
+  - `schemas/tea.py`：`TeaDetail` 增 `video_url`/`video_duration`/`image_set`；`TeaBaseRequest` 增视频字段（`video_url` 强制 `/uploads/` 前缀，`video_duration` 1–180）
+  - 新增 `repositories/tea_media_repo.py`、`services/tea_media.py`；`routers/teas.py` 增 `GET /teas/{id}/images`；`routers/admin.py` 增 `POST/DELETE /admin/teas/{id}/images[/{image_id}]`
+  - `repositories/tea_repo.py`：详情查询 `selectinload(Tea.media_images)`
+- 主要变更（前端）：
+  - `types/index.ts`：`Tea` 增视频/图片集字段；新增 `AdminVideoUploadData`、`TeaMediaItem`；`AdminTeaPayload` 增视频字段
+  - `api/admin.ts` / `api/teas.ts`：新增 `uploadAdminVideo`、`addAdminTeaImage`、`deleteAdminTeaImage`、`getTeaImages`
+  - `TeaDetailView.vue`：视频播放器（无视频/加载失败整块隐藏）+ 图片集缩略图切换主图
+  - 新增 `components/HeroBackground.vue`：纯装饰轮播（无跳转）、可关闭并记忆（localStorage）、尊重 prefers-reduced-motion、首张 eager 其余 lazy、加载失败自动剔除
+  - `HomeView.vue`：Hero 接入装饰背景层，内容层 `z-index:1`
+  - `AdminTeaEdit.vue`：视频上传/清除/预览 + 图片集上传/删除（上限 9 张提示）
+  - 新增 6 张水墨风格占位背景 `public/images/banners/*.svg`（明确标注"占位图 · 待实拍替换"）
+- 文档同步：
+  - `docs/api/API_CONTRACT.md` v1.1→v1.2：`TeaDetail` 字段、§4.2.7、§4.6.9/10/11、§4.6.3/4.6.4 请求字段、变更记录
+  - `docs/development/PLANS_扩展.md`：X-01~X-08 状态回填
+  - 新增 `docs/product/素材清单.md`：目录/命名/格式/体积/兜底/来源登记/待补清单
+- 契约 / 数据 / 安全影响：契约追加 4 个端点与 3 个详情字段（向后兼容，老字段不变）；无新增表（X-01 已完成）；请求体上限仅对视频端点放宽，其余仍 6 MB；视频与图片均校验魔数，不信任客户端类型
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `pytest tests/test_s4_s5.py -q` | 新增 S4/S5 | 13 passed | 视频上传正常/非视频/超时长/未登录/外链拒绝；图片集增删查/上限/越权/下架隐藏 |
+  | `python -m pytest -q` | 后端全量 | **119 passed**（17.68s） | 原 106 条零回归 |
+  | `ruff check app tests` / `ruff format --check app tests` | 后端静态 | 通过 | 格式化后复检通过 |
+  | `npm run typecheck` | 前端类型 | 通过 | |
+  | `npm run lint` | 前端 ESLint | 通过 | |
+  | `npm run test:run` | 前端 Vitest | **30 passed** | 原有 30 条，无新增纯函数 |
+  | `npm run build` | 生产构建 | 通过（4.90s） | 仅既有的 Element Plus chunk >500 kB 警告 |
+  | 结构断言 | tea_guide / tea_guide_test | 通过 | X-01 已完成，本轮无 DDL 变更 |
+
+- 验收结论：功能与门禁通过；**未做浏览器端手工冒烟**（未启动 dev server 实际点击），如需请另开一轮
+- 遗留问题：
+  - 图片集删除仅解除数据库关联，磁盘文件保留（同一 URL 可能被多茶复用）；已在 API 契约与素材清单注明
+  - 视频时长解析依赖 `moov/mvhd`；缺失 `moov` 的异常封装文件会返回 40000「无法解析视频时长」
+  - 六大茶类与每款茶的**真实实拍图尚未提供**，当前为占位图；`素材清单.md` 已列出待补项与来源登记字段
+  - 首页背景在 `prefers-reduced-motion` 与用户关闭开关时停止轮播，但仍保留首张静图
+- 回滚方式：revert 本轮提交即可；无 DDL 回滚需求
+- 关联 ADR：[ADR-0003](../docs/development/ADR/ADR-0003-content-expansion.md)
+
+## 2026-11-09｜X-07 素材落地：首页 6 张背景 + 6 款茶主图/图片集
+
+- 任务卡 / 分级：B（仅新增静态素材与内容数据，不改端点行为、契约字段、表结构、业务规则）
+- 需求来源：用户要求「图片去这些网站里找，加上；首页只加图片背景，不要视频」，并在 AskUserQuestion 中选择「用 CC0 公共领域图库」「茶品主图与图片集一起配」
+- 关于用户给出的 5 个中文茶站（音茶网 / 茶语网 / ipucha / 茶百科 / 普洱茶网）：均为受版权保护的商业站点，且多启用防盗链，直接抓图存在侵权与失效风险，故**未采用**；改用 Wikimedia Commons 的 CC0 / Public domain 文件，可商用且可回溯
+- 主要变更：
+  - `frontend/public/images/banners/banner-{green,white,yellow,oolong,red,dark}.webp`：6 张首页装饰背景，1600×900，单张 92–307 KB（≤320 KB 限制）
+  - `backend/uploads/2026/11/*.webp`：本轮生成 17 张茶品图片（6 张主图 + 11 张图集），1200×900，单张 ≤300 KB
+  - 通过 admin API 写库：6 款茶 `teas.main_image_url` 全部指向本站 `/uploads/`；`tea_media` 图片集共 11 条（西湖龙井 3 / 白毫银针 2 / 正山小种 2 / 普洱熟茶 2 / 君山银针 1 / 大红袍 1）
+  - `docs/product/素材清单.md`：§1 约束改写为"CC0 品类示意图"口径；§3 首页背景改为已落地 WebP；§5 重写为素材来源登记表（6 张背景 + 6 款茶，含 Commons 文件页、许可、日期）
+  - 生成脚本与映射表仅存放于 `%TEMP%`，不进仓库
+- 契约 / 数据 / 安全影响：无契约变更；仅写内容数据（`teas.main_image_url`、`tea_media` 行）；所有 URL 均由服务端 `POST /admin/upload` 生成，符合"禁止第三方外链"约束
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `python %TEMP%/build_dark.py` | 黑茶素材生成 | 通过 | banner 291 KB + 3 张茶图 |
+  | `python %TEMP%/apply_tea_assets.py` | 写库（admin API） | 通过 | 6 款茶 PUT 均 200/0；图片集追加 11 条均 200/0 |
+  | `python %TEMP%/verify_assets.py` | 落库与静态可访问性 | **failures = 0** | 6 款茶主图 + 图片集 URL 全部 HTTP 200；6 张 banner 全部 200（92–300 KB） |
+  | `python -m pytest -q` | 后端全量 | 未运行 | 本轮无代码改动，仅数据与静态文件；如需可复跑 |
+
+- 验收结论：通过（素材已落地并可访问）；浏览器端手工冒烟已通过（首页 6 张 CC0 背景轮播、无视频、无暂停按钮；详情页主图与缩略图切换正常）
+- 已知局限：
+  - CC0 图库只能提供**品类示意**：如"西湖龙井"主图为茶园/茶叶泛图，并非该款茶实拍；已在 `素材清单.md` §1.2 与 §5 顶部明确标注
+  - 君山银针、大红袍已补足至各 2 张图集（2026-11-09 第二轮补充：Tieguanyin2、Tea cloth with autumn leaves motif 等 CC0/PD 图源）；六款茶图集均 ≥ 2 张
+  - `banner-{category}.svg` 保留为三级兜底，未删除
+- 回滚方式：删除 `frontend/public/images/banners/*.webp` 与 `backend/uploads/2026/11/` 下本轮新增文件；数据库侧清空 `teas.main_image_url`、删除 `tea_media` 对应行（或 `alembic downgrade` 后重建）
+- 关联 ADR：[ADR-0003](../docs/development/ADR/ADR-0003-content-expansion.md)
+
 ## 2026-11-09｜项目交付 README 生成
 
 - 任务编号 / 分级：TASK-20261109-README / A（纯文档产出，未触碰业务规则、契约、表结构与安全项）
@@ -574,4 +947,5 @@
 - 遗留问题：无
 - 回滚方式：优先 `git checkout backup-20261107-pre-knowledge-capture` 回到本次变更前（tag 指向 e37a97c）；或删除新增的 ADR/build-log/README 文件，还原 AGENTS.md 与 DEVELOPMENT_GUIDE.md 对应段落
 - 关联 ADR：[ADR-0001](../docs/development/ADR/ADR-0001-knowledge-capture-mechanism.md)
+
 

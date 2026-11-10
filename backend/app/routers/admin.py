@@ -13,8 +13,13 @@ from app.core.auth_deps import get_admin_user
 from app.core.database import get_db
 from app.core.response import ok
 from app.schemas.admin import TipsUpdateRequest
-from app.schemas.tea import TeaCreateRequest, TeaUpdateRequest
+from app.schemas.content import ContentCreateRequest, ContentUpdateRequest
+from app.schemas.contribution import RejectRequest
+from app.schemas.tea import TeaCreateRequest, TeaMediaCreateRequest, TeaUpdateRequest
 from app.services import admin as admin_service
+from app.services import contents as content_service
+from app.services import contributions as contribution_service
+from app.services import tea_media as tea_media_service
 
 router = APIRouter(dependencies=[Depends(get_admin_user)])
 
@@ -109,3 +114,130 @@ async def upload_image(
     """A4/A5 图片上传（API_CONTRACT §4.6.7）：JPEG/PNG/WebP ≤ 5 MB。"""
     data = await admin_service.upload_image(db, admin_id=admin.id, file=file)
     return ok(data.model_dump(mode="json"))
+
+
+@router.post("/media/video")
+async def upload_video(
+    file: UploadFile = File(...),
+    admin=Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """视频上传（ADR-0003 S5 / API_CONTRACT §4.6.9）：MP4/MOV ≤ 50 MB、≤ 3 分钟。"""
+    data = await admin_service.upload_video(db, admin_id=admin.id, file=file)
+    return ok(data.model_dump(mode="json"))
+
+
+@router.post("/teas/{tea_id}/images")
+def add_tea_image(
+    tea_id: int,
+    payload: TeaMediaCreateRequest,
+    admin=Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """追加茶品图片（ADR-0003 S4 / API_CONTRACT §4.6.10）：单茶上限 9 张。"""
+    item = tea_media_service.add_image(db, admin_id=admin.id, tea_id=tea_id, req=payload)
+    return ok(item.model_dump(mode="json"))
+
+
+@router.delete("/teas/{tea_id}/images/{image_id}")
+def delete_tea_image(
+    tea_id: int,
+    image_id: int,
+    admin=Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """删除茶品图片（ADR-0003 S4 / API_CONTRACT §4.6.11）：物理删除。"""
+    tea_media_service.delete_image(db, admin_id=admin.id, tea_id=tea_id, image_id=image_id)
+    return ok({"deleted": image_id})
+
+
+@router.get("/contributions")
+def list_contributions(
+    status: str | None = Query("pending", description="pending | approved | rejected"),
+    type: str | None = Query(None, description="new_tea | article"),
+    page: int = Query(1),
+    page_size: int = Query(12),
+    db: Session = Depends(get_db),
+):
+    """审核队列（API_CONTRACT §4.6.12）：默认待审核。"""
+    data = contribution_service.admin_list(
+        db, status=status, type=type, page=page, page_size=page_size
+    )
+    return ok(data.model_dump(mode="json"))
+
+
+@router.post("/contributions/{contribution_id}/approve")
+def approve_contribution(
+    contribution_id: int,
+    admin=Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """审核通过（API_CONTRACT §4.6.13）：新茶上架 / 科普展示。"""
+    data = contribution_service.approve(db, admin_id=admin.id, contribution_id=contribution_id)
+    return ok(data.model_dump(mode="json"))
+
+
+@router.post("/contributions/{contribution_id}/reject")
+def reject_contribution(
+    contribution_id: int,
+    payload: RejectRequest,
+    admin=Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """审核拒绝（API_CONTRACT §4.6.14）：原因 1–200 字。"""
+    data = contribution_service.reject(
+        db, admin_id=admin.id, contribution_id=contribution_id, reason=payload.reason
+    )
+    return ok(data.model_dump(mode="json"))
+
+
+# === 批次五 R1–R5 内容管理 ===
+
+
+@router.get("/contents")
+def admin_list_contents(
+    type: str | None = Query(None, description="板块 code"),
+    is_active: bool | None = Query(None, description="是否上架"),
+    page: int = Query(1),
+    page_size: int = Query(12),
+    db: Session = Depends(get_db),
+):
+    """后台内容列表（含下架；API_CONTRACT §4.6.12）。"""
+    data = content_service.admin_list_contents(
+        db, type_code=type, is_active=is_active, page=page, page_size=page_size
+    )
+    return ok(data.model_dump(mode="json"))
+
+
+@router.post("/contents")
+def admin_create_content(
+    payload: ContentCreateRequest,
+    admin=Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """管理员创建内容条目（API_CONTRACT §4.6.12 POST）。"""
+    data = content_service.admin_create_content(db, admin_id=admin.id, req=payload)
+    return ok(data.model_dump(mode="json"))
+
+
+@router.put("/contents/{item_id}")
+def admin_update_content(
+    item_id: int,
+    payload: ContentUpdateRequest,
+    admin=Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """管理员更新内容条目（全量替换；API_CONTRACT §4.6.13 PUT）。"""
+    data = content_service.admin_update_content(db, admin_id=admin.id, item_id=item_id, req=payload)
+    return ok(data.model_dump(mode="json"))
+
+
+@router.delete("/contents/{item_id}")
+def admin_delete_content(
+    item_id: int,
+    admin=Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """软删除：is_active=0（API_CONTRACT §4.6.13 DELETE）。"""
+    content_service.admin_delete_content(db, admin_id=admin.id, item_id=item_id)
+    return ok({"deleted": item_id})

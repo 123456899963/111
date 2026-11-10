@@ -39,6 +39,16 @@ async function onLogout() {
       <nav class="app-header__links" aria-label="主导航">
         <RouterLink to="/" class="app-header__link">首页</RouterLink>
         <RouterLink to="/teas" class="app-header__link">茶品列表</RouterLink>
+        <div class="app-header__nav-group">
+          <span class="app-header__link app-header__link--trigger">茶文化 ▾</span>
+          <div class="app-header__dropdown" role="menu">
+            <RouterLink to="/contents/teaware" class="app-header__dropdown-item" role="menuitem">🫖 茶具茶器</RouterLink>
+            <RouterLink to="/contents/origin" class="app-header__dropdown-item" role="menuitem">🗺️ 茶叶产地</RouterLink>
+            <RouterLink to="/contents/culture" class="app-header__dropdown-item" role="menuitem">📜 茶叶文化</RouterLink>
+            <RouterLink to="/contents/brand" class="app-header__dropdown-item" role="menuitem">🏷️ 茶叶品牌</RouterLink>
+            <RouterLink to="/contents/knowledge" class="app-header__dropdown-item" role="menuitem">📚 茶叶知识</RouterLink>
+          </div>
+        </div>
       </nav>
 
       <div class="app-header__right">
@@ -148,6 +158,51 @@ async function onLogout() {
   height: 2px;
   border-radius: 1px;
   background: var(--color-primary);
+}
+
+/* —— 茶文化下拉（批次五 R1–R5）—— */
+.app-header__nav-group {
+  position: relative;
+}
+.app-header__link--trigger {
+  cursor: default;
+}
+.app-header__dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 180px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(139, 115, 85, 0.12);
+  padding: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) translateY(-4px);
+  transition: opacity 0.15s, visibility 0.15s, transform 0.15s;
+  z-index: 60;
+}
+.app-header__nav-group:hover .app-header__dropdown,
+.app-header__link--trigger:hover + .app-header__dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+.app-header__dropdown-item {
+  display: block;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-small);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  line-height: 1.5;
+  transition: background 0.15s, color 0.15s;
+}
+.app-header__dropdown-item:hover {
+  background: var(--color-bg-muted);
+  color: var(--color-primary);
 }
 
 .app-header__right {

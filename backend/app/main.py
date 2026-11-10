@@ -8,7 +8,18 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.core.database import Base, engine  # noqa: F401 —— 开发期建表开关使用
 from app.core.response import ok, register_exception_handlers
-from app.routers import admin, auth, favorites, lists, shares, teas
+from app.routers import (
+    admin,
+    auth,
+    contents,
+    contributions,
+    favorites,
+    lists,
+    me,
+    shares,
+    teas,
+    tips,
+)
 
 # 初始化数据库表（开发期用，生产环境走 Alembic 迁移）
 # Base.metadata.create_all(bind=engine)
@@ -31,7 +42,14 @@ def create_app() -> FastAPI:
                 size = int(content_length)
             except ValueError:
                 size = 0
-            if size > settings.MAX_REQUEST_BODY_MB * 1024 * 1024:
+            # 视频端点单独放宽（ADR-0003：≤50 MB），其余端点沿用 6 MB 网关限制
+            is_video_upload = request.url.path.rstrip("/").endswith("/admin/media/video")
+            limit_mb = (
+                settings.MAX_VIDEO_REQUEST_BODY_MB
+                if is_video_upload
+                else settings.MAX_REQUEST_BODY_MB
+            )
+            if size > limit_mb * 1024 * 1024:
                 return JSONResponse(
                     status_code=413,
                     content={"code": 41300, "message": "请求体过大", "data": None},
@@ -52,10 +70,14 @@ def create_app() -> FastAPI:
 
     # 注册路由
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
+    app.include_router(me.router, prefix="/api/v1/me", tags=["我的"])
     app.include_router(teas.router, prefix="/api/v1/teas", tags=["茶品"])
+    app.include_router(tips.router, prefix="/api/v1/tips", tags=["小贴士"])
     app.include_router(favorites.router, prefix="/api/v1/favorites", tags=["收藏"])
     app.include_router(lists.router, prefix="/api/v1/lists", tags=["清单"])
     app.include_router(shares.router, prefix="/api/v1/shares", tags=["分享"])
+    app.include_router(contributions.router, prefix="/api/v1/contributions", tags=["贡献"])
+    app.include_router(contents.router, prefix="/api/v1", tags=["内容板块"])
     app.include_router(admin.router, prefix="/api/v1/admin", tags=["管理员"])
 
     # 静态挂载 uploads 目录（图片存储；目录与上传服务保持一致）

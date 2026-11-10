@@ -22,6 +22,7 @@ from app.schemas.admin import (
     TipsResponse,
     ToggleResponse,
     UploadResult,
+    VideoUploadResult,
 )
 from app.schemas.tea import (
     CATEGORY_VALUES,
@@ -237,3 +238,24 @@ async def upload_image(db: Session, *, admin_id: int, file: UploadFile) -> Uploa
         raise InternalError
 
     return UploadResult(**result)
+
+
+async def upload_video(db: Session, *, admin_id: int, file: UploadFile) -> VideoUploadResult:
+    """A4' 视频上传（ADR-0003 S5）：MP4/MOV ≤50 MB，时长 ≤180 秒。"""
+    result = await upload_service.save_video(file)
+    admin_repo.add_operation_log(
+        db,
+        user_id=admin_id,
+        action="upload_video",
+        target_id=None,
+        detail=f"{result['original_filename']} / {result['size']} bytes / {result['duration']}s",
+    )
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        saved_path = Path(settings.UPLOAD_DIR) / result["url"].removeprefix("/uploads/")
+        saved_path.unlink(missing_ok=True)
+        raise InternalError
+
+    return VideoUploadResult(**result)

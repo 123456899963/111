@@ -1,7 +1,7 @@
 -- ============================================================
 -- 茶·图鉴 —— 数据库初始化脚本（MySQL 5.7.19+）
 -- 依据：docs/architecture/DATA_MODEL.md v1.0
--- 范围：MVP 7 张表 + 索引 + 最少种子数据
+-- 范围：MVP 9 张表 + S10–S13 贡献 2 张表（共 11 张） + 索引 + 最少种子数据
 -- 编码：UTF-8（无 BOM） / 字符集 utf8mb4 / 排序规则 utf8mb4_unicode_ci
 --
 -- 使用方式（在 MySQL 客户端中执行）：
@@ -53,6 +53,8 @@ CREATE TABLE teas (
   fermentation           ENUM('不发酵','微发酵','半发酵','全发酵','后发酵') DEFAULT NULL
                                                                COMMENT '发酵程度（选填）',
   price_range            VARCHAR(32)   DEFAULT NULL           COMMENT '价格区间（选填，文案未定稿，应用层校验）',
+  price_min              INT UNSIGNED  DEFAULT NULL           COMMENT '价格下限（元/斤，S2 五档筛选）',
+  price_max              INT UNSIGNED  DEFAULT NULL           COMMENT '价格上限（元/斤，S2 五档筛选）',
   representative_variety VARCHAR(100)  DEFAULT NULL           COMMENT '代表品类（选填）',
   shape_desc             TEXT          NOT NULL               COMMENT '外形描述（必填）',
   soup_desc              TEXT          NOT NULL               COMMENT '汤色描述（必填）',
@@ -62,6 +64,8 @@ CREATE TABLE teas (
   tea_amount             DECIMAL(4,1)  DEFAULT NULL           COMMENT '投茶量（克）',
   brew_time              DECIMAL(4,1)  DEFAULT NULL           COMMENT '浸泡时间（秒）',
   main_image_url         VARCHAR(500)  DEFAULT NULL           COMMENT '主图 URL（PRD 必填，应用层强制）',
+  video_url              VARCHAR(500)  DEFAULT NULL           COMMENT '视频介绍 mp4 同源 URL（S5，ADR-0003；≤3 分钟 ≤50MB，应用层校验）',
+  video_duration         INT UNSIGNED  DEFAULT NULL           COMMENT '视频时长（秒，≤180，应用层校验）',
   is_active              TINYINT(1)    NOT NULL DEFAULT 1     COMMENT '1 上架 / 0 下架（FR-6.3）',
   favorite_count         INT UNSIGNED  NOT NULL DEFAULT 0     COMMENT '冗余收藏计数（排序与卡片展示）',
   created_at             DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -83,6 +87,8 @@ CREATE TABLE tea_tips (
   suitable       TEXT         DEFAULT NULL COMMENT '适合人群（空则前端隐藏）',
   misconception  TEXT         DEFAULT NULL COMMENT '冲泡误区（空则前端隐藏）',
   official_note  TEXT         DEFAULT NULL COMMENT '品鉴笔记（官方，空则前端隐藏）',
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_tea_tips_tea_id (tea_id),
   CONSTRAINT fk_tea_tips_tea FOREIGN KEY (tea_id) REFERENCES teas (id)
@@ -91,43 +97,69 @@ CREATE TABLE tea_tips (
   COMMENT = '官方小贴士，与茶品 1:1（FR-6.4）';
 
 -- ------------------------------------------------------------
--- 4. collection_lists —— 用户默认清单（PRD §4.2 / FR-5.1 / FR-5.2）
--- MVP 一人一清单：UNIQUE(user_id) 固化
+-- 3.1 tea_media —— 茶品图片集（PRD S4 / ADR-0003）
+-- 1:N 关联；物理删除（不做软失效），随茶品级联；上限 9 张由应用层校验
+-- ------------------------------------------------------------
+CREATE TABLE tea_media (
+  id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  tea_id      INT UNSIGNED NOT NULL,
+  image_url   VARCHAR(500) NOT NULL                COMMENT '图片 URL（同源 /uploads/...）',
+  sort_order  INT          NOT NULL DEFAULT 0      COMMENT '展示顺序，ASC',
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_tea_media_tea (tea_id, sort_order),
+  CONSTRAINT fk_tea_media_tea FOREIGN KEY (tea_id) REFERENCES teas (id)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
+  COMMENT = '茶品图片集（PRD S4，ADR-0003；物理删除，上限 9 张由应用层校验）';
+
+-- ------------------------------------------------------------
+-- 4. collection_lists —— 用户收藏清单（PRD §4.2 / FR-5.1 / FR-5.2，S9 多清单）
+-- 每用户仅一个默认清单：默认行 is_default=1，普通行 is_default=NULL
+-- UNIQUE(user_id, is_default) 依赖 MySQL 唯一索引允许多个 NULL
 -- 可见性不落列，由 share_tokens.is_active 派生
 -- ------------------------------------------------------------
 CREATE TABLE collection_lists (
   id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id     INT UNSIGNED NOT NULL,
   title       VARCHAR(50)  NOT NULL DEFAULT '我的收藏' COMMENT '清单标题，可编辑（FR-5.2）',
+  is_default  TINYINT(1)   DEFAULT NULL COMMENT '1=默认清单；NULL=普通清单（S9）',
   created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uk_list_user (user_id),
+  UNIQUE KEY uk_list_user_default (user_id, is_default),
+  KEY idx_list_user (user_id),
   CONSTRAINT fk_list_user FOREIGN KEY (user_id) REFERENCES users (id)
     ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
-  COMMENT = '用户默认收藏清单，MVP 一人一个（PRD §4.2）';
+  COMMENT = '用户收藏清单，每用户一个默认 + 最多 9 个普通（PRD §4.2 / S9）';
 
 -- ------------------------------------------------------------
 -- 5. favorite_items —— 收藏条目 + 品鉴笔记（PRD §4.2 / FR-5.1/5.2/5.3/5.6）
--- 保留 user_id 代理清单归属（MVP 单清单），不额外挂 list_id
+-- 清单归属以 list_id 为准；user_id 冗余用于跨清单去重与统计（S9）
+-- 同一茶品可存在于多个清单，但 teas.favorite_count 只计 1 次
 -- ------------------------------------------------------------
 CREATE TABLE favorite_items (
   id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  list_id       INT UNSIGNED NOT NULL COMMENT '所属清单（S9）',
   user_id       INT UNSIGNED NOT NULL,
   tea_id        INT UNSIGNED NOT NULL,
   tasting_note  TEXT         DEFAULT NULL COMMENT '品鉴笔记（私有，PRD FR-5.3）',
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '收藏时间',
   PRIMARY KEY (id),
-  UNIQUE KEY uk_favorite_user_tea (user_id, tea_id),
+  UNIQUE KEY uk_favorite_list_tea (list_id, tea_id),
+  KEY idx_favorite_list_created (list_id, created_at),
   KEY idx_favorite_user_created (user_id, created_at),
   KEY idx_favorite_tea (tea_id),
+  KEY idx_favorite_created_tea (created_at, tea_id),
+  CONSTRAINT fk_favorite_list FOREIGN KEY (list_id) REFERENCES collection_lists (id)
+    ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT fk_favorite_user FOREIGN KEY (user_id) REFERENCES users (id)
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT fk_favorite_tea FOREIGN KEY (tea_id) REFERENCES teas (id)
     ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
-  COMMENT = '收藏条目：用户-茶关联 + 私有品鉴笔记（PRD §4.2）';
+  COMMENT = '收藏条目：清单-茶关联 + 私有品鉴笔记（PRD §4.2）';
 
 -- ------------------------------------------------------------
 -- 6. share_tokens —— 分享令牌（PRD FR-5.4 / FR-5.5）
@@ -170,6 +202,63 @@ CREATE TABLE operation_logs (
     ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
   COMMENT = '管理员写操作审计日志（MVP 最小留痕）';
+
+-- ------------------------------------------------------------
+-- 8. login_attempts —— 登录失败记录（S14，批次二 / 迁移 0004）
+-- 只记录失败事件，不记录密码明文；24 小时后由登录流程清理
+-- 用户名与 IP 双维度窗口计数，任一达到阈值即锁定
+-- ------------------------------------------------------------
+CREATE TABLE login_attempts (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  username   VARCHAR(32)  NOT NULL COMMENT '失败尝试的用户名（含不存在的用户名）',
+  ip         VARCHAR(45)  NOT NULL COMMENT '客户端 IP（兼容 IPv6）',
+  failed_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '失败时间',
+  PRIMARY KEY (id),
+  KEY idx_login_attempt_username (username, failed_at),
+  KEY idx_login_attempt_ip (ip, failed_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
+  COMMENT = '登录失败尝试（S14 锁定依据）';
+
+-- ------------------------------------------------------------
+-- 9. tea_name_category_map —— 名品-茶类映射（S10 第一层校验 / 迁移 0006）
+-- 命中名称时强校验用户提交的茶类；未命中由管理员人工审核
+-- ------------------------------------------------------------
+CREATE TABLE tea_name_category_map (
+  id        INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name      VARCHAR(100) NOT NULL COMMENT '名品名称',
+  category  ENUM('green','white','yellow','red','oolong','dark') NOT NULL COMMENT '应有茶类',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_name_category_name (name)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
+  COMMENT = '名品-茶类映射（S10 第一层校验）';
+
+-- ------------------------------------------------------------
+-- 10. contributions —— 用户贡献提交与审核状态（S10–S13 / 迁移 0006）
+-- payload 为 JSON：new_tea 存茶品字段，article 存 {title, content}
+-- 状态单向流转 pending → approved / rejected；记录不物理删除
+-- ------------------------------------------------------------
+CREATE TABLE contributions (
+  id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id        INT UNSIGNED NOT NULL,
+  type           ENUM('new_tea','article') NOT NULL COMMENT '提交类型',
+  target_tea_id  INT UNSIGNED DEFAULT NULL COMMENT '科普投稿目标茶品（new_tea 为 NULL）',
+  payload        JSON         NOT NULL COMMENT '结构化提交内容',
+  status         ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  reject_reason  VARCHAR(200) DEFAULT NULL COMMENT '拒绝理由（仅 rejected）',
+  reviewer_id    INT UNSIGNED DEFAULT NULL COMMENT '审核管理员',
+  reviewed_at    DATETIME     DEFAULT NULL COMMENT '审核时间',
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_contrib_user_status (user_id, status),
+  KEY idx_contrib_status_created (status, created_at),
+  CONSTRAINT fk_contrib_user FOREIGN KEY (user_id) REFERENCES users (id)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_contrib_reviewer FOREIGN KEY (reviewer_id) REFERENCES users (id)
+    ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_contrib_tea FOREIGN KEY (target_tea_id) REFERENCES teas (id)
+    ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
+  COMMENT = '用户贡献提交与审核状态（S10–S13）';
 
 -- ============================================================
 -- 种子数据
@@ -268,3 +357,65 @@ INSERT INTO tea_tips (tea_id, history, suitable, misconception, official_note) V
    '熟茶性温，适合大多数人群，尤其是胃寒或晚上想喝茶的茶友。',
    '熟茶发酵工艺 1973 年才发明，历史远短于生茶，但因其温和的口感迅速流行。',
    NULL);
+
+-- 名品-茶类映射（S10 第一层校验）：用户提交新茶时命中名称须与茶类一致
+INSERT INTO tea_name_category_map (name, category) VALUES
+  ('西湖龙井', 'green'), ('碧螺春', 'green'), ('黄山毛峰', 'green'),
+  ('六安瓜片', 'green'), ('信阳毛尖', 'green'),
+  ('白毫银针', 'white'), ('白牡丹', 'white'), ('寿眉', 'white'),
+  ('君山银针', 'yellow'), ('蒙顶黄芽', 'yellow'),
+  ('正山小种', 'red'), ('金骏眉', 'red'), ('祁门红茶', 'red'), ('滇红', 'red'),
+  ('大红袍', 'oolong'), ('铁观音', 'oolong'), ('武夷岩茶', 'oolong'), ('凤凰单丛', 'oolong'),
+  ('普洱熟茶', 'dark'), ('普洱生茶', 'dark'), ('安化黑茶', 'dark'), ('六堡茶', 'dark');
+
+-- ------------------------------------------------------------
+-- 11. content_types —— 内容板块分类（批次五 R1–R5 / 迁移 0007）
+-- ------------------------------------------------------------
+CREATE TABLE content_types (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  code          VARCHAR(32)  NOT NULL,
+  name          VARCHAR(50)  NOT NULL,
+  icon          VARCHAR(32)  NULL,
+  description   VARCHAR(200) NULL,
+  sort_order    INT          NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_content_types_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='内容板块分类（批次五 R1–R5）';
+
+-- 12. content_items —— 统一内容条目（批次五 R1–R5 / 迁移 0007）
+--     meta JSON 承载各板块特有字段：
+--       teaware:   material / volume / category
+--       origin:    province / region
+--       culture:   era / tags
+--       brand:     founded / brand_origin / website
+--       knowledge: subtype / difficulty
+-- ------------------------------------------------------------
+CREATE TABLE content_items (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  type_id       INT UNSIGNED NOT NULL,
+  title         VARCHAR(200) NOT NULL,
+  summary       VARCHAR(500) NULL,
+  body          TEXT         NULL,
+  cover_image   VARCHAR(500) NULL,
+  meta          JSON         NULL,
+  sort_order    INT          NOT NULL DEFAULT 0,
+  is_active     TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_content_items_type FOREIGN KEY (type_id) REFERENCES content_types(id) ON DELETE CASCADE,
+  KEY idx_content_items_type_active_sort (type_id, is_active, sort_order),
+  KEY idx_content_items_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='统一内容条目（批次五 R1–R5；meta 为各板块特有 JSON 字段）';
+
+-- ------------------------------------------------------------
+-- 批次五种子数据
+-- ------------------------------------------------------------
+
+-- 5 个板块分类
+INSERT INTO content_types (code, name, icon, description, sort_order) VALUES
+  ('teaware',  '茶具茶器', '🫖', '盖碗、茶壶、品茗杯、公道杯等茶器文化与选择指南', 1),
+  ('origin',   '茶叶产地', '🗺️', '中国主要产茶区地理环境、风土特色与名茶产地溯源', 2),
+  ('culture',  '茶叶文化', '📜', '茶的历史演变、文人茶事、茶道精神与传统礼仪', 3),
+  ('brand',    '茶叶品牌', '🏷️', '中华老字号茶企与现代茶品牌故事', 4),
+  ('knowledge','茶叶知识', '📚', '茶叶标准、分类原理、冲泡技巧与品鉴知识', 5);
