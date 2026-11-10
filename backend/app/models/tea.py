@@ -41,6 +41,9 @@ class Tea(Base):
     )
     # 价格档位文案未在 PRD 定稿，保留 VARCHAR，由 Pydantic 校验
     price_range: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # 价格区间数值（S2 五档筛选）：单位元/斤，由后台录入或按 price_range 回填
+    price_min: Mapped[int | None] = mapped_column(MySQLInteger(unsigned=True), nullable=True)
+    price_max: Mapped[int | None] = mapped_column(MySQLInteger(unsigned=True), nullable=True)
     representative_variety: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # 四大感官（TEXT 在 MySQL 5.7 不能有 DB 默认值，空串由应用层写入）
@@ -56,6 +59,12 @@ class Tea(Base):
 
     # 主图
     main_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # 视频介绍（S5，ADR-0003；NULL 表示无视频，前端整块隐藏）
+    video_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    video_duration: Mapped[int | None] = mapped_column(
+        MySQLInteger(unsigned=True), nullable=True
+    )  # 秒，≤180 由应用层校验
 
     # 状态
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -82,6 +91,35 @@ class Tea(Base):
 
     # 关联
     tips: Mapped["TeaTips | None"] = relationship(back_populates="tea", uselist=False)
+    media_images: Mapped[list["TeaMedia"]] = relationship(
+        back_populates="tea",
+        order_by="TeaMedia.sort_order",
+        cascade="all, delete-orphan",
+    )
+
+
+class TeaMedia(Base):
+    """茶品图片集（PRD S4，ADR-0003；物理删除，上限 9 张由应用层校验）"""
+
+    __tablename__ = "tea_media"
+
+    id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True), primary_key=True, autoincrement=True
+    )
+    tea_id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True),
+        ForeignKey("teas.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    image_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+
+    __table_args__ = (Index("idx_tea_media_tea", "tea_id", "sort_order"),)
+
+    tea: Mapped[Tea] = relationship(back_populates="media_images")
 
 
 class TeaTips(Base):
@@ -103,5 +141,17 @@ class TeaTips(Base):
     suitable: Mapped[str | None] = mapped_column(Text, nullable=True)  # 适合人群
     misconception: Mapped[str | None] = mapped_column(Text, nullable=True)  # 冲泡误区
     official_note: Mapped[str | None] = mapped_column(Text, nullable=True)  # 品鉴笔记（官方）
+
+    # 时间戳（S7 首页最新小贴士按 updated_at 倒序）
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
 
     tea: Mapped[Tea] = relationship(back_populates="tips")
