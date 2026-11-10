@@ -1,6 +1,6 @@
 """分享令牌仓储层：仅封装查询与写入（ARCHITECTURE §3）"""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -36,7 +36,7 @@ def create(db: Session, list_id: int, token: str) -> ShareToken:
 
 def revoke(db: Session, item: ShareToken) -> ShareToken:
     item.is_active = False
-    item.revoked_at = datetime.utcnow()
+    item.revoked_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(item)
     return item

@@ -4,7 +4,7 @@
 标题更新与清单删除由 Service 显式 commit。
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -69,7 +69,7 @@ def create(db: Session, *, user_id: int, title: str, is_default: bool = False) -
 
 def update_title(db: Session, list_obj: CollectionList, title: str) -> CollectionList:
     list_obj.title = title
-    list_obj.updated_at = datetime.utcnow()
+    list_obj.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(list_obj)
     return list_obj

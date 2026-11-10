@@ -7,7 +7,7 @@
 红线：审核动作仅管理员；用户只能查看与删除自己的待审核提交；不物理删除茶品。
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -180,7 +180,7 @@ def approve(db: Session, *, admin_id: int, contribution_id: int) -> Contribution
     item.status = "approved"
     item.reviewer_id = admin_id
     item.reject_reason = None
-    item.reviewed_at = datetime.utcnow()
+    item.reviewed_at = datetime.now(timezone.utc)
     db.flush()
 
     admin_repo.add_operation_log(
@@ -211,7 +211,7 @@ def reject(db: Session, *, admin_id: int, contribution_id: int, reason: str) -> 
     item.status = "rejected"
     item.reviewer_id = admin_id
     item.reject_reason = normalized
-    item.reviewed_at = datetime.utcnow()
+    item.reviewed_at = datetime.now(timezone.utc)
     db.flush()
 
     admin_repo.add_operation_log(

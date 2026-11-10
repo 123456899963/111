@@ -20,6 +20,7 @@ import type {
   AdminUploadData,
   AdminVideoUploadData,
   ApiEnvelope,
+  ContentItem,
   ContributionItem,
   ContributionListData,
   ContributionListParams,
@@ -111,6 +112,11 @@ export function rejectContribution(id: number, reason: string) {
 }
 
 // —— 批次五 R1–R5 内容管理 ——
+
+/** GET /admin/contents/{id} 后台内容详情（编辑回填） */
+export function getAdminContent(id: number) {
+  return request.get<unknown, ApiEnvelope<ContentItem>>(`/admin/contents/${id}`)
+}
 
 /** GET /admin/contents 后台内容列表（含下架） */
 export function getAdminContents(params: AdminContentListParams) {

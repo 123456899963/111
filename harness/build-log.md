@@ -106,6 +106,40 @@
   - 批次五改动未提交 Git（留在工作区等用户指令）
 - 回滚方式：`alembic downgrade 0006_contributions` + 回退上述文件
 
+## 2026-11-10｜批次五完善：回填端点 + 测试补齐 + 种子数据 + utcnow 技术债
+
+- 任务编号 / 分级：TASK-20261110-batch5-fix / B（后端 1 新端点 + Schema 调整，前端 1 API + 回填逻辑，测试 +6 条，种子数据迁移 + init.sql，技术债 8 处）
+- 需求来源：批次五 build-log 遗留 5 项 + utcnow DeprecationWarning
+- 主要变更：
+  - **后端** `routers/admin.py` 新增 `GET /admin/contents/{item_id}` —— 后台详情（含下架条目，is_active 返回给编辑回填）
+  - **后端** `services/contents.py` 新增 `admin_get_content()` + `_to_admin_out()`（含 is_active）；`ContentCreateRequest.validate_meta_for_type` 从 Service 手动调用改为 `@model_validator(mode="after")` 自动执行，ValueError → ValidationError → 422 → 400
+  - **后端** `schemas/content.py`：`ContentItemOut.type_code` 设默认空串（非 ORM 列）；`ContentItemOut.is_active` 改为 Optional；所有 meta 校验异常经 Pydantic 自动重映射
+  - **后端** 8 处 `datetime.utcnow()` → `datetime.now(timezone.utc)` —— `services/{contributions,upload,auth}.py` + `repositories/{list_repo,share_repo,tea_repo}.py`
+  - **前端** `api/admin.ts` 新增 `getAdminContent(id)`
+  - **前端** `views/admin/AdminContentEdit.vue`：编辑模式回填实现 —— 加载详情 → 表单填值 → meta JSON → 各板块 ref 对象还原
+  - **前端** `types/index.ts`：`ContentItem.is_active` 新增 Optional
+  - **数据库** `alembic/versions/0008_seed_content_items.py`（新）：5 板块各 1–2 条示例条目，upsert（按 title 去重）
+  - **数据库** `database/init.sql`：追加 content_items 9 条种子数据（子查询 type_id）
+  - **测试** `tests/test_content_smoke.py` 5 → 11 条 —— CONT-06 meta 结构校验（extra字段/tags非list/枚举超范围/URL格式/非法type_code → 400）、CONT-07 CRUD 全链路（创建→详情→更新软删→前台不可见）、CONT-08 软删恢复、CONT-09 后台详情 not found、CONT-10 板块筛选、CONT-11 operation_log 写入
+  - **修复** `ContentCreateRequest` 的 meta 校验从 Service 层手动调用改为 Pydantic model_validator，异常自动走 FastAPI 重映射
+- 契约 / 数据 / 安全影响：
+  - 契约新增 `GET /admin/contents/{id}`（后台专用，游客 401）；`ContentItemOut` 新增可选 `is_active`（前台详情不含，不破坏既有）
+  - 种子数据迁移 0008 幂等（按 title 去重）；init.sql 追加同样的 9 条示例
+  - 安全：`model_validator` 改造后 meta 校验异常自动返回 400（之前可能漏校验被 Service 层手动调但异常不被捕获）
+- 测试证据：
+
+  | 命令 | 范围 | 结果 | 说明 |
+  |---|---|---|---|
+  | `python -m pytest -q` | 后端全量 | **164 passed**（158 → +6） | DeprecationWarning 从 868 降至 779（少 89 条 utcnow 警告） |
+  | `python -m pytest tests/test_content_smoke.py -v` | 批次五扩展 | **11 passed**（5 → +6） | CONT-06~11 |
+  | `npm run typecheck` | 前端 | 通过 | ContentItem.is_active 新增 Optional |
+  | `python scripts/check_all.py` | 全量静态 | **全部通过** | 242 links / 常量一致 / 五层检查 / 前台 UI / records / secrets |
+- 遗留问题：
+  - `ContentUpdateRequest` 的 meta 校验仍是 Service 层手动调 `_validate_meta`（PUT 时 title/type_code 不可改，meta 字段可能与板块不匹配 → 暂接受 PUT 时用户必须知板块）
+  - SQLAlchemy 底层 `_ColumnDefault` 还有 2 条 utcnow DeprecationWarning（orm `default=func.utc_timestamp()`，来自 Alembic 框架内部），暂无法修复
+  - 种子数据仅 9 条，前台展示可能偏少（可在后台继续录入）
+- 回滚方式：`alembic downgrade 0007_content_platform` + 回退上述文件
+
 ## 2026-11-09｜批次四：S10–S13 用户贡献 + 管理员审核
 
 - 任务编号 / 分级：TASK-20261109-batch4 / C（2 张新表 + 迁移 + 契约变更；用户确认于 2026-11-09 的 PLAN_剩余功能，本批不提交 Git）

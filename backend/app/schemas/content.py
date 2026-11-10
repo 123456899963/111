@@ -8,7 +8,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
 from app.schemas._common import iso_z
 
@@ -100,13 +100,14 @@ class ContentItemOut(BaseModel):
 
     id: int
     type_id: int
-    type_code: str
+    type_code: str = ""  # 运行时由 _to_out 补充，非 ORM 列
     title: str
     summary: str | None = None
     body: str | None = None
     cover_image: str | None = None
     meta: dict[str, Any] | None = None
     sort_order: int
+    is_active: bool | None = None  # 后台返回（前台详情不含）
     created_at: datetime
     updated_at: datetime
 
@@ -163,9 +164,11 @@ class ContentCreateRequest(BaseModel):
             raise ValueError("cover_image 必须为 http(s):// 或 /uploads/ 路径")
         return v
 
-    def validate_meta_for_type(self) -> None:
-        """按板块校验 meta —— 在 Service 层根据 type_code 调用。"""
+    @model_validator(mode="after")
+    def _validate_meta_for_type(self) -> "ContentCreateRequest":
+        """按板块校验 meta —— Pydantic 自动在构造时执行，ValueError → ValidationError → 422 → 400。"""
         self.meta = _validate_meta(self.meta, self.type_code)
+        return self
 
 
 class ContentUpdateRequest(BaseModel):

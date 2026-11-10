@@ -5,7 +5,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { createAdminContent, updateAdminContent } from '@/api/admin'
+import { createAdminContent, getAdminContent, updateAdminContent } from '@/api/admin'
 import { getContentTypes } from '@/api/contents'
 import type {
   AdminContentCreatePayload,
@@ -103,15 +103,50 @@ function syncFormFromMeta() {
   }
 }
 
+function restoreMetaFromForm() {
+  // 将 form.value.meta JSON → 各板块 ref 对象（编辑回填时调用）
+  const type = form.value.type_code
+  const m = form.value.meta || {}
+  if (type === 'teaware') {
+    teawareMeta.value.material = String(m.material ?? '')
+    teawareMeta.value.volume = String(m.volume ?? '')
+    teawareMeta.value.category = String(m.category ?? '')
+  } else if (type === 'origin') {
+    originMeta.value.province = String(m.province ?? '')
+    originMeta.value.region = String(m.region ?? '')
+  } else if (type === 'culture') {
+    cultureMeta.value.era = String(m.era ?? '')
+    const tags = Array.isArray(m.tags) ? (m.tags as string[]).join(',') : String(m.tags ?? '')
+    cultureMeta.value.tags = tags
+  } else if (type === 'brand') {
+    brandMeta.value.founded = (m.founded as number) ?? ''
+    brandMeta.value.brand_origin = String(m.brand_origin ?? '')
+    brandMeta.value.website = String(m.website ?? '')
+  } else if (type === 'knowledge') {
+    knowledgeMeta.value.subtype = String(m.subtype ?? '')
+    knowledgeMeta.value.difficulty = String(m.difficulty ?? '')
+  }
+}
+
 async function load() {
   loading.value = true
   try {
     types.value = await getContentTypes()
 
-    if (isEdit.value) {
-      // TODO: 编辑模式下拉取详情回填（需要后端加 GET /admin/contents/{id}）
-      // 当前 MVP 暂不实现，编辑功能仅允许通过 PUT 手动传 id 更新
-      ElMessage.warning('编辑详情回填暂未实现，请通过 API 直接调用 PUT /admin/contents/{id}')
+    if (isEdit.value && editId.value) {
+      const res = await getAdminContent(editId.value)
+      const item = res.data
+      // 回填表单
+      form.value.type_code = item.type_code
+      form.value.title = item.title
+      form.value.summary = item.summary ?? ''
+      form.value.body = item.body ?? ''
+      form.value.cover_image = item.cover_image ?? ''
+      form.value.meta = item.meta ?? {}
+      form.value.sort_order = item.sort_order
+      form.value.is_active = item.is_active ?? true
+      // meta → 各板块 ref 对象
+      restoreMetaFromForm()
     }
   } catch {
     ElMessage.error('加载失败')

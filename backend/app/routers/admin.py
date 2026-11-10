@@ -209,6 +209,13 @@ def admin_list_contents(
     return ok(data.model_dump(mode="json"))
 
 
+@router.get("/contents/{item_id}")
+def admin_get_content(item_id: int, db: Session = Depends(get_db)):
+    """后台内容详情（编辑回填；含下架条目）。"""
+    data = content_service.admin_get_content(db, item_id=item_id)
+    return ok(data.model_dump(mode="json"))
+
+
 @router.post("/contents")
 def admin_create_content(
     payload: ContentCreateRequest,

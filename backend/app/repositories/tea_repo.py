@@ -4,7 +4,7 @@
 本层只接收已解析好的结构化条件。
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, case, func, or_, text
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -80,7 +80,7 @@ def list_teas(
 
 def list_hot(db: Session, limit: int) -> list[Tea]:
     """热门推荐（S17）：7 天收藏数 ×3 + 累计收藏数，稳定次级键兜底。"""
-    since = datetime.utcnow() - timedelta(days=7)
+    since = datetime.now(timezone.utc) - timedelta(days=7)
     recent = (
         db.query(FavoriteItem.tea_id.label("tea_id"), func.count().label("cnt"))
         .filter(FavoriteItem.created_at >= since)

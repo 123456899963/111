@@ -87,6 +87,15 @@ def _to_out(item: ContentItem, type_code: str) -> ContentItemOut:
     """ORM → 前台 DTO。"""
     out = ContentItemOut.model_validate(item, from_attributes=True)
     out.type_code = type_code
+    # is_active 仅后台详情有意义；item 是后台查询结果时它是 int
+    out.is_active = None
+    return out
+
+
+def _to_admin_out(item: ContentItem, type_code: str) -> ContentItemOut:
+    """ORM → 后台 DTO（含 is_active）。"""
+    out = _to_out(item, type_code)
+    out.is_active = bool(item.is_active)
     return out
 
 
@@ -154,8 +163,7 @@ def admin_create_content(
     if ct is None:
         raise ContentTypeNotFound
 
-    # meta 按板块校验（Schema 层调用）
-    req.validate_meta_for_type()
+    # meta 按板块校验已在 Schema model_validator 中自动执行
 
     item = ContentItem(
         type_id=ct.id,
@@ -178,7 +186,7 @@ def admin_create_content(
     )
     db.commit()
     db.refresh(item)
-    return _to_out(item, ct.code)
+    return _to_admin_out(item, ct.code)
 
 
 def admin_update_content(
@@ -223,7 +231,17 @@ def admin_update_content(
     )
     db.commit()
     db.refresh(item)
-    return _to_out(item, ct.code if ct else "")
+    return _to_admin_out(item, ct.code if ct else "")
+
+
+def admin_get_content(db: Session, *, item_id: int) -> ContentItemOut:
+    """后台详情（编辑回填用；软删条目也能访问）。"""
+    repo = ContentRepository(db)
+    item = repo.get_by_id(item_id)
+    if item is None:
+        raise ContentItemNotFound
+    ct = repo.get_type_by_id(item.type_id)
+    return _to_admin_out(item, ct.code if ct else "")
 
 
 def admin_delete_content(db: Session, *, admin_id: int, item_id: int) -> None:

@@ -8,7 +8,7 @@
 - S-33：登录失败锁定（用户名 + IP 双维度，窗口内达到阈值返回 42900）
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -60,7 +60,7 @@ def login(db: Session, username: str, password: str, *, ip: str) -> User:
     - 用户名不存在与密码错误统一返回 40110（不区分）；对不存在的用户也执行一次
       bcrypt 哑哈希比对，避免响应时间差暴露账号是否存在（SECURITY S-04）
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     if _is_locked(db, username, ip, now):
         # 锁定期间即使密码正确也拒绝；不泄露账号是否存在

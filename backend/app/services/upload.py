@@ -7,7 +7,7 @@
 """
 
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -68,7 +68,7 @@ async def save_image(file: UploadFile) -> dict:
         raise UnsupportedMedia
 
     content_type, ext = detected
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     relative_dir = Path(f"{now.year:04d}") / f"{now.month:02d}"
     upload_root = Path(settings.UPLOAD_DIR).resolve()
     target_dir = (upload_root / relative_dir).resolve()
@@ -186,7 +186,7 @@ async def save_video(file: UploadFile) -> dict:
     if duration_seconds > settings.MAX_VIDEO_DURATION_SECONDS:
         raise VideoTooLong
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     relative_dir = Path("videos") / f"{now.year:04d}" / f"{now.month:02d}"
     upload_root = Path(settings.UPLOAD_DIR).resolve()
     target_dir = (upload_root / relative_dir).resolve()
