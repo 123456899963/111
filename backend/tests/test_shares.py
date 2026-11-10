@@ -128,7 +128,7 @@ def _user_id(username: str) -> int:
 
 
 def _list_id(client: TestClient) -> int:
-    return client.get("/api/v1/lists").json()["data"]["id"]
+    return client.get("/api/v1/lists").json()["data"][0]["id"]
 
 
 def test_share_01_generate_reuses_active_token():
@@ -148,7 +148,7 @@ def test_share_01_generate_reuses_active_token():
 
         list_id = _list_id(client)
         assert _active_tokens(list_id) == 1
-        share = client.get("/api/v1/lists").json()["data"]["share"]
+        share = client.get(f"/api/v1/lists/{list_id}").json()["data"]["share"]
         assert share["token"] == data["token"]
     finally:
         _cleanup([], [username])
@@ -246,7 +246,8 @@ def test_share_05_public_view_filters_private_fields():
     client_b, _ = _register(username_b)
     try:
         client_a.post(f"/api/v1/favorites/{tea_id}")
-        client_a.put(f"/api/v1/lists/notes/{tea_id}", json={"content": "私有笔记"})
+        list_a = client_a.get("/api/v1/lists").json()["data"][0]["id"]
+        client_a.put(f"/api/v1/lists/{list_a}/notes/{tea_id}", json={"content": "私有笔记"})
         token = client_a.post("/api/v1/shares/generate").json()["data"]["token"]
 
         guest = TestClient(app)

@@ -38,11 +38,28 @@ class ListItem(BaseModel):
         return iso_z(v)
 
 
-class ListData(BaseModel):
-    """默认清单（§4.4.1）"""
+class ListSummary(BaseModel):
+    """清单摘要（§4.4.1 GET /lists）"""
 
     id: int
     title: str
+    is_default: bool
+    tea_count: int
+    created_at: datetime
+    updated_at: datetime
+    share: ShareBrief | None = None
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_datetime(self, v: datetime) -> str:
+        return iso_z(v)
+
+
+class ListData(BaseModel):
+    """清单详情（§4.4.2 GET /lists/{list_id}）"""
+
+    id: int
+    title: str
+    is_default: bool
     tea_count: int
     created_at: datetime
     updated_at: datetime
@@ -54,15 +71,22 @@ class ListData(BaseModel):
         return iso_z(v)
 
 
+class ListCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+
+
 class TitleUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str
 
 
-class TitleUpdateData(BaseModel):
+class ListTitleData(BaseModel):
     id: int
     title: str
+    is_default: bool
     updated_at: datetime
 
     @field_serializer("updated_at")
@@ -78,4 +102,5 @@ class NoteUpdateRequest(BaseModel):
 
 class NoteUpdateData(BaseModel):
     tea_id: int
+    list_id: int
     tasting_note: str | None

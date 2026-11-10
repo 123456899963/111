@@ -17,6 +17,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 from itsdangerous import URLSafeTimedSerializer
+from sqlalchemy import text as sa_text
 
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -282,6 +283,15 @@ def test_tc_auth_05_login_failure_is_uniform_and_timed():
             ghost_times.append(time.perf_counter() - start)
             ghost_body = ghost
 
+        # S14：同一 IP 连续失败会触发锁定，先清空失败记录再测“密码错误”路径，
+        # 保证本用例只验证 401 文案与等时性，不混入 429 锁定行为。
+        db = SessionLocal()
+        try:
+            db.execute(sa_text("DELETE FROM login_attempts"))
+            db.commit()
+        finally:
+            db.close()
+
         for _ in range(5):
             start = time.perf_counter()
             wrong = TestClient(app).post(
@@ -312,8 +322,11 @@ def test_tc_auth_06_all_protected_endpoints_require_session():
         ("get", "/api/v1/auth/me", {}),
         ("post", "/api/v1/favorites/1", {}),
         ("get", "/api/v1/lists", {}),
-        ("put", "/api/v1/lists/title", {"json": {"title": "未登录标题"}}),
-        ("put", "/api/v1/lists/notes/1", {"json": {"content": "未登录笔记"}}),
+        ("post", "/api/v1/lists", {"json": {"title": "未登录标题"}}),
+        ("get", "/api/v1/lists/1", {}),
+        ("put", "/api/v1/lists/1", {"json": {"title": "未登录标题"}}),
+        ("delete", "/api/v1/lists/1", {}),
+        ("put", "/api/v1/lists/1/notes/1", {"json": {"content": "未登录笔记"}}),
         ("post", "/api/v1/shares/generate", {}),
         ("post", "/api/v1/shares/ZZZZZZZZ/copy", {}),
         ("get", "/api/v1/admin/stats", {}),
@@ -745,7 +758,10 @@ def test_tc_share_05_public_fields_and_off_shelf_flag():
     try:
         client.post(f"/api/v1/favorites/{active_tea}")
         client.post(f"/api/v1/favorites/{off_tea}")
-        client.put(f"/api/v1/lists/notes/{active_tea}", json={"content": "私有笔记"})
+        default_list = client.get("/api/v1/lists").json()["data"][0]["id"]
+        client.put(
+            f"/api/v1/lists/{default_list}/notes/{active_tea}", json={"content": "私有笔记"}
+        )
         db = SessionLocal()
         try:
             db.query(Tea).filter(Tea.id == off_tea).update({"is_active": False})
@@ -945,7 +961,10 @@ def test_tc_e2e_mvp_closure():
         assert fav.status_code == 200 and fav.json()["data"]["is_favorited"] is True
 
         # 4 写笔记
-        note = owner.put(f"/api/v1/lists/notes/{tea_id}", json={"content": "闭环笔记"})
+        default_list = owner.get("/api/v1/lists").json()["data"][0]["id"]
+        note = owner.put(
+            f"/api/v1/lists/{default_list}/notes/{tea_id}", json={"content": "闭环笔记"}
+        )
         assert note.status_code == 200 and note.json()["data"]["tasting_note"] == "闭环笔记"
 
         # 5 生成分享

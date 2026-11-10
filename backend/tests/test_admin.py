@@ -513,7 +513,8 @@ def test_admin_tea_08_toggle_links_public_visibility_and_keeps_favorites():
         assert resp.json()["code"] == 40401
 
         # 已收藏条目保留并灰显，收藏计数不被上下架改变
-        my_list = admin.get("/api/v1/lists").json()["data"]
+        default_list = admin.get("/api/v1/lists").json()["data"][0]["id"]
+        my_list = admin.get(f"/api/v1/lists/{default_list}").json()["data"]
         item = next(i for i in my_list["items"] if i["tea_id"] == tea_id)
         assert item["is_available"] is False
         detail = admin.get(f"/api/v1/admin/teas/{tea_id}").json()["data"]

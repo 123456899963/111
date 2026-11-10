@@ -2,9 +2,17 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel, ConfigDict, field_serializer
 
 from app.schemas._common import iso_z
+
+
+class ShareGenerateRequest(BaseModel):
+    """生成分享请求体（可选）：不传 list_id 时分享默认清单。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    list_id: int | None = None
 
 
 class ShareGenerateData(BaseModel):

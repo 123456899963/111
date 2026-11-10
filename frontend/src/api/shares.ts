@@ -11,9 +11,12 @@ import type {
   ShareViewData,
 } from '@/types'
 
-/** POST /shares/generate 生成或复用分享令牌 */
-export function generateShare() {
-  return request.post<unknown, ApiEnvelope<ShareGenerateData>>('/shares/generate')
+/** POST /shares/generate 生成或复用分享令牌；不传 listId 时分享默认清单 */
+export function generateShare(listId?: number) {
+  return request.post<unknown, ApiEnvelope<ShareGenerateData>>(
+    '/shares/generate',
+    listId ? { list_id: listId } : undefined,
+  )
 }
 
 /** POST /shares/revoke/{token} 撤销分享（不可逆） */

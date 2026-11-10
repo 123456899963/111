@@ -1,11 +1,12 @@
 """分享路由（API_CONTRACT §4.5）"""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import get_current_user, get_optional_user
 from app.core.database import get_db
 from app.core.response import ok
+from app.schemas.share import ShareGenerateRequest
 from app.services import shares as shares_service
 
 router = APIRouter()
@@ -13,11 +14,13 @@ router = APIRouter()
 
 @router.post("/generate")
 def generate(
+    payload: ShareGenerateRequest | None = Body(default=None),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """生成/复用分享链接（§4.5.1）"""
-    data = shares_service.generate(db, current_user.id)
+    """生成/复用分享链接（§4.5.1）：可选 body {list_id}，缺省分享默认清单"""
+    list_id = payload.list_id if payload else None
+    data = shares_service.generate(db, current_user.id, list_id)
     return ok(data.model_dump())
 
 

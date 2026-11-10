@@ -3,15 +3,25 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
+  addAdminTeaImage,
   createAdminTea,
+  deleteAdminTeaImage,
   getAdminTea,
   toggleAdminTea,
   updateAdminTea,
   updateAdminTips,
   uploadAdminImage,
+  uploadAdminVideo,
 } from '@/api/admin'
+import { getTeaImages } from '@/api/teas'
 import { CATEGORY_LABELS, TEA_CATEGORIES, TEA_SEASONS } from '@/utils/teaQuery'
-import type { AdminTeaPayload, AdminTeaCreatePayload, Tea, TeaCategory } from '@/types'
+import type {
+  AdminTeaPayload,
+  AdminTeaCreatePayload,
+  Tea,
+  TeaCategory,
+  TeaMediaItem,
+} from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,6 +34,9 @@ const FERMENTATION_OPTIONS = ['不发酵', '微发酵', '半发酵', '全发酵'
 const loading = ref(false)
 const saving = ref(false)
 const uploading = ref(false)
+const uploadingVideo = ref(false)
+const uploadingGallery = ref(false)
+const gallery = ref<TeaMediaItem[]>([])
 const formRef = ref<FormInstance>()
 
 const teaForm = reactive({
@@ -42,6 +55,8 @@ const teaForm = reactive({
   tea_amount: 3,
   brew_time: 90,
   main_image_url: '',
+  video_url: '',
+  video_duration: null as number | null,
   is_active: true,
   tips_history: '',
   tips_suitable: '',
@@ -84,6 +99,8 @@ function fillForm(tea: Tea) {
   teaForm.tea_amount = tea.tea_amount ?? 3
   teaForm.brew_time = tea.brew_time ?? 90
   teaForm.main_image_url = tea.main_image_url ?? ''
+  teaForm.video_url = tea.video_url ?? ''
+  teaForm.video_duration = tea.video_duration ?? null
   teaForm.is_active = tea.is_active
   teaForm.tips_history = tea.tips_history ?? ''
   teaForm.tips_suitable = tea.tips_suitable ?? ''
@@ -97,9 +114,17 @@ async function loadDetail() {
   try {
     const res = await getAdminTea(teaId.value)
     fillForm(res.data)
+    await loadGallery()
   } finally {
     loading.value = false
   }
+}
+
+/** 图片集（S4）：仅编辑态可管理，新增态需先保存 */
+async function loadGallery() {
+  if (!isEdit.value) return
+  const res = await getTeaImages(teaId.value)
+  gallery.value = res.data
 }
 
 function buildPayload(): AdminTeaPayload {
@@ -119,6 +144,8 @@ function buildPayload(): AdminTeaPayload {
     tea_amount: teaForm.tea_amount,
     brew_time: teaForm.brew_time,
     main_image_url: teaForm.main_image_url.trim(),
+    video_url: nullableText(teaForm.video_url),
+    video_duration: teaForm.video_duration,
   }
 }
 
@@ -201,6 +228,89 @@ async function onFileChange(event: Event) {
 
 function triggerFileInput() {
   document.getElementById('tea-image-input')?.click()
+}
+
+/** 视频上传（S5）：MP4/MOV ≤ 50MB、≤ 3 分钟，时长由服务端校验并回填 */
+async function onVideoFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  if (!['video/mp4', 'video/quicktime'].includes(file.type)) {
+    ElMessage.error('仅支持 MP4 / MOV 视频')
+    input.value = ''
+    return
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.error('视频大小不能超过 50 MB')
+    input.value = ''
+    return
+  }
+
+  uploadingVideo.value = true
+  try {
+    const res = await uploadAdminVideo(file)
+    teaForm.video_url = res.data.url
+    teaForm.video_duration = res.data.duration
+    ElMessage.success('视频上传成功，保存后生效')
+  } finally {
+    uploadingVideo.value = false
+    input.value = ''
+  }
+}
+
+function triggerVideoInput() {
+  document.getElementById('tea-video-input')?.click()
+}
+
+function clearVideo() {
+  teaForm.video_url = ''
+  teaForm.video_duration = null
+}
+
+/** 图片集追加（S4）：先走图片上传拿 URL，再关联到茶品 */
+async function onGalleryFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+  if (!allowedTypes.includes(file.type)) {
+    ElMessage.error('仅支持 JPEG / PNG / WebP 图片')
+    input.value = ''
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过 5 MB')
+    input.value = ''
+    return
+  }
+  if (gallery.value.length >= 9) {
+    ElMessage.warning('图片集最多 9 张')
+    input.value = ''
+    return
+  }
+
+  uploadingGallery.value = true
+  try {
+    const uploaded = await uploadAdminImage(file)
+    const created = await addAdminTeaImage(teaId.value, uploaded.data.url)
+    gallery.value = [...gallery.value, created.data]
+    ElMessage.success('已加入图片集')
+  } finally {
+    uploadingGallery.value = false
+    input.value = ''
+  }
+}
+
+function triggerGalleryInput() {
+  document.getElementById('tea-gallery-input')?.click()
+}
+
+async function removeGalleryItem(item: TeaMediaItem) {
+  await deleteAdminTeaImage(teaId.value, item.id)
+  gallery.value = gallery.value.filter((row) => row.id !== item.id)
+  ElMessage.success('已删除该图片')
 }
 
 onMounted(loadDetail)
@@ -305,6 +415,54 @@ onMounted(loadDetail)
               <img :src="teaForm.main_image_url" alt="主图预览" />
             </div>
           </el-form-item>
+          <el-form-item label="视频介绍">
+            <div class="image-field">
+              <el-input
+                v-model="teaForm.video_url"
+                maxlength="500"
+                placeholder="留空表示无视频；只能填本站 /uploads/ 路径"
+              />
+              <el-button :loading="uploadingVideo" @click="triggerVideoInput">上传视频</el-button>
+              <el-button v-if="teaForm.video_url" @click="clearVideo">清除</el-button>
+              <input
+                id="tea-video-input"
+                type="file"
+                accept="video/mp4,video/quicktime"
+                class="file-input"
+                @change="onVideoFileChange"
+              />
+            </div>
+            <p class="text-small text-secondary">
+              MP4 / MOV，≤ 50 MB，时长 ≤ 3 分钟（服务端校验）。
+              <span v-if="teaForm.video_duration">当前：{{ teaForm.video_duration }} 秒</span>
+            </p>
+            <div v-if="teaForm.video_url" class="video-preview">
+              <video :src="teaForm.video_url" controls preload="metadata" />
+            </div>
+          </el-form-item>
+        </div>
+      </section>
+
+      <section v-if="isEdit" class="form-section">
+        <h3 class="text-h3 section-title">图片集（最多 9 张）</h3>
+        <p class="text-small text-secondary">
+          按添加顺序展示；删除仅解除关联，不物理删除磁盘文件。
+        </p>
+        <div class="gallery-grid">
+          <div v-for="item in gallery" :key="item.id" class="gallery-item">
+            <img :src="item.image_url" alt="图片集预览" loading="lazy" />
+            <el-button type="danger" link @click="removeGalleryItem(item)">删除</el-button>
+          </div>
+          <div v-if="gallery.length < 9" class="gallery-add">
+            <el-button :loading="uploadingGallery" @click="triggerGalleryInput">+ 添加图片</el-button>
+            <input
+              id="tea-gallery-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              class="file-input"
+              @change="onGalleryFileChange"
+            />
+          </div>
         </div>
       </section>
 
@@ -455,6 +613,44 @@ onMounted(loadDetail)
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   object-fit: cover;
+}
+.video-preview {
+  margin-top: 10px;
+}
+.video-preview video {
+  max-width: 360px;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+.gallery-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+.gallery-item {
+  width: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.gallery-item img {
+  width: 140px;
+  height: 105px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+.gallery-add {
+  width: 140px;
+  height: 105px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
 }
 .form-actions {
   display: flex;

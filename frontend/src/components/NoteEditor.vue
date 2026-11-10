@@ -6,6 +6,7 @@ import { useToastStore } from '@/stores/toast'
 const visible = defineModel<boolean>({ required: true })
 
 const props = defineProps<{
+  listId: number
   teaId: number
   teaName: string
   initialNote: string | null
@@ -44,7 +45,7 @@ async function save() {
   }
   saving.value = true
   try {
-    const res = await saveTastingNote(props.teaId, content)
+    const res = await saveTastingNote(props.listId, props.teaId, content)
     emit('saved', res.data.tasting_note)
     visible.value = false
     toast.success(content ? '品鉴笔记已保存' : '品鉴笔记已清空')

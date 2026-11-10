@@ -35,13 +35,13 @@ def _new_token() -> str:
     return secrets.token_urlsafe(TOKEN_BYTES)
 
 
-def generate(db: Session, user_id: int) -> ShareGenerateData:
-    """生成或复用分享令牌（并发下仅一条生效令牌）。"""
-    lists_service.get_or_create_default_list(db, user_id)
+def generate(db: Session, user_id: int, list_id: int | None = None) -> ShareGenerateData:
+    """生成或复用分享令牌（并发下同一清单仅一条生效令牌）。"""
+    target = lists_service.resolve_list(db, user_id, list_id)
 
     # 行锁串行化同一清单的并发生成，避免产生多条 is_active=1
-    list_obj = list_repo.get_by_user_for_update(db, user_id)
-    if list_obj is None:  # pragma: no cover - get_or_create 已保证存在
+    list_obj = list_repo.get_by_id_for_update(db, target.id)
+    if list_obj is None:  # pragma: no cover - resolve_list 已保证存在
         raise ShareNotFound
 
     existing = share_repo.get_active_by_list(db, list_obj.id, for_update=True)
@@ -69,7 +69,7 @@ def generate(db: Session, user_id: int) -> ShareGenerateData:
         except IntegrityError:
             # token 全局唯一冲突（概率极低）：回滚后重试
             db.rollback()
-            list_obj = list_repo.get_by_user_for_update(db, user_id)
+            list_obj = list_repo.get_by_id_for_update(db, target.id)
             if list_obj is None:  # pragma: no cover
                 raise ShareNotFound
             existing = share_repo.get_active_by_list(db, list_obj.id, for_update=True)
@@ -128,7 +128,7 @@ def view(db: Session, *, token: str, viewer_id: int | None) -> ShareViewData:
             items=[],
         )
 
-    rows = list_repo.list_items(db, list_obj.user_id)
+    rows = list_repo.list_items(db, list_obj.id)
     items = [
         ShareViewItem(
             tea_id=tea.id,
@@ -167,12 +167,14 @@ def copy_all(db: Session, *, token: str, user_id: int) -> CopyResult:
     if source_list.user_id == user_id:
         raise UserForbidden
 
-    rows = list_repo.list_items(db, source_list.user_id)
+    rows = list_repo.list_items(db, source_list.id)
     total = len(rows)
 
     lists_service.get_or_create_default_list(db, user_id)
-    # 串行化同一用户的并发 copy，锁内使用当前读获取已收藏集合
-    list_repo.get_by_user_for_update(db, user_id)
+    # 串行化同一用户的并发 copy，锁内使用当前读获取已收藏集合（跨清单去重）
+    default_list = list_repo.get_default_for_update(db, user_id)
+    if default_list is None:  # pragma: no cover - get_or_create 已保证存在
+        raise ShareNotFound
     existing_ids = favorite_repo.list_tea_ids(db, user_id, for_update=True)
 
     added = 0
@@ -189,7 +191,7 @@ def copy_all(db: Session, *, token: str, user_id: int) -> CopyResult:
 
         savepoint = db.begin_nested()
         try:
-            favorite_repo.create_favorite(db, user_id, tea.id)
+            favorite_repo.create_favorite(db, user_id, tea.id, default_list.id)
             favorite_repo.increment_favorite_count(db, tea.id)
             savepoint.commit()
             added += 1

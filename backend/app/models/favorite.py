@@ -17,16 +17,22 @@ from app.core.database import Base
 
 
 class FavoriteItem(Base):
-    """收藏清单条目（PRD §4.2 — MVP 每用户一个默认清单）
+    """收藏清单条目（PRD §4.2，S9 多清单）
 
-    MVP 单清单下用 user_id 代理清单归属，不额外挂 list_id；
-    S9 多清单时再补列并回填（见 DATA_MODEL §10）。
+    - 清单归属以 list_id 为准，user_id 冗余保留用于「跨清单去重」与统计
+    - 同一清单内同一茶品唯一：UNIQUE(list_id, tea_id)
+    - 同一茶品可存在于多个清单，但 teas.favorite_count 只在用户首次收藏时 +1
     """
 
     __tablename__ = "favorite_items"
 
     id: Mapped[int] = mapped_column(
         MySQLInteger(unsigned=True), primary_key=True, autoincrement=True
+    )
+    list_id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True),
+        ForeignKey("collection_lists.id", ondelete="CASCADE"),
+        nullable=False,
     )
     user_id: Mapped[int] = mapped_column(
         MySQLInteger(unsigned=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
@@ -40,7 +46,8 @@ class FavoriteItem(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("user_id", "tea_id", name="uk_favorite_user_tea"),
+        UniqueConstraint("list_id", "tea_id", name="uk_favorite_list_tea"),
+        Index("idx_favorite_list_created", "list_id", "created_at"),
         Index("idx_favorite_user_created", "user_id", "created_at"),
         Index("idx_favorite_tea", "tea_id"),
     )

@@ -92,11 +92,11 @@ def test_fav_01_add_favorite_updates_count_and_status():
         assert resp.status_code == 200
         body = resp.json()
         assert body["code"] == 0
-        assert body["data"] == {
-            "tea_id": tea_id,
-            "is_favorited": True,
-            "favorite_count": 11,
-        }
+        data = body["data"]
+        assert data["tea_id"] == tea_id
+        assert data["is_favorited"] is True
+        assert data["favorite_count"] == 11
+        assert len(data["list_ids"]) == 1
         assert _favorite_rows(tea_id) == 1
         assert _tea_count(tea_id) == 11
 
@@ -121,7 +121,7 @@ def test_fav_02_add_is_idempotent_and_concurrent():
         # 20 线程并发收藏同一茶品（需先清理该用户已有收藏）
         db = SessionLocal()
         try:
-            favorite_repo.delete_favorite(db, user_repo.get_by_username(db, username).id, tea_id)
+            favorite_repo.delete_all_for_tea(db, user_repo.get_by_username(db, username).id, tea_id)
             db.commit()
         finally:
             db.close()
@@ -157,11 +157,11 @@ def test_fav_03_remove_favorite_decrements_count():
         client.post(f"/api/v1/favorites/{tea_id}")
         resp = client.delete(f"/api/v1/favorites/{tea_id}")
         assert resp.status_code == 200
-        assert resp.json()["data"] == {
-            "tea_id": tea_id,
-            "is_favorited": False,
-            "favorite_count": 5,
-        }
+        data = resp.json()["data"]
+        assert data["tea_id"] == tea_id
+        assert data["is_favorited"] is False
+        assert data["favorite_count"] == 5
+        assert data["list_ids"] == []
         assert _favorite_rows(tea_id) == 0
         assert _tea_count(tea_id) == 5
         status = client.get(f"/api/v1/favorites/{tea_id}/status").json()["data"]
@@ -303,3 +303,44 @@ def test_fav_08_multi_user_concurrent_add():
         assert _tea_count(tea_id) == 12
     finally:
         _cleanup([tea_id], usernames)
+
+
+def test_fav_09_multi_list_counts_once_across_lists():
+    """S9：同一茶品跨清单只计 1 次收藏数，按清单取消不影响其它清单。"""
+    username = _unique_username("favlists")
+    tea_id = _create_tea(count=0)
+    client, _ = _register(username)
+    try:
+        default = client.get("/api/v1/lists").json()["data"][0]
+        extra = client.post("/api/v1/lists", json={"title": "第二清单"}).json()["data"]
+
+        first = client.post(f"/api/v1/favorites/{tea_id}").json()["data"]
+        assert first["favorite_count"] == 1
+        assert first["list_ids"] == [default["id"]]
+
+        second = client.post(f"/api/v1/favorites/{tea_id}", json={"list_id": extra["id"]}).json()[
+            "data"
+        ]
+        assert second["favorite_count"] == 1
+        assert sorted(second["list_ids"]) == sorted([default["id"], extra["id"]])
+
+        removed_one = client.delete(f"/api/v1/favorites/{tea_id}", params={"list_id": extra["id"]})
+        assert removed_one.json()["data"]["favorite_count"] == 1
+        assert removed_one.json()["data"]["list_ids"] == [default["id"]]
+
+        status = client.get(f"/api/v1/favorites/{tea_id}/status").json()["data"]
+        assert status["is_favorited"] is True
+        assert status["list_ids"] == [default["id"]]
+
+        removed_all = client.delete(f"/api/v1/favorites/{tea_id}")
+        assert removed_all.json()["data"]["favorite_count"] == 0
+        assert removed_all.json()["data"]["list_ids"] == []
+        assert _tea_count(tea_id) == 0
+
+        # 不存在的清单 / 他人的清单 → 40420
+        assert (
+            client.post(f"/api/v1/favorites/{tea_id}", json={"list_id": 999999}).json()["code"]
+            == 40420
+        )
+    finally:
+        _cleanup([tea_id], [username])
