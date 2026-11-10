@@ -503,13 +503,15 @@ function categoryStyle(category: TeaCategory) {
   height: 360px;
   background: radial-gradient(circle, rgba(92, 184, 92, 0.08) 0%, transparent 70%);
   pointer-events: none;
+  /* 背景图铺满时不再叠加装饰光斑，避免出现可见色块 */
+  display: none;
 }
 
 .hero__badge {
   display: inline-block;
   padding: 6px 16px;
   border-radius: var(--radius-full);
-  background: rgba(250, 248, 245, 0.78);
+  background: rgba(250, 248, 245, 0.9);
   border: 1px solid rgba(139, 115, 85, 0.25);
   color: var(--color-primary);
   font-size: var(--text-small);
@@ -526,20 +528,22 @@ function categoryStyle(category: TeaCategory) {
   color: var(--color-text-primary);
   margin: 0 0 20px;
   text-shadow:
-    0 1px 2px rgba(250, 248, 245, 0.9),
-    0 0 18px rgba(250, 248, 245, 0.7);
+    0 1px 2px rgba(250, 248, 245, 1),
+    0 0 10px rgba(250, 248, 245, 0.95),
+    0 0 22px rgba(250, 248, 245, 0.8);
 }
 
 .hero__subtitle {
   font-size: var(--text-h3);
   font-weight: 400;
   color: var(--color-text-primary);
-  opacity: 0.82;
+  opacity: 0.95;
   margin: 0 auto 40px;
   max-width: 600px;
   text-shadow:
-    0 1px 2px rgba(250, 248, 245, 0.9),
-    0 0 14px rgba(250, 248, 245, 0.65);
+    0 1px 2px rgba(250, 248, 245, 1),
+    0 0 9px rgba(250, 248, 245, 0.95),
+    0 0 18px rgba(250, 248, 245, 0.75);
 }
 
 .hero__search {
