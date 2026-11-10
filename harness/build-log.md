@@ -7,6 +7,23 @@
 | 记录顺序 | **最新条目置顶**（按日期倒序） |
 | 定位 | 事实流水，不替代任何权威文档 |
 
+## 2026-11-10｜S9 补齐：详情页收藏清单选择面板
+
+- 任务编号 / 分级：TASK-20261110-fav-list-picker / **B**（前端交互补齐，后端 API 原生支持，无契约变更）
+- 背景：上一任务 P0 冒烟发现「前端无把茶加入非默认清单入口」（FavoriteButton 仅默认清单；后端 `addFavorite` 已支持 `list_id`，收藏状态响应已含 `list_ids`）
+- 改动：
+  1. [favorite.ts](../frontend/src/utils/favorite.ts)：新增纯函数 `nextListToggleState`（清单维度切换 + 「用户 × 茶品」去重口径计数联动）
+  2. [FavoriteButton.vue](../frontend/src/components/FavoriteButton.vue)：primary variant 新增箭头按钮 + 清单选择面板（`role="menu"` / `menuitemcheckbox`，`aria-checked` 由 `list_ids` 驱动；懒加载 `GET /lists`；Esc/外点关闭；仅登录态渲染；乐观更新 + 失败回滚；登出重置面板状态；主按钮行为不变）
+  3. icon variant（卡片快速收藏）行为不变
+- 文档同步：[PAGE_SPECS.md](../docs/design/PAGE_SPECS.md) §5.6 新增面板交互规格
+- 测试：
+  - Vitest：新增 5 条 `nextListToggleState` 用例，全量 **50 passed**
+  - `npm run format` / `format:check` / `lint` / `typecheck` 全部通过
+  - 浏览器冒烟 **7/7 PASS**（建清单 → 面板开合 → 勾选加入计数 +1 → 取消计数 -1 → 复勾选 → /my 清单茶品数 = 1）
+- 契约 / 数据 / 安全影响：无契约变更、无表结构变更，纯前端改动
+- 遗留问题：冒烟数据 smoketest04（含 1 条非默认清单收藏记录）待清理，需用户授权后删除
+- 回滚方式：回退本提交
+
 ## 2026-11-10｜P0 收尾：顶栏可访问性 + 三项冒烟 + 部署演练 + CI 本地等效
 
 - 任务编号 / 分级：TASK-20261110-p0-closeout / **B**（AppHeader 交互修复无契约变更；其余为验证、格式化与文档修正）
