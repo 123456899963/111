@@ -227,8 +227,8 @@ python -m app.scripts.rotate_admin_password --password "新密码"
 ### 已知问题 / 限制
 
 1. **系统截图缺失**：README §11 待补充真实页面截图。
-2. **CI 未实跑**：`.github/workflows/ci.yml` 已配置但未在 GitHub Actions 实际执行验证。
-3. **Alembic baseline 迁移未生成**：当前建表以 `database/init.sql` 为准；正式上线前需在空库生成 baseline migration 并对现有环境执行 `alembic stamp`。
+2. **CI 远程触发待落地**：ci.yml 三 job 命令已本地等效实跑全绿（2026-11-10，含修复后端/前端格式漂移）；远程仓库在 Gitee，GitHub Actions 不会触发，迁移 Gitee Go 或镜像 GitHub 待决策。
+3. **Alembic 全新环境接管方式**：baseline 迁移（0001）已生成且版本链推进至 0010；`init.sql` 已随批次演进包含最新全部结构与种子，全新环境流程为 `init.sql 建库 → alembic stamp head`（2026-11-10 部署演练修正：旧流程 stamp 0001 后 upgrade 会与 init.sql 已有列冲突）。既有旧环境直接 `alembic upgrade head`。
 4. **构建体积告警**：前端主 chunk 超过 500 kB（Element Plus 已拆分为 admin 异步 chunk），后续可进一步拆分优化。
 5. **随机关联推荐成本**：热门 / 随机推荐使用 `ORDER BY RAND()`，当前数据量级（<1000）下可接受，数据量增长后需改为随机偏移方案。
 6. **登出后旧 Cookie 重放**：Cookie 会话登出仅清除客户端，服务端未做会话吊销（安全设计已知限制，SECURITY S-10 已记录）。
@@ -237,7 +237,7 @@ python -m app.scripts.rotate_admin_password --password "新密码"
 
 ### 后续改进方向（均未实现，属规划项）
 
-- 生成 Alembic baseline 迁移，切换为迁移驱动的表结构管理。
+- ~~生成 Alembic baseline 迁移~~（已完成：0001_baseline 起 10 个迁移；全新环境改为 `stamp head` 接管，见已知问题 3）。
 - 补充 Docker Compose（`web` + `api` + `mysql`）一键部署与真实服务器部署验证。
 - 在 GitHub Actions 实跑 CI 并回填结果。
 - PRD 第二阶段需求（S1–S17，如更丰富的用户能力与运营能力）按后续计划评估；暂不实现项（X1–X13）维持不开发。
