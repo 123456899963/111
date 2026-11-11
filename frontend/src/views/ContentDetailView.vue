@@ -42,6 +42,21 @@ async function load() {
 
 const currentType = computed(() => types.value.find((t) => t.code === typeCode.value) ?? null)
 
+/** 正文按空行切块，「## 」开头渲染为小标题，其余为段落 */
+const bodyBlocks = computed(() => {
+  const raw = item.value?.body
+  if (!raw) return []
+  return raw
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) =>
+      block.startsWith('## ')
+        ? { type: 'heading' as const, text: block.slice(3).trim() }
+        : { type: 'paragraph' as const, text: block },
+    )
+})
+
 onMounted(load)
 
 // 同一路由记录下切换 id（如上一页/下一页、相关推荐）时实例被复用，需重新加载
@@ -181,8 +196,11 @@ watch(
         </section>
 
         <!-- 正文 -->
-        <section v-if="item.body" class="detail__body">
-          <p>{{ item.body }}</p>
+        <section v-if="bodyBlocks.length" class="detail__body">
+          <template v-for="(block, index) in bodyBlocks" :key="index">
+            <h2 v-if="block.type === 'heading'" class="detail__subheading">{{ block.text }}</h2>
+            <p v-else>{{ block.text }}</p>
+          </template>
         </section>
 
         <!-- 返回 -->
@@ -310,6 +328,17 @@ watch(
 .detail__body p {
   margin: 0 0 20px;
   white-space: pre-wrap;
+}
+.detail__subheading {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  line-height: 1.6;
+  margin: 36px 0 12px;
+}
+.detail__subheading:first-child {
+  margin-top: 0;
 }
 
 .detail__footer {

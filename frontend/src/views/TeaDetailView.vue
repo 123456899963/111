@@ -76,7 +76,7 @@ const brewItems = computed(() => {
   return [
     { icon: '🌡️', label: '水温', value: item.water_temp != null ? `${item.water_temp}℃` : '—' },
     { icon: '🫖', label: '投茶量', value: item.tea_amount != null ? `${item.tea_amount}g` : '—' },
-    { icon: '⏱️', label: '浸泡时间', value: item.brew_time != null ? `${item.brew_time}s` : '—' },
+    { icon: '⏱️', label: '浸泡时间', value: item.brew_time != null ? `${item.brew_time}秒` : '—' },
   ]
 })
 

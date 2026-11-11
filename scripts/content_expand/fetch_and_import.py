@@ -31,8 +31,9 @@ sys.path.insert(0, str(BASE_DIR))
 sys.path.insert(0, str(BASE_DIR.parent))
 sys.path.append(str(BASE_DIR.parent / "tea_expand"))
 
-from tea_expand.download_images import HEADERS, search_baidu  # noqa: E402
 from __init__ import TYPE_ITEMS  # noqa: E402
+from detail_bodies import BODIES as DETAIL_BODIES  # noqa: E402
+from tea_expand.download_images import HEADERS, search_baidu  # noqa: E402
 
 load_dotenv(BASE_DIR.parent.parent / "backend" / ".env")
 
@@ -256,6 +257,7 @@ def main():
     no_image = []
     for item, res in zip(pending, results):
         code = item["code"]
+        body = DETAIL_BODIES.get(code, {}).get(item["title"], item["body"])
         max_sort[code] = max_sort.get(code, 0) + 1
         cur.execute(
             """
@@ -267,7 +269,7 @@ def main():
                 type_ids[code],
                 item["title"],
                 item["summary"],
-                item["body"],
+                body,
                 res["cover"],
                 json.dumps(item["meta"], ensure_ascii=False),
                 max_sort[code],

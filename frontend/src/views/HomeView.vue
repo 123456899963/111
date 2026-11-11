@@ -373,7 +373,7 @@ function categoryStyle(category: TeaCategory) {
                 <div class="card-random__brew">
                   <span v-if="randomTea.water_temp">🌡️ {{ randomTea.water_temp }}℃</span>
                   <span v-if="randomTea.tea_amount">🫖 {{ randomTea.tea_amount }}g</span>
-                  <span v-if="randomTea.brew_time">⏱ {{ randomTea.brew_time }}s</span>
+                  <span v-if="randomTea.brew_time">⏱ {{ randomTea.brew_time }}秒</span>
                 </div>
               </div>
             </RouterLink>
