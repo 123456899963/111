@@ -194,6 +194,7 @@ common.js 的 `getPagePrefix()` 自动检测当前页面层级：
 | **骨架屏** | 大图占位 + 标题占位 + 文本占位 + shimmer | CSS | 首次加载 350ms 后替换 |
 | **头部** | 主图（大图）+ 图片上叠加的茶类标签（**可点击**）+ 名称 + 产地 + 季节 | TEAS[id] | 点茶类标签跳列表页带 `?category={tea.category}`；主图 onerror 显示灰底 |
 | **行动按钮栏** | ❤️ 收藏 / ✏️ 写笔记 / ↗️ 分享 | localStorage + 模态框 | 收藏 toggle + Toast；笔记弹模态框（localStorage tea_notes）；分享弹模态框（生成 shareId + localStorage 写入 + 正确路径 `/c/{shareId}/index.html`） |
+| **购买入口** | 茶名右侧（与标题同一行、右对齐）的主按钮「🛒 去淘宝搜索同款」+ 下方小字「跳转第三方平台，本站不参与交易」 | `tea.name` 前端拼接 | 新标签页打开 `https://s.taobao.com/search?q={encodeURIComponent(茶名)}`；仅 `ready` 状态且茶名非空时渲染；`target="_blank" rel="noopener noreferrer"`；不接入商品、下单、支付 |
 | **冲泡参考卡** | 🌡 水温 / 🫖 投茶量 / ⏱ 浸泡时间 | tea.waterTemp / tea.teaAmount / tea.brewTime | — |
 | **四大感官卡** | 外形 / 汤色 / 香气 / 滋味 | tea.shape / tea.soup / tea.aroma / tea.taste | 每块左侧 emoji + 文字描述 |
 | **小贴士卡** | 4 块可独立显隐：历史文化 / 适合人群 / 常见误区 / 官方备注 | tea.tips.history / suitable / misconception / officialNote | **空内容整块隐藏**（display:none） |

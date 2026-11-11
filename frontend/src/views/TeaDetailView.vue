@@ -12,6 +12,7 @@ import { getHotTeas, getRelatedTeas, getTeaDetail } from '@/api/teas'
 import { getFavoriteStatus } from '@/api/favorites'
 import { clearPendingAction, loadPendingAction, savePendingAction } from '@/utils/pendingAction'
 import { addHistory } from '@/utils/viewHistory'
+import { buildTaobaoSearchUrl } from '@/utils/purchase'
 import type { Tea, TeaListItem } from '@/types'
 
 const route = useRoute()
@@ -88,6 +89,9 @@ const hasBrew = computed(
 )
 
 const favoriteText = computed(() => favoriteCount.value.toLocaleString('zh-CN'))
+
+/** 购买入口：仅按茶名跳转淘宝搜索，不接入交易（茶名为空时不渲染） */
+const purchaseUrl = computed(() => (tea.value ? buildTaobaoSearchUrl(tea.value.name) : null))
 
 watch(
   () => route.params.id,
@@ -295,7 +299,25 @@ function retry() {
               <span v-if="tea.season">{{ tea.season }}</span>
               <span>♡ {{ favoriteText }} 人收藏</span>
             </div>
-            <h1 class="detail-header__name">{{ tea.name }}</h1>
+            <div class="detail-header__title-row">
+              <h1 class="detail-header__name">{{ tea.name }}</h1>
+
+              <!-- 购买入口：茶名右侧 -->
+              <div v-if="purchaseUrl" class="purchase-entry">
+                <a
+                  class="btn btn--primary"
+                  :href="purchaseUrl as string"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :title="`在淘宝搜索「${tea.name}」`"
+                >
+                  <span aria-hidden="true">🛒</span>
+                  去淘宝搜索同款
+                </a>
+                <span class="purchase-entry__hint">跳转第三方平台，本站不参与交易</span>
+              </div>
+            </div>
+
             <p class="detail-header__origin">{{ tea.origin }}</p>
 
             <div v-if="hasBrew" class="brew-card">
@@ -676,12 +698,21 @@ function retry() {
   margin-bottom: 12px;
 }
 
+.detail-header__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
 .detail-header__name {
   font-family: var(--font-display);
   font-size: var(--text-h1);
   font-weight: 600;
   color: var(--color-text-primary);
-  margin: 0 0 12px;
+  margin: 0;
   line-height: 1.3;
 }
 
@@ -745,6 +776,29 @@ function retry() {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* 购买入口：茶名右侧 */
+.purchase-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.purchase-entry__hint {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 767px) {
+  .purchase-entry {
+    align-items: flex-start;
+  }
+  .purchase-entry .btn {
+    width: 100%;
+  }
 }
 
 /* 通用 section */
