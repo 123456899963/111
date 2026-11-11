@@ -9,6 +9,7 @@ import time
 from fastapi.testclient import TestClient
 
 from app.core.database import SessionLocal
+from app.core.security import verify_password
 from app.main import app
 from app.repositories import user_repo
 
@@ -236,5 +237,159 @@ def test_password_is_bcrypt_hashed_in_db():
             assert user.password_hash.startswith("$2b$10$")
         finally:
             db.close()
+    finally:
+        _cleanup_user(username)
+
+
+# ===== AUTH-14 / AUTH-15 / AUTH-16：自助修改密码（session_version 吊销旧会话） =====
+
+
+def _register_for_password(username: str, password: str = "tea2026") -> tuple[TestClient, str]:
+    c = TestClient(app)
+    resp = c.post(
+        "/api/v1/auth/register",
+        json={"username": username, "password": password},
+    )
+    assert resp.status_code == 200
+    token = resp.cookies.get("tea_session")
+    assert token
+    return c, token
+
+
+def test_change_password_success_invalidates_old_session():
+    username = _unique_username("pwd")
+    try:
+        c, old_token = _register_for_password(username)
+        assert c.get("/api/v1/auth/me").status_code == 200
+
+        db = SessionLocal()
+        try:
+            before = user_repo.get_by_username(db, username).session_version
+        finally:
+            db.close()
+
+        resp = c.put(
+            "/api/v1/auth/password",
+            json={"old_password": "tea2026", "new_password": "tea2027"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["code"] == 0
+        assert resp.json()["data"] is None
+        # 成功响应清除 Cookie（与登录一致的 HttpOnly/SameSite/Path）
+        set_cookie = resp.headers.get("set-cookie", "")
+        assert "tea_session=" in set_cookie and "Max-Age=0" in set_cookie
+
+        db = SessionLocal()
+        try:
+            user = user_repo.get_by_username(db, username)
+            assert user.session_version == before + 1
+            assert verify_password("tea2027", user.password_hash)
+        finally:
+            db.close()
+
+        # 旧 Cookie（sv 未更新）立即失效
+        replay = TestClient(app)
+        replay.cookies.set("tea_session", old_token)
+        replay_resp = replay.get("/api/v1/auth/me")
+        assert replay_resp.status_code == 401
+        assert replay_resp.json()["code"] == 40100
+    finally:
+        _cleanup_user(username)
+
+
+def test_change_password_wrong_old_password_keeps_password():
+    username = _unique_username("pwd")
+    try:
+        c, _ = _register_for_password(username)
+        resp = c.put(
+            "/api/v1/auth/password",
+            json={"old_password": "wrongpass", "new_password": "tea2027"},
+        )
+        assert resp.status_code == 401
+        assert resp.json()["code"] == 40110
+
+        db = SessionLocal()
+        try:
+            user = user_repo.get_by_username(db, username)
+            assert user.session_version == 0
+            assert verify_password("tea2026", user.password_hash)
+        finally:
+            db.close()
+
+        # 原会话仍然有效
+        assert c.get("/api/v1/auth/me").status_code == 200
+    finally:
+        _cleanup_user(username)
+
+
+def test_change_password_invalid_new_password_returns_40000():
+    username = _unique_username("pwd")
+    try:
+        c, _ = _register_for_password(username)
+
+        weak = c.put(
+            "/api/v1/auth/password",
+            json={"old_password": "tea2026", "new_password": "123"},
+        )
+        assert weak.status_code == 400
+        assert weak.json()["code"] == 40000
+
+        same = c.put(
+            "/api/v1/auth/password",
+            json={"old_password": "tea2026", "new_password": "tea2026"},
+        )
+        assert same.status_code == 400
+        assert same.json()["code"] == 40000
+
+        too_long = c.put(
+            "/api/v1/auth/password",
+            json={"old_password": "tea2026", "new_password": "a" * 65},
+        )
+        assert too_long.status_code == 400
+        assert too_long.json()["code"] == 40000
+
+        extra = c.put(
+            "/api/v1/auth/password",
+            json={"old_password": "tea2026", "new_password": "tea2027", "username": "x"},
+        )
+        assert extra.status_code == 400
+        assert extra.json()["code"] == 40000
+
+        db = SessionLocal()
+        try:
+            user = user_repo.get_by_username(db, username)
+            assert user.session_version == 0
+            assert verify_password("tea2026", user.password_hash)
+        finally:
+            db.close()
+    finally:
+        _cleanup_user(username)
+
+
+def test_change_password_new_password_can_login():
+    username = _unique_username("pwd")
+    try:
+        c, _ = _register_for_password(username)
+        resp = c.put(
+            "/api/v1/auth/password",
+            json={"old_password": "tea2026", "new_password": "tea2027"},
+        )
+        assert resp.status_code == 200
+
+        fresh = TestClient(app)
+        new_login = fresh.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "tea2027"},
+        )
+        assert new_login.status_code == 200
+        assert new_login.json()["code"] == 0
+        assert fresh.get("/api/v1/auth/me").status_code == 200
+
+        old_login = TestClient(app).post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "tea2026"},
+        )
+        assert old_login.status_code == 401
+        assert old_login.json()["code"] == 40110
     finally:
         _cleanup_user(username)

@@ -107,6 +107,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/AdminContributions.vue'),
         meta: { title: '投稿审核' },
       },
+      {
+        path: 'operation-logs',
+        name: 'admin-operation-logs',
+        component: () => import('@/views/admin/OperationLogsView.vue'),
+        meta: { title: '操作日志' },
+      },
       // —— 批次五 R1–R5 内容管理 ——
       {
         path: 'contents',

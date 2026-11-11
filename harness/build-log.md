@@ -1489,3 +1489,52 @@ gba(250,248,245,0.12)，无方向、无渐变，肉眼不可辨认为独立图�
   | 主题一致性 | 通过 | 低饱和暖调 + 上方留白，贴合「清新水墨」且不压标题文字 |
 
 - 遗留：AI 生成示意图，非实拍；如需实拍同名覆盖即可
+
+## 2026-11-11 文档与实现基线同步（P0）
+
+- 分级：A（纯文档同步；无业务规则、接口行为、表结构、权限变更）
+- 背景：全局体检发现权威文档滞后于已实现代码：README 端点/用例/测试数均为旧值；AGENTS 仍声明 S1–S17 不开发；API_CONTRACT 缺整个内容板块章节；openapi.yaml 缺已实现的 `GET /admin/contents/{item_id}`
+- 变更：
+  - `docs/api/API_CONTRACT.md`：新增 §4.9 内容板块（8 个端点：`/content-types`、`/contents`、`/contents/{item_id}`、`/admin/contents` 增删改查）；§1.1 路由分组表新增 `/api/v1/contents`；§3 接口总览由 46 条补齐为 56 条（补 `/me/avatar` POST/PUT 及内容板块 8 条）；版本 v1.6 → v1.7
+  - `docs/api/openapi.yaml`：补 `GET /admin/contents/{item_id}`（`adminGetContent`），operations 55 → 56
+  - `README.md`：端点 29 → 56、用例 60 → 89、pytest 106 → 170、Vitest 30 → 50、表 7 → 13、安全项 32 → 35、链接 205 → 273、文件 153 → 236；Alembic 说明改为 0001–0010
+  - `AGENTS.md`：阶段改为「MVP + 第二阶段扩展已完成，S1–S17 已实现并冻结，X1–X13 不开发」；业务端点 55 → 56
+  - `scripts/check_constants.py`、`docs/api/README.md`：常量与引用同步 55 → 56
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | 文档与运行时端点对比 | 通过 | 运行时 57 operations（56 业务 + health），openapi 补齐后 56 业务；无缺漏 |
+  | python scripts/check_all.py | 通过 | 273 链接、常量 56/89/35/13、五层 0 违规、前台 UI、记录、密钥全部通过 |
+  | pytest / Vitest | 未运行 | 本次零代码改动，沿用当日已执行的 170 passed / 50 passed 基线 |
+
+- 遗留：openapi 部分 `summary` 仍引用旧章节编号（§4.2.10/§4.6.12），不影响契约语义，后续随接口改动一并修正；P1 功能项待用户确认后实施
+
+## 2026-11-11 P1 功能补全（6 项）
+
+- 分级：B/C（清单导出、浏览历史、投稿标记为前端功能；内容搜索、修改密码、操作日志涉及接口/表结构，经用户确认后实施）
+- 需求：补齐体检发现的 6 项缺口；用户确认改密采用 `users.session_version` 吊销旧会话、投稿通知采用轻量本地标记
+- 变更：
+  - 清单一键导出：`frontend/src/utils/export.ts` + 我的清单页，CSV（UTF-8 BOM、RFC 4180 转义）与 JSON
+  - 浏览历史：`frontend/src/utils/viewHistory.ts`（localStorage、去重、上限 50）+ 详情页写入 + 个人中心展示/清空
+  - 内容搜索：`GET /contents` 新增 `keyword`（≤100，title/summary，复用 `escape_like`），前端 300ms 防抖搜索框
+  - 修改密码：`PUT /auth/password`；`users.session_version` 列 + Alembic `0011_user_session_version`；改密递增版本并清 Cookie，旧会话立即 40100；个人中心「账号安全」表单
+  - 操作日志：`GET /admin/operation-logs`（分页/动作/目标类型/管理员/日期筛选）+ 后台「操作日志」页
+  - 投稿结果标记：`frontend/src/utils/contributionRead.ts` + 我的投稿页统计与新结果提示（localStorage 已读）
+  - 文档同步：API_CONTRACT v1.9（业务端点 58）、openapi.yaml（58 operations）、DATA_MODEL、SECURITY S-06/S-08/S-10、MODULE_DESIGN、TEST_PLAN v1.6（94 条）、README/AGENTS/check_constants
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | python -m ruff check app tests | 通过 | All checks passed |
+  | pytest | 通过 | 184 passed（新增内容搜索 5、改密 4、操作日志 5） |
+  | npm run lint / typecheck / format:check | 通过 | 同时修复 8 个历史文件的 Prettier 格式基线 |
+  | npm run test:run | 通过 | 9 文件 / 73 用例（新增导出 8、浏览历史 7、投稿标记 8） |
+  | python scripts/check_all.py | 通过 | 273 链接、常量 58/94/35/13、五层 0 违规、密钥 0 |
+  | Alembic | 通过 | 测试库与开发库均升级至 `0011_user_session_version` |
+
+- 遗留：
+  - `operation_logs` 表无 IP 列，操作日志的 `ip_address` 恒为 null，已在契约标注预留；真实采集需另开 C 类表结构变更
+  - 浏览历史与投稿已读标记仅存本机 localStorage，不跨设备
+  - 内容搜索仅匹配标题与摘要，不含正文
+  - 本次改动未提交 git

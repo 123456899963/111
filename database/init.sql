@@ -33,6 +33,7 @@ CREATE TABLE users (
   password_hash VARCHAR(255)      NOT NULL                COMMENT 'bcrypt 哈希（60 字符）',
   role          ENUM('user','admin') NOT NULL DEFAULT 'user' COMMENT '角色：user 注册用户 / admin 管理员',
   avatar_url    VARCHAR(255)      NULL                    COMMENT '头像地址：/uploads/... 或预置 /avatars/tea-0X.svg',
+  session_version INT UNSIGNED    NOT NULL DEFAULT 0      COMMENT '会话版本号：改密后 +1，旧 Cookie 立即失效',
   created_at    DATETIME          NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_users_username (username)

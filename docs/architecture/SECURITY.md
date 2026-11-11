@@ -104,11 +104,11 @@ MySQL（不对公网暴露；最小权限账号）
 
 | ID | 控制目标 | 落点（层 / 文件 / 约束） | 实现要求 | 验证 |
 |---|---|---|---|---|
-| **S-06** | 会话令牌不可伪造、载荷最小 | `core/security.py` [create_session_token / verify_session_token](file:///d:/项目二/backend/app/core/security.py#L20-L37) | itsdangerous `URLSafeTimedSerializer(SECRET_KEY)`；载荷仅 `{"uid": <int>}`，不含角色、用户名、密码；任何解析失败返回 `None` → `40100` | AUTH-06、AUTH-07 |
-| **S-07** | Cookie 属性安全、有效期 30 天 | `routers/auth.py` [register / login Set-Cookie](file:///d:/项目二/backend/app/routers/auth.py#L13-L40)；`core/config.py` [SESSION_EXPIRE_DAYS](file:///d:/项目二/backend/app/core/config.py#L17-L19) | `HttpOnly=true`、`SameSite=Lax`、`Path=/`、`Max-Age=2592000`；生产 HTTPS 下 `Secure=true`；不设置 `Domain`；登出 `delete_cookie` 使用相同 `path`/`samesite`。`SameSite=Lax` + 仅同源 JSON 写接口 + CORS 白名单共同缓解 CSRF，MVP 不引入独立 CSRF token（若未来改为跨站部署或表单提交，再补 token 与 Origin 校验）。**当前代码缺 `secure` 参数，见 §5 G-02** | AUTH-01、AUTH-08 |
-| **S-08** | 每次请求验签并实时读取角色 | `core/auth_deps.py` **待创建**：`get_current_user` / `get_admin_user`；各 Router 通过 `Depends` 注入 | 验签 → 按 `uid` 查 `users` → 不存在返回 `40100`；`get_admin_user` 再判断 `role == 'admin'`，否则 `40300`；角色每次查库，Cookie 中不缓存角色，改库后立即生效 | AUTH-04、AUTH-06、PERM-04 |
-| **S-09** | 会话过期语义明确 | `core/security.py` [verify_session_token max_age](file:///d:/项目二/backend/app/core/security.py#L30-L37)；`config.py` `SESSION_EXPIRE_DAYS=30` | `SignatureExpired` / `BadSignature` 统一 `40100`；不区分“过期/伪造/用户不存在”，避免信息泄露 | AUTH-07 |
-| **S-10** | 明确无服务端会话的边界 | DATA_MODEL §1（不建 `sessions` 表）；`routers/auth.py` `logout` 只清 Cookie | 退出仅清除浏览器 Cookie；**已泄露的旧 Cookie 在 30 天内仍可重放**。MVP 接受该风险（无强制下线需求）；若后续要求“立即踢下线”，必须新增 `sessions` 表并在 S-08 增加版本号校验 | AUTH-08（已知限制） |
+| **S-06** | 会话令牌不可伪造、载荷最小 | `core/security.py` [create_session_token / parse_session_token / verify_session_token](file:///d:/项目二/backend/app/core/security.py) | itsdangerous `URLSafeTimedSerializer(SECRET_KEY)`；载荷仅 `{"uid": <int>, "sv": <int>}`（`sv` = `users.session_version`），不含角色、用户名、密码；旧格式无 `sv` 按 0 处理；任何解析失败返回 `None` → `40100` | AUTH-06、AUTH-07、AUTH-16 |
+| **S-07** | Cookie 属性安全、有效期 30 天 | `routers/auth.py` [register / login Set-Cookie](file:///d:/项目二/backend/app/routers/auth.py#L13-L40)；`core/config.py` [SESSION_EXPIRE_DAYS](file:///d:/项目二/backend/app/core/config.py#L17-L19) | `HttpOnly=true`、`SameSite=Lax`、`Path=/`、`Max-Age=2592000`；生产 HTTPS 下 `Secure=true`；不设置 `Domain`；登出/改密 `delete_cookie` 使用相同 `path`/`samesite`。`SameSite=Lax` + 仅同源 JSON 写接口 + CORS 白名单共同缓解 CSRF，MVP 不引入独立 CSRF token（若未来改为跨站部署或表单提交，再补 token 与 Origin 校验）。**当前代码缺 `secure` 参数，见 §5 G-02** | AUTH-01、AUTH-08 |
+| **S-08** | 每次请求验签并实时读取角色 | `core/auth_deps.py` `get_current_user` / `get_admin_user` / `get_optional_user`；各 Router 通过 `Depends` 注入 | 验签取得 `uid` + `sv` → 按 `uid` 查 `users` → 不存在或 `sv != users.session_version` 返回 `40100`；`get_admin_user` 再判断 `role == 'admin'`，否则 `40300`；角色每次查库，Cookie 中不缓存角色，改库后立即生效 | AUTH-04、AUTH-06、AUTH-16、PERM-04 |
+| **S-09** | 会话过期语义明确 | `core/security.py` [parse_session_token max_age](file:///d:/项目二/backend/app/core/security.py)；`config.py` `SESSION_EXPIRE_DAYS=30` | `SignatureExpired` / `BadSignature` 统一 `40100`；不区分“过期/伪造/用户不存在/会话版本失效”，避免信息泄露 | AUTH-07 |
+| **S-10** | 会话撤销边界与改密吊销 | DATA_MODEL §1（不建 `sessions` 表）；`users.session_version`（0011 迁移）；`routers/auth.py` `logout` 只清 Cookie、`PUT /auth/password` 递增版本；`repositories/user_repo.py` `update_password` | 登出仅清除浏览器 Cookie，**未改密的旧 Cookie 在 30 天内仍可重放**（MVP 风险接受）；**修改密码时 `session_version + 1` 并在同一事务提交，Cookie 载荷 `sv` 不匹配即 `40100`，该用户所有旧会话立即失效**；响应同时清除当前 Cookie 要求重新登录 | AUTH-08（登出重放，已知限制）、AUTH-16 |
 
 ### 2.3 授权与资源归属
 
@@ -187,7 +187,7 @@ MySQL（不对公网暴露；最小权限账号）
 | **A04 不安全设计** | 明确角色矩阵、单清单、软失效、撤销不可逆、幂等与事务边界；业务上限（分页 50、上传 5 MB、笔记 20,000 字符、keyword 50）；**登录失败锁定（S14 → S-33）** | **不做验证码**：MVP 以失败锁定覆盖暴力破解；**不做全站限流**：单机演示环境，Nginx `limit_req` 作为上线可选项记录在 §6。风险接受 | S-04、S-33、S-19、S-24–S-27 | AUTH-05、AUTH-10–AUTH-13、FAV-02、SHARE-02 |
 | **A05 安全配置错误** | `DEBUG=False`、随机 `SECRET_KEY`、CORS 白名单、生产关闭文档页、统一 500 文案、MySQL 不对外、非 root 账号 | 不做自动化配置基线扫描/容器镜像加固：MVP 尚未容器化（X3 第二阶段）；以 §6 上线检查单替代 | S-30、S-31 | DEF-01–DEF-04 |
 | **A06 易受攻击和过时的组件** | 固定版本、`pip-audit`/`npm audit`、避免 `passlib` 兼容坑、直接使用官方 `bcrypt` | 不做自动化 SBOM/持续依赖机器人：课程项目无 CI 供应链流水线；上线前人工审计一次并记录 | S-32 | DEF-04（上线检查） |
-| **A07 身份识别与认证失败** | bcrypt、统一失败提示、**登录失败锁定（用户名 + IP 双维度）**、30 天签名 Cookie、`HttpOnly`/`SameSite`、登出清 Cookie、角色实时读库 | **不做密码找回、邮箱/微信登录**：PRD FR-4.4 明确排除；**旧 Cookie 可重放**：无服务端会话表的设计取舍（S-10），MVP 接受。若上线后需要强制下线，须新增 `sessions` 表 | S-01–S-10、S-33 | AUTH-01–AUTH-13 |
+| **A07 身份识别与认证失败** | bcrypt、统一失败提示、**登录失败锁定（用户名 + IP 双维度）**、30 天签名 Cookie、`HttpOnly`/`SameSite`、登出清 Cookie、角色实时读库、**改密后 `session_version` 吊销全部旧会话** | **不做密码找回、邮箱/微信登录**：PRD FR-4.4 明确排除；**登出后旧 Cookie 可重放**：无服务端会话表的设计取舍（S-10），MVP 接受；改密已可强制使旧会话失效，若需“登出即下线”仍须新增 `sessions` 表 | S-01–S-10、S-33 | AUTH-01–AUTH-16 |
 | **A08 软件和数据完整性失效** | 不反序列化不可信二进制；仅 JSON/multipart；Alembic 版本化迁移；`operation_logs` 记录管理员写入；上传魔数校验 | 不做代码签名/镜像签名：无发布制品、无容器；依赖完整性由 S-32 兜底 | S-23、S-28、S-32 | TEA-01、UPLOAD-03 |
 | **A09 安全日志与监控失效** | uvicorn access log + 业务异常日志 + `operation_logs`；日志不含密码/Cookie/笔记正文；审计与账号生命周期解耦 | **不做集中日志、告警、SIEM**：单机 MVP 无运维平台；以“日志文件权限 + 保留 30 天 + 上线检查”替代。风险接受 | S-03、S-28、S-29 | AUTH-09、TEA-01、DEF-03 |
 | **A10 服务端请求伪造（SSRF）** | **不适用**：服务端从不根据用户输入发起 HTTP 请求；`main_image_url` 仅作为字符串返回浏览器，由浏览器直接加载；上传文件落本地磁盘，不做远程抓取 | 若未来增加“远程图片导入/代理”，必须增加域名/IP 白名单、禁止内网地址与重定向跟随；当前无此功能，不引入控制 | — | — |
@@ -263,3 +263,4 @@ MySQL（不对公网暴露；最小权限账号）
 | v1.1 | 2026-11-09 | 批次二：新增 S-33 登录失败锁定（S14，用户名 + IP 双维度、`42900`/HTTP 429、24 小时清理、不泄露账号存在性）；A04/A07 风险条目同步；用例增至 70 条 |
 | v1.2 | 2026-11-09 | 批次四：新增 S-34 用户贡献与审核门禁（S10–S13：提交需登录、仅本人可见/删除、仅 pending 可处理、审核仅管理员、映射与查重校验、拒绝理由必填、操作日志留痕）；适用范围改为 MVP + S1–S17 全项；配套用例增至 84 条 |
 | v1.3 | 2026-11-10 | ADR-0004 头像：新增 S-35 头像变更（登录鉴权、服务端生成地址、魔数+5 MB 限制、预置白名单、`operation_logs` 留痕）；S-02 字段范围补 `avatar_url` 与 `/me/avatar`；配套用例增至 89 条 |
+| v1.4 | 2026-11-11 | 自助修改密码（`PUT /auth/password`）：会话载荷增加 `sv`（`users.session_version`，0011 迁移）；S-06/S-08 同步载荷与校验语义，S-10 更新为“登出仍不可吊销、改密可吊销全部旧会话”；A07 风险条目同步；新增 AUTH-14～AUTH-16 用例 |

@@ -3,11 +3,14 @@
 事务边界由 Service 层控制：本层只 add/flush，不 commit。
 """
 
+from datetime import datetime
+
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.operation_log import OperationLog
 from app.models.tea import Tea, TeaTips
+from app.models.user import User
 from app.repositories._common import escape_like
 
 
@@ -93,6 +96,46 @@ def update_tips(db: Session, tips: TeaTips, values: dict) -> None:
     for key, value in values.items():
         setattr(tips, key, value)
     db.flush()
+
+
+def list_operation_logs(
+    db: Session,
+    *,
+    action: str | None = None,
+    target_type: str | None = None,
+    admin_id: int | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    offset: int = 0,
+    limit: int = 20,
+) -> tuple[list[tuple[OperationLog, str | None]], int]:
+    """操作日志查询（API_CONTRACT §4.6.12）：附操作人用户名，时间倒序。
+
+    左连 users：账号删除后 user_id 为 NULL，日志仍保留（admin_username 为 NULL）。
+    """
+    query = db.query(OperationLog, User.username).outerjoin(
+        User, User.id == OperationLog.user_id
+    )
+
+    if action:
+        query = query.filter(OperationLog.action == action)
+    if target_type:
+        query = query.filter(OperationLog.target_type == target_type)
+    if admin_id is not None:
+        query = query.filter(OperationLog.user_id == admin_id)
+    if start_at is not None:
+        query = query.filter(OperationLog.created_at >= start_at)
+    if end_at is not None:
+        query = query.filter(OperationLog.created_at < end_at)
+
+    total = query.count()
+    rows = (
+        query.order_by(OperationLog.created_at.desc(), OperationLog.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return rows, total
 
 
 def add_operation_log(

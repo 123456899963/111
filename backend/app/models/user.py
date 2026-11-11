@@ -21,6 +21,10 @@ class User(Base):
         Enum("user", "admin", name="user_role"), nullable=False, default="user"
     )
     avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # 会话版本号：改密后 +1，旧 Cookie 中的 sv 不再匹配即失效（SECURITY S-10）
+    session_version: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True), nullable=False, default=0, server_default=text("0")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
     )

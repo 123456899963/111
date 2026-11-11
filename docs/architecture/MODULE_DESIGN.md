@@ -22,7 +22,7 @@
 | M1 | 茶品列表页 + 筛选 | `/api/v1/teas` | `GET ""`（列表+筛选+排序+分页）、`GET /categories`、`GET /origins` | `/teas` · TeaListView | `teas` |
 | M2 | 首页 | `/api/v1/teas` | `GET /hot`（热门推荐）、`GET /random`（随机发现）、`GET /categories`（六大茶类计数） | `/` · HomeView | `teas` |
 | M3 | 茶品详情页 | `/api/v1/teas` | `GET /{tea_id}`（详情 + 小贴士） | `/teas/:id` · TeaDetailView | `teas` + `tea_tips` |
-| M4 | 注册登录 + 个人中心 | `/api/v1/auth` + `/api/v1/me` | `GET /auth/username-availability`、`POST /auth/register`、`POST /auth/login`、`POST /auth/logout`、`GET /auth/me`；`GET /me/stats`、`POST /me/avatar`、`PUT /me/avatar` | 登录模态框（HomeView/MyListView/TeaDetailView 触发）、`/admin/login` · AdminLogin、`/profile` · ProfileView | `users` + `operation_logs` |
+| M4 | 注册登录 + 个人中心 | `/api/v1/auth` + `/api/v1/me` | `GET /auth/username-availability`、`POST /auth/register`、`POST /auth/login`、`POST /auth/logout`、`GET /auth/me`、`PUT /auth/password`；`GET /me/stats`、`POST /me/avatar`、`PUT /me/avatar` | 登录模态框（HomeView/MyListView/TeaDetailView 触发）、`/admin/login` · AdminLogin、`/profile` · ProfileView | `users` + `operation_logs` |
 | M5 | 收藏清单 + 品鉴笔记 + 分享链接 | `/api/v1/favorites` + `/api/v1/lists` + `/api/v1/shares` | 见 §4 完整端点表 | `/my` · MyListView、`/c/:shareId` · ShareView | `collection_lists` + `favorite_items` + `share_tokens` + `users`（外键）+ `teas`（外键） |
 | M6 | 管理员后台（数据维护） | `/api/v1/admin` | 见 §4 完整端点表 | `/admin` · AdminLayout + 子路由（Dashboard / Teas / TeaEdit） | `teas` + `tea_tips` + `users`（角色） |
 
@@ -132,6 +132,7 @@ graph LR
 | 登录 | POST | `/api/v1/auth/login` | `{ username: string, password: string }` | `User 对象 { id, username, role, created_at }` | Set-Cookie `tea_session`（30 天） | 游客 |
 | 退出登录 | POST | `/api/v1/auth/logout` | 无 | `{ code: 0, message: "ok" }` | Delete-Cookie `tea_session` | 已登录 |
 | 获取当前用户 | GET | `/api/v1/auth/me` | 无（Cookie 自动携带） | `User 对象 { id, username, role, created_at }` | — | 已登录 |
+| 修改密码 | PUT | `/api/v1/auth/password` | `{ old_password, new_password }` | `{ code: 0, message: "ok", data: null }` | Delete-Cookie `tea_session` | 已登录 |
 
 **关键业务规则**：
 
@@ -139,7 +140,8 @@ graph LR
 |---|---|
 | 用户名实时唯一性校验 | 前端 `Debounce` 调 `GET /auth/username-availability?username=`（大小写不敏感）；注册提交时后端仍二次校验，冲突返回 40910 |
 | bcrypt 密码哈希（PRD 4.3） | `core/security.py` `hash_password()` → bcrypt cost=10 |
-| 签名 Cookie 会话 | `core/security.py` `create_session_token()` → itsdangerous URLSafeTimedSerializer → `max_age=30*86400` |
+| 签名 Cookie 会话 | `core/security.py` `create_session_token()` → itsdangerous URLSafeTimedSerializer → `max_age=30*86400`；载荷 `{uid, sv}` |
+| 改密吊销旧会话（S-10） | `services/auth.py` `change_password()`：校验旧密码 → 更新 `password_hash` → `users.session_version + 1`（同事务）；`core/auth_deps.py` 比对 `sv` 不一致返回 40100 |
 | 登录后回到触发页（FR-4.1） | 前端处理：注册/登录成功后，检查 `localStorage.pending_action`（由"想收藏但未登录"时写入），执行后清除 |
 | 管理员初始账号 | 后端启动时检查 `users` 表是否有 `role=admin`，无则自动创建（配置在 `core/config.py`） |
 

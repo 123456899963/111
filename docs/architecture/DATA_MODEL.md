@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.5（已确认）** |
+| 文档版本 | **v1.6（已确认）** |
 | 创建日期 | 2026-11-06 |
 | 修订记录 | v1.0（2026-11-06）：基于 PRD v1.1 与已确认技术架构完成数据模型定稿；确认 7 张表、清单独立建表、`share_tokens` 改挂 `list_id`、`operation_logs` 最小留痕、不建 `sessions` 表 |
 | 分析依据 | [PRD.md](../product/PRD.md) v1.1 · [TECH_STACK.md](TECH_STACK.md) v1.0 · [ARCHITECTURE.md](ARCHITECTURE.md) · [MODULE_DESIGN.md](MODULE_DESIGN.md) · `backend/app/models/` |
@@ -178,6 +178,7 @@ erDiagram
 | `password_hash` | VARCHAR(255) | 否 | — | bcrypt（60 字符），不存明文 |
 | `role` | ENUM('user','admin') | 否 | 'user' | 权限矩阵依据 |
 | `avatar_url` | VARCHAR(255) | 是 | NULL | 头像地址（ADR-0004）：`/uploads/...` 或预置 `/avatars/tea-0X.svg`；NULL 表示未设置 |
+| `session_version` | INT UNSIGNED | 否 | 0 | 会话版本号（S-10）：Cookie 载荷 `sv` 与此值比对；修改密码后 +1，所有旧 Cookie 立即失效 |
 | `created_at` | DATETIME | 否 | CURRENT_TIMESTAMP | UTC |
 
 - **主/外键**：PK `id`；无外键。
@@ -550,6 +551,7 @@ erDiagram
 | C15 | `collection_lists` / `favorite_items` | S9 多清单：增 `is_default` 与 `list_id`，唯一键改为清单内唯一（0005 迁移） | 清单 CRUD、收藏归属、跨清单去重 |
 | C16 | `contributions` | 新增表（S10–S13，0006 迁移）：JSON payload + 三态审核 | 贡献提交、审核后台、我的提交、详情科普聚合 |
 | C17 | `tea_name_category_map` | 新增表（S10，0006 迁移）：名品-茶类映射种子 22 条 | 提交时第一层茶类矛盾校验 |
+| C18 | `users` | 新增 `session_version INT UNSIGNED NOT NULL DEFAULT 0`（0011 迁移） | 会话载荷增加 `sv`；鉴权比对不一致返回 40100；改密后 +1 吊销全部旧会话 |
 
 **注意**：`share_tokens` 与 `favorite_items` 均通过 `list_id` 归属到具体清单，`favorite_items.user_id` 作为冗余列保留，用于跨清单去重与用户维度统计（S15/S16/S17）；`teas.favorite_count` 按「用户 × 茶品」去重维护。
 
@@ -594,3 +596,4 @@ erDiagram
 | **v1.3** | 2026-11-09 | 批次三 S9 多收藏清单（0005 迁移）：`collection_lists` 去 `uk_list_user`、增 `is_default` + `uk_list_user_default` + `idx_list_user`；`favorite_items` 增 `list_id`，唯一键改 `uk_favorite_list_tea`，新增 `idx_favorite_list_created` 与清单外键；`favorite_count` 改为跨清单去重 |
 | **v1.4** | 2026-11-09 | 批次四 S10–S13（0006 迁移）：新增 `contributions`（JSON payload + pending/approved/rejected）与 `tea_name_category_map`（22 条种子）；共 11 张表 |
 | **v1.5** | 2026-11-10 | ADR-0004 用户头像（0010 迁移）：`users` 增 `avatar_url VARCHAR(255) NULL`（上传 `/uploads/...` 或预置 `/avatars/tea-0X.svg`）；表数量不变 |
+| **v1.6** | 2026-11-11 | 自助修改密码（0011 迁移）：`users` 增 `session_version INT UNSIGNED NOT NULL DEFAULT 0`，Cookie 载荷携带 `sv`，改密后 +1 吊销所有旧会话；表数量不变 |

@@ -41,6 +41,20 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=1, max_length=64)
 
 
+class ChangePasswordRequest(BaseModel):
+    """修改密码（API_CONTRACT §4.1.6）；新旧密码规则与注册一致。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    old_password: str = Field(..., min_length=1, max_length=64, description="当前密码")
+    new_password: str = Field(
+        ...,
+        min_length=6,
+        max_length=64,
+        description="新密码 6-64 字符，规则与注册一致",
+    )
+
+
 class UserResponse(BaseModel):
     """当前用户信息（API_CONTRACT §2.1 User）。不含 password_hash。"""
 

@@ -9,6 +9,8 @@ import type {
   AdminContentListData,
   AdminContentListParams,
   AdminContentUpdatePayload,
+  AdminOperationLogListData,
+  AdminOperationLogListParams,
   AdminStatsData,
   AdminTeaCreatePayload,
   AdminTeaListData,
@@ -31,6 +33,13 @@ import type {
 /** GET /admin/stats 仪表盘统计 */
 export function getAdminStats() {
   return request.get<unknown, ApiEnvelope<AdminStatsData>>('/admin/stats')
+}
+
+/** GET /admin/operation-logs 操作日志查询（分页 + 动作/类型/管理员/日期筛选） */
+export function getAdminOperationLogs(params: AdminOperationLogListParams) {
+  return request.get<unknown, ApiEnvelope<AdminOperationLogListData>>('/admin/operation-logs', {
+    params,
+  })
 }
 
 /** GET /admin/teas 后台茶品列表（含下架） */

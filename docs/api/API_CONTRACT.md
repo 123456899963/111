@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.6** |
+| 文档版本 | **v1.9** |
 | 创建日期 | 2026-11-06 |
 | 契约基线 | [PRD.md](../product/PRD.md) v1.1 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.4 · [database/init.sql](../../database/init.sql) · [MODULE_DESIGN.md](../architecture/MODULE_DESIGN.md) |
 | 本契约地位 | 前后端联调与字段命名的唯一依据。脚手架中与本契约不一致的字段，以本契约（数据库列名）为准 |
@@ -28,6 +28,7 @@
 | `/api/v1/lists` | 我的多清单、标题、品鉴笔记 |
 | `/api/v1/shares` | 分享链接生成、撤销、游客查看、一键收藏 |
 | `/api/v1/admin` | 管理员茶品维护、上下架、小贴士、统计、图片上传 |
+| `/api/v1/contents` | 内容板块：茶具 / 产地 / 文化 / 品牌 / 知识（含 `/content-types` 板块分类与 `/admin/contents` 后台维护） |
 
 - 路径中的静态段必须先于动态段匹配（例如 `/teas/categories` 必须先于 `/teas/{tea_id}` 注册）。
 - `/api/v1/health` 是部署探针，不返回统一业务响应体，**不属于本契约**。
@@ -110,7 +111,7 @@
 | 项 | 约定 |
 |---|---|
 | 凭证载体 | HttpOnly Cookie，名称固定为 **`tea_session`** |
-| Cookie 值 | itsdangerous `URLSafeTimedSerializer` 签名的载荷 `{"uid": <users.id>}`，不含密码、角色、用户名 |
+| Cookie 值 | itsdangerous `URLSafeTimedSerializer` 签名的载荷 `{"uid": <users.id>, "sv": <users.session_version>}`，不含密码、角色、用户名；旧格式无 `sv` 的令牌按 0 处理 |
 | 有效期 | 30 天（`Max-Age=2592000`，对应 `SESSION_EXPIRE_DAYS=30`） |
 | 属性 | `HttpOnly=true`；`SameSite=Lax`；`Path=/`；生产环境 HTTPS 下 `Secure=true`，本地 HTTP 开发可关闭 |
 | 域 | 不设置 `Domain`，使用同源主机级 Cookie |
@@ -119,7 +120,8 @@
 | 登录 | `POST /auth/login` 校验成功后 `Set-Cookie: tea_session=...` |
 | 注册 | `POST /auth/register` 成功后自动登录并 `Set-Cookie`（PRD FR-4.1） |
 | 退出 | `POST /auth/logout` 删除 Cookie，服务端无状态可清理 |
-| 失效 | 签名无效、过期、用户不存在 → `40100`；前端提示“登录已过期”并弹登录面板 |
+| 失效 | 签名无效、过期、用户不存在、`sv` 与 `users.session_version` 不一致 → `40100`；前端提示“登录已过期”并弹登录面板 |
+| 改密吊销 | `PUT /auth/password` 成功后 `session_version + 1`，该用户所有旧 Cookie 立即失效 |
 | 角色 | `role` 每次从 `users.role` 读取；`admin` 才可访问 `/admin/*` |
 | 跨域 | 前后端同源部署；开发期 CORS 允许配置内源并 `allow_credentials=true` |
 | CSRF | MVP 依赖 `SameSite=Lax` + 同源部署；不额外下发 CSRF Token。若未来改为跨站 Cookie，必须补充 CSRF 防护 |
@@ -247,8 +249,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 - 举报、评论；用户贡献的富文本与图片上传（X7，仅接受纯文本）；
 - 清单描述、用户管理、修改他人账号、密码找回、邮箱登录、微信扫码登录；
 - 茶品物理删除（`DELETE /admin/teas/{id}` 不提供，只有上下架软失效）；
-- 批量导入、茶品图片删除（分享海报为纯前端生成，无接口）；
-- 管理员操作日志查询接口（日志仅服务端记录，不对外暴露，见 §6.3）。
+- 批量导入、茶品图片删除（分享海报为纯前端生成，无接口）。
 
 > 用户贡献与审核（S10–S13）已在 v1.5 纳入契约，见 §4.8；多清单（S9）见 §4.4/§4.5。
 
@@ -535,47 +536,59 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | 3 | 认证 | POST | `/auth/login` | 游客 |
 | 4 | 认证 | POST | `/auth/logout` | 任意 |
 | 5 | 认证 | GET | `/auth/me` | 登录用户 |
-| 6 | 我的 | GET | `/me/stats` | 登录用户 |
-| 7 | 茶品 | GET | `/teas` | 游客 |
-| 8 | 茶品 | GET | `/teas/categories` | 游客 |
-| 9 | 茶品 | GET | `/teas/origins` | 游客 |
-| 10 | 茶品 | GET | `/teas/hot` | 游客 |
-| 11 | 茶品 | GET | `/teas/random` | 游客 |
-| 12 | 茶品 | GET | `/teas/recommended` | 游客（可选 Cookie） |
-| 13 | 茶品 | GET | `/teas/{tea_id}` | 游客 |
-| 14 | 茶品 | GET | `/teas/{tea_id}/images` | 游客 |
-| 15 | 茶品 | GET | `/teas/{tea_id}/related` | 游客 |
-| 16 | 茶品 | GET | `/tips/latest` | 游客 |
-| 17 | 收藏 | POST | `/favorites/{tea_id}` | 登录用户 |
-| 18 | 收藏 | DELETE | `/favorites/{tea_id}` | 登录用户 |
-| 19 | 收藏 | GET | `/favorites/{tea_id}/status` | 登录用户 |
-| 20 | 清单 | GET | `/lists` | 登录用户 |
-| 21 | 清单 | POST | `/lists` | 登录用户 |
-| 22 | 清单 | GET | `/lists/{list_id}` | 登录用户（所有者） |
-| 23 | 清单 | PUT | `/lists/{list_id}` | 登录用户（所有者） |
-| 24 | 清单 | DELETE | `/lists/{list_id}` | 登录用户（所有者） |
-| 25 | 清单 | PUT | `/lists/{list_id}/notes/{tea_id}` | 登录用户（所有者） |
-| 26 | 分享 | POST | `/shares/generate` | 登录用户 |
-| 27 | 分享 | POST | `/shares/revoke/{token}` | 登录用户（所有者） |
-| 28 | 分享 | GET | `/shares/{token}` | 游客（可选 Cookie） |
-| 29 | 分享 | POST | `/shares/{token}/copy` | 登录用户（非所有者） |
-| 30 | 管理员 | GET | `/admin/teas` | 管理员 |
-| 31 | 管理员 | GET | `/admin/teas/{tea_id}` | 管理员 |
-| 32 | 管理员 | POST | `/admin/teas` | 管理员 |
-| 33 | 管理员 | PUT | `/admin/teas/{tea_id}` | 管理员 |
-| 34 | 管理员 | PATCH | `/admin/teas/{tea_id}/toggle` | 管理员 |
-| 35 | 管理员 | PUT | `/admin/teas/{tea_id}/tips` | 管理员 |
-| 36 | 管理员 | GET | `/admin/stats` | 管理员 |
-| 37 | 管理员 | POST | `/admin/upload` | 管理员 |
-| 38 | 管理员 | POST | `/admin/media/video` | 管理员 |
-| 39 | 管理员 | POST | `/admin/teas/{tea_id}/images` | 管理员 |
-| 40 | 管理员 | DELETE | `/admin/teas/{tea_id}/images/{image_id}` | 管理员 |
-| 41 | 贡献 | POST | `/contributions` | 登录用户 |
-| 42 | 贡献 | GET | `/contributions/mine` | 登录用户 |
-| 43 | 贡献 | DELETE | `/contributions/{contribution_id}` | 登录用户（本人） |
+| 6 | 认证 | PUT | `/auth/password` | 登录用户 |
+| 7 | 我的 | GET | `/me/stats` | 登录用户 |
+| 8 | 我的 | POST | `/me/avatar` | 登录用户 |
+| 9 | 我的 | PUT | `/me/avatar` | 登录用户 |
+| 10 | 茶品 | GET | `/teas` | 游客 |
+| 11 | 茶品 | GET | `/teas/categories` | 游客 |
+| 12 | 茶品 | GET | `/teas/origins` | 游客 |
+| 13 | 茶品 | GET | `/teas/hot` | 游客 |
+| 14 | 茶品 | GET | `/teas/random` | 游客 |
+| 15 | 茶品 | GET | `/teas/recommended` | 游客（可选 Cookie） |
+| 16 | 茶品 | GET | `/teas/{tea_id}` | 游客 |
+| 17 | 茶品 | GET | `/teas/{tea_id}/images` | 游客 |
+| 18 | 茶品 | GET | `/teas/{tea_id}/related` | 游客 |
+| 19 | 小贴士 | GET | `/tips/latest` | 游客 |
+| 20 | 收藏 | POST | `/favorites/{tea_id}` | 登录用户 |
+| 21 | 收藏 | DELETE | `/favorites/{tea_id}` | 登录用户 |
+| 22 | 收藏 | GET | `/favorites/{tea_id}/status` | 登录用户 |
+| 23 | 清单 | GET | `/lists` | 登录用户 |
+| 24 | 清单 | POST | `/lists` | 登录用户 |
+| 25 | 清单 | GET | `/lists/{list_id}` | 登录用户（所有者） |
+| 26 | 清单 | PUT | `/lists/{list_id}` | 登录用户（所有者） |
+| 27 | 清单 | DELETE | `/lists/{list_id}` | 登录用户（所有者） |
+| 28 | 清单 | PUT | `/lists/{list_id}/notes/{tea_id}` | 登录用户（所有者） |
+| 29 | 分享 | POST | `/shares/generate` | 登录用户 |
+| 30 | 分享 | POST | `/shares/revoke/{token}` | 登录用户（所有者） |
+| 31 | 分享 | GET | `/shares/{token}` | 游客（可选 Cookie） |
+| 32 | 分享 | POST | `/shares/{token}/copy` | 登录用户（非所有者） |
+| 33 | 管理员 | GET | `/admin/teas` | 管理员 |
+| 34 | 管理员 | GET | `/admin/teas/{tea_id}` | 管理员 |
+| 35 | 管理员 | POST | `/admin/teas` | 管理员 |
+| 36 | 管理员 | PUT | `/admin/teas/{tea_id}` | 管理员 |
+| 37 | 管理员 | PATCH | `/admin/teas/{tea_id}/toggle` | 管理员 |
+| 38 | 管理员 | PUT | `/admin/teas/{tea_id}/tips` | 管理员 |
+| 39 | 管理员 | GET | `/admin/stats` | 管理员 |
+| 40 | 管理员 | POST | `/admin/upload` | 管理员 |
+| 41 | 管理员 | POST | `/admin/media/video` | 管理员 |
+| 42 | 管理员 | POST | `/admin/teas/{tea_id}/images` | 管理员 |
+| 43 | 管理员 | DELETE | `/admin/teas/{tea_id}/images/{image_id}` | 管理员 |
 | 44 | 管理员 | GET | `/admin/contributions` | 管理员 |
 | 45 | 管理员 | POST | `/admin/contributions/{contribution_id}/approve` | 管理员 |
 | 46 | 管理员 | POST | `/admin/contributions/{contribution_id}/reject` | 管理员 |
+| 47 | 贡献 | POST | `/contributions` | 登录用户 |
+| 48 | 贡献 | GET | `/contributions/mine` | 登录用户 |
+| 49 | 贡献 | DELETE | `/contributions/{contribution_id}` | 登录用户（本人） |
+| 50 | 内容 | GET | `/content-types` | 游客 |
+| 51 | 内容 | GET | `/contents` | 游客 |
+| 52 | 内容 | GET | `/contents/{item_id}` | 游客 |
+| 53 | 内容管理 | GET | `/admin/contents` | 管理员 |
+| 54 | 内容管理 | POST | `/admin/contents` | 管理员 |
+| 55 | 内容管理 | GET | `/admin/contents/{item_id}` | 管理员 |
+| 56 | 内容管理 | PUT | `/admin/contents/{item_id}` | 管理员 |
+| 57 | 内容管理 | DELETE | `/admin/contents/{item_id}` | 管理员 |
+| 58 | 管理员 | GET | `/admin/operation-logs` | 管理员 |
 
 > 清单条目移除不单独提供 `DELETE /lists/{tea_id}`，统一复用 `DELETE /favorites/{tea_id}`（可带 `?list_id`），避免同一语义两个入口。
 
@@ -729,8 +742,44 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 }
 ```
 
-- **错误**：`40100`（无 Cookie、签名无效、过期、用户已被删除）。
+- **错误**：`40100`（无 Cookie、签名无效、过期、用户已被删除、会话版本不匹配）。
 - **规则**：`role` 实时读 `users.role`；前端据此显示管理入口。
+
+#### 4.1.6 修改密码
+
+- **方法与路径**：`PUT /auth/password`
+- **权限**：登录用户（Cookie 自动携带）
+- **请求体**（`extra=forbid`）：
+
+| 字段 | 类型 | 必填 | 约束 |
+|---|---|---|---|
+| `old_password` | string | 是 | 1–64 字符；bcrypt 校验，永不回显 |
+| `new_password` | string | 是 | 6–64 字符，规则与注册完全一致；不得与 `old_password` 相同 |
+
+- **请求示例**：
+
+```json
+{ "old_password": "tea2026", "new_password": "tea2027" }
+```
+
+- **成功响应**：HTTP 200，`code=0`，`data=null`；同时 `Set-Cookie: tea_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`
+
+```json
+{ "code": 0, "message": "ok", "data": null }
+```
+
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | `new_password` 长度非法、字段缺失、包含额外字段、新旧密码相同 |
+| 401 | 40100 | 未登录、Cookie 无效/过期、会话版本已失效 |
+| 401 | 40110 | `old_password` 错误（复用登录凭证错误码，不区分具体原因） |
+
+- **规则**：
+  - 成功后 `password_hash` 更新、`users.session_version + 1`，同一事务提交；该用户所有旧 Cookie（`sv` 不匹配）立即失效，需重新登录。
+  - 响应清除当前 `tea_session` Cookie（HttpOnly / SameSite=Lax / Path=/ 与登录一致）。
+  - 旧密码校验失败时不修改密码、不递增 `session_version`。
 
 ---
 
@@ -1946,6 +1995,64 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 
 - **规则**：**物理删除**（ADR-0003 §6）；磁盘文件保留（同一 URL 可能被其他茶品复用），仅解除关联；写入 `operation_logs`：`action='delete_tea_media'`。
 
+#### 4.6.12 操作日志查询
+
+- **方法与路径**：`GET /admin/operation-logs`
+- **权限**：管理员
+- **查询参数**：
+
+| 参数 | 类型 | 必填 | 约束 |
+|---|---|---|---|
+| `page` | integer | 否 | 默认 1；< 1 时夹取为 1 |
+| `page_size` | integer | 否 | 默认 20；取值 1–50，越界夹取 |
+| `action` | string | 否 | 精确匹配动作，如 `create_tea` |
+| `target_type` | string | 否 | 精确匹配目标类型，如 `tea` |
+| `admin_id` | integer | 否 | 操作人 `users.id`（对应 `operation_logs.user_id`） |
+| `start_date` | string | 否 | `YYYY-MM-DD`；按 `created_at` 过滤，含起始日 00:00:00 |
+| `end_date` | string | 否 | `YYYY-MM-DD`；含结束日全天（< 次日 00:00:00） |
+
+- **成功响应**：HTTP 200，`code=0`：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "items": [
+      {
+        "id": 128,
+        "admin_id": 1,
+        "admin_username": "admin",
+        "action": "create_tea",
+        "target_type": "tea",
+        "target_id": 42,
+        "detail": "新增茶品：碧螺春",
+        "ip_address": null,
+        "created_at": "2026-11-11T03:20:15Z"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "page_size": 20
+  }
+}
+```
+
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | `page`/`page_size`/`admin_id` 非整数；日期不是 `YYYY-MM-DD`；`start_date` 晚于 `end_date` |
+| 401 | 40100 | 未登录/会话过期 |
+| 403 | 40300 | 非管理员 |
+
+- **规则**：
+  - 排序固定 `created_at DESC, id DESC`（稳定次级键）。
+  - `admin_username` 通过 LEFT JOIN `users` 获取；账号已删除时 `admin_id` / `admin_username` 均为 `null`，历史日志照常返回，不抛错。
+  - `ip_address` 为**预留字段**：`operation_logs` 当前无 IP 列，恒返回 `null`；采集 IP 需新增列，属 C 类数据库变更。
+  - 日期边界按 UTC 自然日计算（与 `created_at` 存储口径一致）。
+  - 只读查询，不写入 `operation_logs`。
+
 ---
 
 ### 4.7 我的模块
@@ -2174,6 +2281,281 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 
 ---
 
+### 4.9 内容板块（批次五 R1–R5）
+
+> 5 个板块（`teaware` 茶具 / `origin` 产地 / `culture` 文化 / `brand` 品牌 / `knowledge` 知识）由 `content_types` + `content_items` 两表统一承载；板块特有字段存放在 `content_items.meta` JSON 中，按板块校验。
+> 前台（§4.9.1–§4.9.3）游客只读，仅返回 `is_active=1` 的条目；后台（§4.9.4–§4.9.8）要求管理员，下架为软失效（`is_active=0`），**不物理删除**。
+
+#### 4.9.1 板块分类列表
+
+- **方法与路径**：`GET /content-types`
+- **权限**：游客
+- **请求参数**：无
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `ContentTypeOut[]`，按 `sort_order ASC` 排序：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | integer | `content_types.id` |
+| `code` | string | `teaware` / `origin` / `culture` / `brand` / `knowledge` |
+| `name` | string | 板块中文名 |
+| `icon` | string / null | 板块图标字符 |
+| `description` | string / null | 板块说明 |
+| `sort_order` | integer | 展示顺序，升序 |
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": [
+    {
+      "id": 1,
+      "code": "teaware",
+      "name": "茶具茶器",
+      "icon": "🫖",
+      "description": "盖碗、茶壶、品茗杯、公道杯等茶器文化与选择指南",
+      "sort_order": 1
+    }
+  ]
+}
+```
+
+- **错误**：`50000`（服务端异常）。
+
+#### 4.9.2 内容列表（前台）
+
+- **方法与路径**：`GET /contents`
+- **权限**：游客
+- **查询参数**：
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `type` | string | 否 | — | 板块 code：`teaware` / `origin` / `culture` / `brand` / `knowledge`；省略时返回全部板块 |
+| `keyword` | string | 否 | — | ≤100 字符；对 `title` 与 `summary` 做 `%keyword%` 模糊匹配，`%` / `_` / `\` 按字面量转义；trim 后为空视为未传 |
+| `page` | integer | 否 | `1` | ≥1，越界按 1 处理 |
+| `page_size` | integer | 否 | `12` | 1–50，越界夹取 |
+
+- **请求体**：无
+- **示例**：`GET /contents?type=teaware&keyword=盖碗`（板块与关键词 AND 生效，匹配标题或摘要）
+- **成功响应**：HTTP 200，`code=0`，`data` 为分页结构 `{items, total, page, page_size}`；`items` 为 `ContentItemOut[]`：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | integer | `content_items.id` |
+| `type_id` | integer | 所属板块 ID |
+| `type_code` | string | 所属板块 code（派生字段） |
+| `title` | string | 标题，≤200 字符 |
+| `summary` | string / null | 摘要，≤500 字符 |
+| `body` | string / null | 正文，≤20,000 字符 |
+| `cover_image` | string / null | 封面图 URL |
+| `meta` | object / null | 板块特有字段，见 §4.9.6 |
+| `sort_order` | integer | 排序值 |
+| `is_active` | boolean / null | 前台恒为 `null`（不向前台暴露上下架状态） |
+| `created_at` | datetime | 创建时间（UTC，ISO8601 带 `Z`） |
+| `updated_at` | datetime | 更新时间（UTC，ISO8601 带 `Z`） |
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "type_id": 1,
+        "type_code": "teaware",
+        "title": "盖碗：茶席上最常见的泡茶器具",
+        "summary": "上盖、中碗、下托三件一套，又称三才碗，明代以后流行。",
+        "body": "盖碗，也称三才碗、三才杯，是一种古老的泡茶器具……",
+        "cover_image": "/uploads/2026/11/teaware-cover.jpg",
+        "meta": {"material": "白瓷", "volume": "130ml", "category": "盖碗"},
+        "sort_order": 1,
+        "is_active": null,
+        "created_at": "2026-11-11T02:00:00Z",
+        "updated_at": "2026-11-11T02:00:00Z"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "page_size": 12
+  }
+}
+```
+
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | `type` 不在五值枚举内 |
+| 404 | 40450 | 板块 code 合法但库中不存在 |
+| 500 | 50000 | 服务端异常 |
+
+- **规则**：排序 `sort_order ASC, created_at DESC`；仅返回 `is_active=1`；`keyword` 与 `type` 为 AND 关系，匹配 `title` 或 `summary`。
+
+#### 4.9.3 内容详情（前台）
+
+- **方法与路径**：`GET /contents/{item_id}`
+- **权限**：游客
+- **路径参数**：`item_id` integer，必填
+- **请求体**：无
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `ContentItemOut`（字段见 §4.9.2），`is_active` 恒为 `null`。
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 404 | 40460 | 条目不存在或已下架（不区分，避免泄露存在性） |
+| 500 | 50000 | 服务端异常 |
+
+#### 4.9.4 内容列表（管理视角）
+
+- **方法与路径**：`GET /admin/contents`
+- **权限**：管理员
+- **查询参数**：
+
+| 参数 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| `type` | string | 否 | — | 板块 code，五值枚举；省略返回全部板块 |
+| `is_active` | boolean | 否 | — | 省略=全部；`true` 只看上架；`false` 只看下架 |
+| `page` | integer | 否 | `1` | ≥1，越界按 1 处理 |
+| `page_size` | integer | 否 | `12` | 1–50，越界夹取 |
+
+- **请求体**：无
+- **成功响应**：HTTP 200，`code=0`，`data` 为分页结构，`items` 为 `AdminContentListItem[]`：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | integer | `content_items.id` |
+| `type_code` | string | 所属板块 code |
+| `title` | string | 标题 |
+| `summary` | string / null | 摘要 |
+| `is_active` | boolean | 上架 / 下架 |
+| `sort_order` | integer | 排序值 |
+| `created_at` | datetime | 创建时间（UTC） |
+| `updated_at` | datetime | 更新时间（UTC） |
+
+- **错误**：`40000`（`type` 非法）、`40100`、`40300`、`40450`（板块不存在）。
+- **规则**：后台列表**包含下架条目**，排序 `sort_order ASC, created_at DESC`。
+
+#### 4.9.5 内容详情（管理视角）
+
+- **方法与路径**：`GET /admin/contents/{item_id}`
+- **权限**：管理员
+- **路径参数**：`item_id` integer，必填
+- **请求体**：无
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `ContentItemOut`（字段见 §4.9.2），`is_active` 返回 `true` / `false`。
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 401 | 40100 | 未登录/会话过期 |
+| 403 | 40300 | 非管理员 |
+| 404 | 40460 | 条目不存在 |
+
+- **规则**：编辑回填用途；下架条目仍可读取，故不返回 `40401`。
+
+#### 4.9.6 新建内容条目
+
+- **方法与路径**：`POST /admin/contents`
+- **权限**：管理员
+- **请求体**（JSON，`extra=forbid`）：
+
+| 字段 | 类型 | 必填 | 约束 | DB 列 |
+|---|---|---|---|---|
+| `type_code` | string | 是 | `teaware` / `origin` / `culture` / `brand` / `knowledge` | `content_items.type_id`（经 code 映射） |
+| `title` | string | 是 | trim 后非空，≤200 字符 | `content_items.title` |
+| `summary` | string / null | 否 | ≤500 字符 | `content_items.summary` |
+| `body` | string / null | 否 | ≤20,000 字符 | `content_items.body` |
+| `cover_image` | string / null | 否 | ≤500 字符；`http(s)://` 外链或 `/uploads/` 路径 | `content_items.cover_image` |
+| `meta` | object / null | 否 | 按板块校验，见下表 | `content_items.meta` |
+| `sort_order` | integer | 否 | -9999–9999，默认 `0` | `content_items.sort_order` |
+
+- **不接受**：`is_active`（创建后默认上架）、`id`、`type_id`。
+- **`meta` 分板块字段规则**：
+
+| 板块 code | 允许的 key | 规则 |
+|---|---|---|
+| `teaware` | `material` / `volume` / `category` | 均为字符串 |
+| `origin` | `province` / `region` | 均为字符串 |
+| `culture` | `era` / `tags` | `era` 字符串；`tags` 必须为字符串数组 |
+| `brand` | `founded` / `brand_origin` / `website` | `founded` 整数；`brand_origin` 字符串；`website` 非空时必须以 `http://` 或 `https://` 开头 |
+| `knowledge` | `subtype` / `difficulty` | `subtype` ∈ `standard` / `brewing`；`difficulty` ∈ `beginner` / `intermediate` / `advanced` |
+
+> `meta` 必须是对象，最多 20 个字段；出现未定义的 key 一律 `40000`。各 key 均可选，省略即不写入。
+
+- **请求示例**：
+
+```json
+{
+  "type_code": "knowledge",
+  "title": "绿茶冲泡水温为何不宜过高",
+  "summary": "80–85℃ 更能保留鲜爽度与氨基酸。",
+  "body": "绿茶多为不发酵茶，高温会加速茶多酚氧化……",
+  "cover_image": "/uploads/2026/11/knowledge-brewing.jpg",
+  "meta": {"subtype": "brewing", "difficulty": "beginner"},
+  "sort_order": 10
+}
+```
+
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `ContentItemOut`，`is_active=true`。
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | 必填缺失、长度/枚举/数值越界、`meta` 结构非法、请求体含未定义字段 |
+| 401 | 40100 | 未登录/会话过期 |
+| 403 | 40300 | 非管理员 |
+| 404 | 40450 | 板块不存在 |
+
+- **规则**：写入 `operation_logs`：`action='create_content'`、`target_type='content_item'`、`target_id=新 id`、`detail` 为 `[板块 code] 标题`。
+
+#### 4.9.7 更新内容条目
+
+- **方法与路径**：`PUT /admin/contents/{item_id}`
+- **权限**：管理员
+- **路径参数**：`item_id` integer，必填
+- **请求体**（JSON，`extra=forbid`）：
+
+| 字段 | 类型 | 必填 | 约束 |
+|---|---|---|---|
+| `title` | string / null | 否 | ≤200 字符 |
+| `summary` | string / null | 否 | ≤500 字符 |
+| `body` | string / null | 否 | ≤20,000 字符 |
+| `cover_image` | string / null | 否 | ≤500 字符；`http(s)://` 或 `/uploads/` 路径 |
+| `meta` | object / null | 否 | 按条目当前所属板块校验 |
+| `sort_order` | integer / null | 否 | -9999–9999 |
+| `is_active` | boolean / null | 否 | `true` 上架 / `false` 下架（软失效） |
+
+- **不接受**：`type_code`、`type_id`（条目所属板块创建后不可变更）。
+- **规则**：全量替换语义，仅更新请求中出现的字段；`meta` 传入时按条目当前板块重新校验；写入 `operation_logs`：`action='update_content'`。
+- **成功响应**：HTTP 200，`code=0`，`data` 为更新后的 `ContentItemOut`（含 `is_active`）。
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | 长度/枚举/数值越界、`meta` 结构非法、请求体含未定义字段 |
+| 401 | 40100 | 未登录/会话过期 |
+| 403 | 40300 | 非管理员 |
+| 404 | 40460 | 条目不存在 |
+| 404 | 40450 | 条目所属板块数据缺失 |
+
+#### 4.9.8 删除内容条目（软删除）
+
+- **方法与路径**：`DELETE /admin/contents/{item_id}`
+- **权限**：管理员
+- **路径参数**：`item_id` integer，必填
+- **请求体**：无
+- **成功响应**：HTTP 200，`code=0`，`data` 为 `{ "deleted": 5 }`（值为条目 id）。
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 401 | 40100 | 未登录/会话过期 |
+| 403 | 40300 | 非管理员 |
+| 404 | 40460 | 条目不存在 |
+
+- **规则**：仅置 `is_active=0`，**不物理删除**；下架后前台接口不再返回；写入 `operation_logs`：`action='delete_content'`。
+
+---
+
 ## 5. 数据库字段与 API 字段对照
 
 ### 5.1 `users`
@@ -2183,6 +2565,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 | `id` | `id` / 路径中的用户身份 | `User`、`/auth/me` |
 | `username` | `username` | `User`、注册/登录 |
 | `role` | `role` | `User`、权限判定 |
+| `session_version` | 不暴露 | 会话版本校验（改密吊销旧 Cookie） |
 | `created_at` | `created_at` | `User` |
 | `password_hash` | 不暴露 | — |
 
@@ -2243,7 +2626,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 
 ### 5.7 `operation_logs`
 
-不对外暴露任何接口字段，仅由管理员写操作触发：
+只读查询接口 `GET /admin/operation-logs`（§4.6.12）；写入仍由管理员写操作触发：
 
 | `action` | 触发接口 |
 |---|---|
@@ -2251,6 +2634,20 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 | `update_tea` | `PUT /admin/teas/{tea_id}`、`PUT /admin/teas/{tea_id}/tips` |
 | `toggle_tea` | `PATCH /admin/teas/{tea_id}/toggle` |
 | `upload_image` | `POST /admin/upload` |
+
+字段映射（查询响应）：
+
+| 数据库列 | API 字段 |
+|---|---|
+| `id` | `id` |
+| `user_id` | `admin_id`（操作人） |
+| `user_id` → `users.username` | `admin_username`（LEFT JOIN，账号删除后为 `null`） |
+| `action` | `action` |
+| `target_type` | `target_type` |
+| `target_id` | `target_id` |
+| `detail` | `detail` |
+| （无此列） | `ip_address` 恒为 `null`（预留） |
+| `created_at` | `created_at` |
 
 `target_type` 固定 `tea`；`target_id` 为弱引用（上传时为 `null`）；`detail` 仅存摘要，不存 JSON diff；不记录 GET 操作。
 
@@ -2317,7 +2714,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 - 仅管理员写操作记录 1 行，读操作不记录。
 - `user_id` 可为空（账号删除后 `SET NULL`），审计不随账号消失。
 - `target_id` 不建外键，避免删茶/下架影响历史日志。
-- MVP 不提供日志查询接口；如需排查，直接查询 `operation_logs` 表。
+- 管理员可通过只读接口 `GET /admin/operation-logs`（§4.6.12）按动作、目标类型、操作人与日期检索；接口不写入新日志。
 
 ### 6.4 契约与既有脚手架的差异（落地时以此为准）
 
@@ -2381,3 +2778,6 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 | **v1.4** | 2026-11-09 | 批次三 S9 多收藏清单：清单拆分为 6 个端点；`FavoriteState` 增 `list_ids`，收藏/取消/分享支持可选 `list_id`；新增错误码 `40420`；`favorite_count` 改为跨清单去重；接口总览 37 → 40 个 |
 | **v1.5** | 2026-11-09 | 批次四 S10–S13 用户贡献：新增 §4.8 六个端点；`TeaDetail` 增 `contributed_articles`；新增错误码 `40440`；新增枚举 `contribution.type/status`；新增 §5.9 `contributions`、§5.10 `tea_name_category_map`；接口总览 40 → 46 个 |
 | **v1.6** | 2026-11-10 | ADR-0004 用户头像：`User` 增 `avatar_url`；新增 §4.7.2 `POST /me/avatar`、§4.7.3 `PUT /me/avatar`；错误码复用 400/401/413/415；接口总数 53 → 55 |
+| **v1.7** | 2026-11-11 | 补录批次五 R1–R5 内容板块 8 个端点：新增 §4.9（`GET /content-types`、`GET /contents`、`GET /contents/{item_id}`、`GET/POST /admin/contents`、`GET/PUT/DELETE /admin/contents/{item_id}`）；新增错误码 `40450`/`40460` 的文档说明；接口总览补齐至 56 个业务端点 |
+| **v1.8** | 2026-11-11 | 新增 §4.1.6 用户自助修改密码 `PUT /auth/password`：Cookie 载荷增加 `sv`（`users.session_version`），改密后旧会话立即失效；接口总览 56 → 57 个业务端点 |
+| **v1.9** | 2026-11-11 | 新增 §4.6.12 管理员操作日志查询 `GET /admin/operation-logs`（分页 + 动作/目标类型/管理员/日期筛选，`created_at DESC, id DESC`，LEFT JOIN 取 `admin_username`）；§5.7/§6.3 同步日志可读；`ip_address` 为预留字段恒 `null`；接口总览 57 → 58 个业务端点 |

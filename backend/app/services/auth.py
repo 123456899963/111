@@ -14,7 +14,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.response import BadCredentials, TooManyLoginAttempts, UsernameExists
+from app.core.response import (
+    BadCredentials,
+    TooManyLoginAttempts,
+    UsernameExists,
+    ValidationError,
+)
 from app.core.security import DUMMY_HASH, hash_password, verify_password
 from app.models.user import User
 from app.repositories import login_attempt_repo, user_repo
@@ -85,3 +90,16 @@ def login(db: Session, username: str, password: str, *, ip: str) -> User:
 
 def get_by_id(db: Session, user_id: int) -> User | None:
     return user_repo.get_by_id(db, user_id)
+
+
+def change_password(db: Session, user: User, old_password: str, new_password: str) -> None:
+    """修改密码：校验旧密码 → 更新哈希 → 递增会话版本（旧 Cookie 立即失效）。
+
+    - 旧密码错误复用凭证错误码 40110（不区分具体原因）
+    - 新旧密码相同返回 40000；长度/字符规则由 Schema 与注册保持一致
+    """
+    if not verify_password(old_password, user.password_hash):
+        raise BadCredentials
+    if old_password == new_password:
+        raise ValidationError
+    user_repo.update_password(db, user, hash_password(new_password))

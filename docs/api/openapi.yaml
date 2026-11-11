@@ -176,6 +176,58 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /auth/password:
+    put:
+      tags: [认证]
+      summary: 修改密码
+      description: |
+        登录用户自助修改密码（API_CONTRACT §4.1.6）。成功后更新 password_hash 并将
+        users.session_version + 1，该用户所有旧 Cookie（sv 不匹配）立即失效；响应清除当前 Cookie。
+      operationId: changePassword
+      security:
+        - teaSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: 修改成功
+          headers:
+            Set-Cookie:
+              description: tea_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmptyEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: 未登录/会话已失效（40100）或当前密码错误（40110）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                unauthorized:
+                  summary: 未登录或会话已失效
+                  value:
+                    code: 40100
+                    message: 未登录或登录已过期
+                    data: null
+                badCredentials:
+                  summary: 当前密码错误
+                  value:
+                    code: 40110
+                    message: 用户名或密码错误
+                    data: null
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /me/stats:
     get:
       tags: [我的]
@@ -1203,6 +1255,79 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /admin/operation-logs:
+    get:
+      tags: [管理员]
+      summary: 操作日志查询（API_CONTRACT §4.6.12）
+      description: |
+        仅管理员；按 created_at DESC, id DESC 分页。
+        admin_username 通过 LEFT JOIN users 获取，账号删除后 admin_id/admin_username 为 null。
+        ip_address 为预留字段（operation_logs 无该列），恒为 null。
+      operationId: adminListOperationLogs
+      security:
+        - teaSession: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - name: page_size
+          in: query
+          required: false
+          description: 每页条数，默认 20；小于 1 按 1，大于 50 按 50
+          schema:
+            type: integer
+            default: 20
+        - name: action
+          in: query
+          required: false
+          description: 动作精确匹配
+          schema:
+            type: string
+          example: create_tea
+        - name: target_type
+          in: query
+          required: false
+          description: 目标类型精确匹配
+          schema:
+            type: string
+          example: tea
+        - name: admin_id
+          in: query
+          required: false
+          description: 操作人 users.id（对应 operation_logs.user_id）
+          schema:
+            type: integer
+            format: int64
+        - name: start_date
+          in: query
+          required: false
+          description: 起始日期 YYYY-MM-DD（含当天 00:00:00）
+          schema:
+            type: string
+            format: date
+          example: '2026-11-01'
+        - name: end_date
+          in: query
+          required: false
+          description: 结束日期 YYYY-MM-DD（含当天全天）
+          schema:
+            type: string
+            format: date
+          example: '2026-11-11'
+      responses:
+        '200':
+          description: 操作日志分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationLogPageEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /admin/upload:
     post:
       tags: [管理员]
@@ -1580,6 +1705,13 @@ paths:
             type: string
             enum: [teaware, origin, culture, brand, knowledge]
           description: 板块 code
+        - name: keyword
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+          description: 关键词，匹配 title / summary；通配符按字面量转义
         - name: page
           in: query
           required: false
@@ -1713,6 +1845,38 @@ paths:
           $ref: '#/components/responses/ServerError'
 
   /admin/contents/{item_id}:
+    get:
+      tags: [管理员]
+      summary: 后台内容详情（API_CONTRACT §4.9.5）
+      description: 编辑回填用途；含下架条目，is_active 返回真实状态；仅管理员可访问。
+      operationId: adminGetContent
+      security:
+        - teaSession: []
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 后台内容详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentItemEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: 条目不存在（code=40460）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          $ref: '#/components/responses/ServerError'
     put:
       tags: [管理员]
       summary: 更新内容条目（全量替换；API_CONTRACT §4.6.13 PUT）
@@ -2197,6 +2361,23 @@ components:
           minLength: 1
           maxLength: 64
           example: admin123
+
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [old_password, new_password]
+      properties:
+        old_password:
+          type: string
+          minLength: 1
+          maxLength: 64
+          example: tea2026
+        new_password:
+          type: string
+          minLength: 6
+          maxLength: 64
+          description: 规则与注册一致；不得与 old_password 相同（40000）
+          example: tea2027
 
     TeaCategory:
       type: string
@@ -3314,6 +3495,68 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/AdminStats'
+
+    OperationLogItem:
+      type: object
+      required:
+        - id
+        - action
+        - target_type
+        - created_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        admin_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: 操作人 users.id（对应 operation_logs.user_id），账号删除后为 null
+        admin_username:
+          type: string
+          nullable: true
+          description: LEFT JOIN users 获取；账号不存在时为 null
+        action:
+          type: string
+          example: create_tea
+        target_type:
+          type: string
+          example: tea
+        target_id:
+          type: integer
+          format: int64
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+          description: 预留字段，operation_logs 无 IP 列，恒为 null
+        created_at:
+          type: string
+          format: date-time
+
+    OperationLogPageEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [items, total, page, page_size]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/OperationLogItem'
+                total:
+                  type: integer
+                page:
+                  type: integer
+                page_size:
+                  type: integer
 
     UploadResult:
       type: object

@@ -31,13 +31,14 @@ def list_contents(
     type: str | None = Query(
         None, description="板块 code（teaware/origin/culture/brand/knowledge）"
     ),
+    keyword: str | None = Query(None, description="关键词（title/summary 模糊匹配，≤100 字符）"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(12, ge=1, le=50, description="每页条数"),
     db: Session = Depends(get_db),
 ) -> dict:
     """前台内容列表（API_CONTRACT §4.2.11 GET /contents）。"""
     result: ContentListResponse = contents.list_contents(
-        db, type_code=type, page=page, page_size=page_size
+        db, type_code=type, keyword=keyword, page=page, page_size=page_size
     )
     return ok(result.model_dump())
 

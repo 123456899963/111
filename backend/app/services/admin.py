@@ -6,6 +6,8 @@
 - 上下架只改 is_active，不物理删除茶品、收藏与图片（FR-6.3）
 """
 
+import re
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import UploadFile
@@ -15,6 +17,8 @@ from app.core.config import settings
 from app.core.response import InternalError, TeaGuideError, TeaNotFound
 from app.repositories import admin_repo, tea_repo
 from app.schemas.admin import (
+    AdminOperationLogItem,
+    AdminOperationLogListResponse,
     AdminStatsResponse,
     AdminTeaListItem,
     AdminTeaListResponse,
@@ -35,8 +39,11 @@ from app.services import upload as upload_service
 from app.services._common import split_csv
 
 DEFAULT_PAGE_SIZE = 12
+DEFAULT_LOG_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 50
 MAX_KEYWORD_LEN = 50
+
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 TIPS_FIELDS = ("tips_history", "tips_suitable", "tips_misconception", "tips_official_note")
 TIPS_FIELD_TO_COLUMN = {
@@ -201,6 +208,70 @@ def update_tips(db: Session, *, admin_id: int, tea_id: int, req) -> TipsResponse
 
     response_values = {field: values[column] for field, column in TIPS_FIELD_TO_COLUMN.items()}
     return TipsResponse(tea_id=tea_id, **response_values)
+
+
+def list_operation_logs(
+    db: Session,
+    *,
+    page: int,
+    page_size: int,
+    action: str | None,
+    target_type: str | None,
+    admin_id: int | None,
+    start_date: str | None,
+    end_date: str | None,
+) -> AdminOperationLogListResponse:
+    """操作日志查询（API_CONTRACT §4.6.12）：仅管理员，时间倒序分页。"""
+    page = max(1, page)
+    page_size = min(max(1, page_size), MAX_PAGE_SIZE)
+
+    start_at = _parse_log_date(start_date, "start_date")
+    end_at = _parse_log_date(end_date, "end_date")
+    if end_at is not None:
+        # 含结束日期全天：按 [start_date 00:00, end_date+1day 00:00) 过滤
+        end_at += timedelta(days=1)
+    if start_at is not None and end_at is not None and start_at >= end_at:
+        raise TeaGuideError(40000, "start_date 不能晚于 end_date")
+
+    rows, total = admin_repo.list_operation_logs(
+        db,
+        action=(action or "").strip() or None,
+        target_type=(target_type or "").strip() or None,
+        admin_id=admin_id,
+        start_at=start_at,
+        end_at=end_at,
+        offset=(page - 1) * page_size,
+        limit=page_size,
+    )
+    items = [
+        AdminOperationLogItem(
+            id=log.id,
+            admin_id=log.user_id,
+            admin_username=username,
+            action=log.action,
+            target_type=log.target_type,
+            target_id=log.target_id,
+            detail=log.detail,
+            ip_address=None,
+            created_at=log.created_at,
+        )
+        for log, username in rows
+    ]
+    return AdminOperationLogListResponse(
+        items=items, total=total, page=page, page_size=page_size
+    )
+
+
+def _parse_log_date(value: str | None, field: str) -> datetime | None:
+    """YYYY-MM-DD → naive UTC datetime；格式非法统一 40000（API_CONTRACT §4.6.12）。"""
+    if not value:
+        return None
+    if not DATE_RE.match(value):
+        raise TeaGuideError(40000, f"{field} 必须为 YYYY-MM-DD 格式")
+    try:
+        return datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        raise TeaGuideError(40000, f"{field} 不是有效日期") from None
 
 
 def stats(db: Session) -> AdminStatsResponse:

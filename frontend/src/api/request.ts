@@ -10,7 +10,13 @@ const request = axios.create({
 })
 
 // 不需要登录的路径（401 时不强制跳转，避免登录页自身死循环）
-const PUBLIC_PATHS = ['/auth/login', '/auth/register', '/auth/username-availability']
+// /auth/password 的 401 表示“当前密码错误”（40110），由页面内联提示，不触发会话过期跳转
+const PUBLIC_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/username-availability',
+  '/auth/password',
+]
 
 // —— 响应拦截器：统一错误处理 ——
 request.interceptors.response.use(

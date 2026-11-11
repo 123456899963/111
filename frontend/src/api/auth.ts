@@ -1,5 +1,11 @@
 import request from '@/api/request'
-import type { ApiResponse, LoginPayload, RegisterPayload, User } from '@/types'
+import type {
+  ApiResponse,
+  ChangePasswordPayload,
+  LoginPayload,
+  RegisterPayload,
+  User,
+} from '@/types'
 
 /**
  * 认证相关 API
@@ -25,6 +31,11 @@ export async function logout(): Promise<ApiResponse<null>> {
 
 export async function getMe(): Promise<ApiResponse<User>> {
   return request.get('/auth/me')
+}
+
+/** 修改密码：成功后后端递增 session_version，所有旧会话失效。 */
+export async function changePassword(payload: ChangePasswordPayload): Promise<ApiResponse<null>> {
+  return request.put('/auth/password', payload)
 }
 
 export async function checkUsernameAvailability(

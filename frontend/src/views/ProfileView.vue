@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import CategoryTag from '@/components/CategoryTag.vue'
+import { changePassword } from '@/api/auth'
 import { getListDetail, getMyLists } from '@/api/lists'
 import { getMyStats, setPresetAvatar, uploadAvatar } from '@/api/me'
 import { useUserStore } from '@/stores/user'
 import { useToastStore } from '@/stores/toast'
-import type { ListItem, ListSummary, UserStats } from '@/types'
+import { CATEGORY_LABELS } from '@/utils/teaQuery'
+import { clearHistory, getHistory, type ViewHistoryItem } from '@/utils/viewHistory'
+import type { ListItem, ListSummary, TeaCategory, UserStats } from '@/types'
 
 /** 预置头像编号（与 backend services/me.py AVATAR_PRESETS 对应） */
 const AVATAR_PRESETS = Array.from({ length: 8 }, (_, index) => `tea-0${index + 1}`)
@@ -24,11 +27,27 @@ const loading = ref(true)
 const stats = ref<UserStats | null>(null)
 const lists = ref<ListSummary[]>([])
 const preview = ref<ListItem[]>([])
+const history = ref<ViewHistoryItem[]>([])
+const HISTORY_DISPLAY_LIMIT = 12
 
 const avatarOpen = ref(false)
 const uploading = ref(false)
 const savingPreset = ref<string | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
+
+/** 修改密码（API_CONTRACT §4.1.6）：成功后旧会话全部失效，需重新登录 */
+const passwordForm = reactive({
+  old_password: '',
+  new_password: '',
+  confirm_password: '',
+})
+const passwordErrors = reactive<{
+  old_password?: string
+  new_password?: string
+  confirm_password?: string
+  form?: string
+}>({})
+const changingPassword = ref(false)
 
 const avatarUrl = computed(() => userStore.user?.avatar_url ?? null)
 const initial = computed(() => (userStore.user?.username ?? '').slice(0, 1).toUpperCase())
@@ -40,6 +59,7 @@ onMounted(() => {
 
 async function load() {
   loading.value = true
+  history.value = getHistory().slice(0, HISTORY_DISPLAY_LIMIT)
   try {
     // 统计 / 清单失败不阻断页面其余部分展示（错误提示由请求拦截器统一处理）
     const [statsRes, listsRes] = await Promise.all([
@@ -64,6 +84,19 @@ function formatDate(value?: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
   return date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+
+function historyMeta(item: ViewHistoryItem): string {
+  const label = CATEGORY_LABELS[item.category as TeaCategory] ?? item.category
+  return `${label} · ${formatDate(item.viewed_at)}`
+}
+
+function onClearHistory() {
+  if (!history.value.length) return
+  if (!window.confirm('确定清空最近浏览记录吗？')) return
+  clearHistory()
+  history.value = []
+  toast.info('最近浏览已清空')
 }
 
 function pickFile() {
@@ -118,6 +151,58 @@ async function onLogout() {
   await userStore.logout()
   toast.info('已退出登录')
   router.push('/')
+}
+
+function validatePasswordForm(): boolean {
+  passwordErrors.old_password = undefined
+  passwordErrors.new_password = undefined
+  passwordErrors.confirm_password = undefined
+  passwordErrors.form = undefined
+
+  if (!passwordForm.old_password) {
+    passwordErrors.old_password = '请输入当前密码'
+  }
+  if (passwordForm.new_password.length < 6 || passwordForm.new_password.length > 64) {
+    passwordErrors.new_password = '新密码需为 6-64 个字符'
+  }
+  if (passwordForm.confirm_password !== passwordForm.new_password) {
+    passwordErrors.confirm_password = '两次输入的新密码不一致'
+  }
+  return (
+    !passwordErrors.old_password && !passwordErrors.new_password && !passwordErrors.confirm_password
+  )
+}
+
+function clearPasswordError(field: 'old_password' | 'new_password' | 'confirm_password') {
+  passwordErrors[field] = undefined
+  passwordErrors.form = undefined
+}
+
+async function onChangePassword() {
+  if (!validatePasswordForm()) return
+  changingPassword.value = true
+  try {
+    await changePassword({
+      old_password: passwordForm.old_password,
+      new_password: passwordForm.new_password,
+    })
+    passwordForm.old_password = ''
+    passwordForm.new_password = ''
+    passwordForm.confirm_password = ''
+    // 后端已递增 session_version 并清除 Cookie，这里同步清空本地登录态
+    await userStore.logout()
+    toast.success('密码已修改，请重新登录')
+    router.push('/login')
+  } catch (err) {
+    // 旧密码错误返回 40110（拦截器不对该路径做会话过期跳转），在此内联提示
+    const response = (err as { response?: { status?: number; data?: { message?: string } } })
+      .response
+    if (response?.status === 401) {
+      passwordErrors.form = response.data?.message || '当前密码不正确'
+    }
+  } finally {
+    changingPassword.value = false
+  }
 }
 </script>
 
@@ -240,6 +325,73 @@ async function onLogout() {
         </div>
       </section>
 
+      <!-- 账号安全：自助修改密码 -->
+      <section class="security">
+        <header class="section-head">
+          <h2 class="section-head__title">账号安全</h2>
+        </header>
+        <p class="security__hint">修改密码后，所有已登录设备将立即退出，需要重新登录。</p>
+
+        <form class="password-form" novalidate @submit.prevent="onChangePassword">
+          <div class="password-field">
+            <label class="password-label" for="password-old">当前密码</label>
+            <input
+              id="password-old"
+              v-model="passwordForm.old_password"
+              type="password"
+              class="password-input"
+              :class="{ 'password-input--error': passwordErrors.old_password }"
+              autocomplete="current-password"
+              placeholder="请输入当前密码"
+              @input="clearPasswordError('old_password')"
+            />
+            <div v-if="passwordErrors.old_password" class="password-hint password-hint--error">
+              {{ passwordErrors.old_password }}
+            </div>
+          </div>
+
+          <div class="password-field">
+            <label class="password-label" for="password-new">新密码</label>
+            <input
+              id="password-new"
+              v-model="passwordForm.new_password"
+              type="password"
+              class="password-input"
+              :class="{ 'password-input--error': passwordErrors.new_password }"
+              autocomplete="new-password"
+              placeholder="6-64 个字符"
+              @input="clearPasswordError('new_password')"
+            />
+            <div v-if="passwordErrors.new_password" class="password-hint password-hint--error">
+              {{ passwordErrors.new_password }}
+            </div>
+          </div>
+
+          <div class="password-field">
+            <label class="password-label" for="password-confirm">确认新密码</label>
+            <input
+              id="password-confirm"
+              v-model="passwordForm.confirm_password"
+              type="password"
+              class="password-input"
+              :class="{ 'password-input--error': passwordErrors.confirm_password }"
+              autocomplete="new-password"
+              placeholder="请再次输入新密码"
+              @input="clearPasswordError('confirm_password')"
+            />
+            <div v-if="passwordErrors.confirm_password" class="password-hint password-hint--error">
+              {{ passwordErrors.confirm_password }}
+            </div>
+          </div>
+
+          <div v-if="passwordErrors.form" class="password-error-bar">{{ passwordErrors.form }}</div>
+
+          <button type="submit" class="btn btn--primary" :disabled="changingPassword">
+            {{ changingPassword ? '提交中…' : '修改密码' }}
+          </button>
+        </form>
+      </section>
+
       <!-- 我的收藏预览 -->
       <section class="favorites">
         <header class="section-head">
@@ -288,6 +440,41 @@ async function onLogout() {
         <p v-if="!loading && lists.length" class="favorites__summary">
           共 {{ lists.length }} 个清单 · {{ stats?.favorite_count ?? 0 }} 款茶
         </p>
+      </section>
+
+      <!-- 最近浏览（本地记录，最多 12 条；无数据时整块隐藏） -->
+      <section v-if="history.length" class="history">
+        <header class="section-head">
+          <h2 class="section-head__title">最近浏览</h2>
+          <button type="button" class="section-head__clear" @click="onClearHistory">清空</button>
+        </header>
+        <ul class="history-grid">
+          <li v-for="item in history" :key="item.tea_id">
+            <RouterLink
+              class="history-card"
+              :to="{ name: 'tea-detail', params: { id: item.tea_id } }"
+            >
+              <img
+                v-if="item.cover_image"
+                class="history-card__image"
+                :src="item.cover_image"
+                :alt="item.name"
+                loading="lazy"
+              />
+              <span
+                v-else
+                class="history-card__image history-card__image--placeholder"
+                aria-hidden="true"
+              >
+                🫖
+              </span>
+              <span class="history-card__body">
+                <span class="history-card__name">{{ item.name }}</span>
+                <span class="history-card__meta">{{ historyMeta(item) }}</span>
+              </span>
+            </RouterLink>
+          </li>
+        </ul>
       </section>
 
       <!-- 快捷入口 -->
@@ -589,6 +776,85 @@ async function onLogout() {
   object-fit: cover;
 }
 
+/* —— 账号安全 —— */
+.security {
+  padding: 24px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 20px;
+}
+
+.security__hint {
+  margin: -4px 0 18px;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 380px;
+}
+
+.password-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.password-label {
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.password-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: var(--text-body);
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-dark);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.password-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.12);
+}
+
+.password-input--error {
+  border-color: var(--color-error);
+}
+
+.password-hint {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.password-hint--error {
+  color: var(--color-error);
+}
+
+.password-error-bar {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-muted);
+  color: var(--color-error);
+  font-size: var(--text-caption);
+}
+
+.password-form .btn {
+  align-self: flex-start;
+}
+
 /* —— 我的收藏 —— */
 .favorites {
   padding: 24px;
@@ -617,6 +883,19 @@ async function onLogout() {
   font-size: var(--text-small);
   color: var(--color-primary);
   white-space: nowrap;
+}
+
+.section-head__clear {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.section-head__clear:hover {
+  color: var(--color-primary);
 }
 
 .favorites__skeleton {
@@ -711,6 +990,82 @@ async function onLogout() {
   color: var(--color-text-muted);
 }
 
+/* —— 最近浏览 —— */
+.history {
+  padding: 24px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 20px;
+}
+
+.history-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.history-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.history-card:hover {
+  border-color: var(--color-border-dark);
+  box-shadow: var(--shadow-card);
+}
+
+.history-card__image {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--color-bg-muted);
+}
+
+.history-card__image--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: var(--color-text-muted);
+}
+
+.history-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.history-card__name {
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-card__meta {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* —— 快捷入口 —— */
 .quick-links {
   display: flex;
@@ -786,6 +1141,10 @@ async function onLogout() {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  .history-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .preset-grid {
     grid-template-columns: repeat(4, 1fr);
   }
@@ -819,6 +1178,10 @@ async function onLogout() {
   }
 
   .favorite-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-grid {
     grid-template-columns: 1fr;
   }
 }

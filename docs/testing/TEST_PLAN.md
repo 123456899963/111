@@ -2,11 +2,11 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.4** |
+| 文档版本 | **v1.6** |
 | 创建日期 | 2026-11-07 |
-| 测试对象 | MVP 后端 48 个 REST 端点 + 11 张表约束 + 安全控制 S-01–S-35 |
-| 依据 | [PRD.md](../product/PRD.md) v1.1 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.6 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.5 · [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) v1.0 · [SECURITY.md](../architecture/SECURITY.md) v1.3 |
-| 用例总数 | **89 条**（高 50 / 中 36 / 低 3） |
+| 测试对象 | MVP 后端 50 个 REST 端点 + 11 张表约束 + 安全控制 S-01–S-35 |
+| 依据 | [PRD.md](../product/PRD.md) v1.1 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.9 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.6 · [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) v1.0 · [SECURITY.md](../architecture/SECURITY.md) v1.4 |
+| 用例总数 | **94 条**（高 53 / 中 38 / 低 3） |
 | 覆盖类型 | 正向、反向、边界；含越权、并发重复提交、超长字段、非法枚举 |
 | 交付边界 | 用例按模块在 `backend/tests/`（pytest）与 `frontend/src/utils/*.spec.ts`（Vitest 纯函数）落地 |
 
@@ -114,7 +114,7 @@
 
 > 列说明：“对应接口/安全项”同时给出 API 路径与 SECURITY 控制编号；“前置条件”只列本用例额外依赖，公共基线见 §3。
 
-### 5.1 认证与会话（13 条）
+### 5.1 认证与会话（16 条）
 
 | 编号 | 模块 | 优先级 | 对应接口/安全项 | 前置条件 | 操作步骤 | 预期结果 |
 |---|---|---|---|---|---|---|
@@ -131,6 +131,9 @@
 | **TC-AUTH-11** | 认证 | 高 | `POST /api/v1/auth/login`；S-33 | 已触发 AUTH-10 的锁定 | ① 锁定期内用正确密码登录；② 锁定期内用错误密码登录；③ 查响应体 | ① ② 均 429/`42900`；③ 两者 message 完全一致，不暴露账号是否存在、不返回密码校验结果 |
 | **TC-AUTH-12** | 认证 | 中 | `POST /api/v1/auth/login`；S-33 | 已有 5 条失败记录 | ① 将 `login_attempts.failed_at` 前移 16 分钟（窗口 15 分钟）；② 用正确密码登录；③ 查记录 | ① 登录成功 200/`code=0` 并下发 Cookie；② 该用户名失败记录被清空 |
 | **TC-AUTH-13** | 认证 | 高 | `POST /api/v1/auth/login`；S-33/S-04 | 使用**不存在**的用户名 | ① 用不存在用户名失败 5 次；② 第 6 次再失败 | ① 前 5 次均 401/`40110`；② 第 6 次 429/`42900`，与真实账号锁定响应一致，无法据此枚举账号 |
+| **TC-AUTH-14** | 认证 | 中 | `PUT /api/v1/auth/password`；S-01/S-02/S-10 | `user_a` 已登录，当前密码 `tea2026` | ① 提交 `{"old_password":"WrongPwd","new_password":"tea2027"}`；② 查 `users.password_hash` 与 `session_version`；③ 用原 Cookie 调 `/auth/me` | ① HTTP 401、`code=40110`，message 与登录失败一致；② 密码哈希仍匹配 `tea2026`，`session_version` 不变；③ 200/`code=0`，原会话未被误吊销 |
+| **TC-AUTH-15** | 认证 | 中 | `PUT /api/v1/auth/password`；S-19/S-24 | `user_a` 已登录，当前密码 `tea2026` | ① 新密码 5 字符；② 新密码 65 字符；③ 新旧密码相同；④ 请求体附加 `username` 字段 | ① ② ③ ④ 均 HTTP 400、`code=40000`；`password_hash` 与 `session_version` 均不变；无 500 |
+| **TC-AUTH-16** | 认证 | 高 | `PUT /api/v1/auth/password`、`GET /api/v1/auth/me`、`POST /api/v1/auth/login`；S-06/S-08/S-10 | `user_a` 已登录并记录当前 `tea_session` | ① 提交 `{"old_password":"tea2026","new_password":"tea2027"}`；② 用步骤①前的旧 Cookie 调 `/auth/me`；③ 用新密码登录并调 `/auth/me`；④ 用旧密码登录；⑤ 查响应 `Set-Cookie` 与 `users.session_version` | ① 200/`code=0`、`data=null`，响应清除 `tea_session`（Max-Age=0、Path=/、HttpOnly、SameSite=Lax）；② 401/`40100`（`sv` 不匹配，旧会话立即失效）；③ 新密码 200/`code=0`，新 Cookie 调 `/auth/me` 返回 200；④ 401/`40110`；⑤ `session_version` 较改密前 +1 |
 
 ### 5.2 茶品录入与上下架（7 条）
 
@@ -195,7 +198,7 @@
 | **TC-SHARE-09** | 分享/权限 | 中 | `POST /shares/{token}/copy`；S-13/S-17/S-11 | A 有 TA；TB 有效；TR 已撤销 | ① A 对自己 TA 调 copy；② 游客对 TB 调 copy；③ B 对 TR 调 copy | ① 403/`code=40300`（所有者不得一键收藏自己）；② 401/`code=40100`；③ 409/`code=40900`；④ 三种情况均无收藏新增、无计数变化 |
 | **TC-SHARE-10** | 分享/并发 | 中 | `POST /api/v1/shares/TB/copy`；S-25/S-26 | `user_c` 登录且未收藏 TB 中的 3 款在架茶；20 个独立客户端 | ① 20 线程并发 copy；② 查 C 的收藏行；③ 汇总 `added` 与计数 | ① 全部 200/`code=0`，无 500；② `tea 1/2/3` 恰好各 1 行，无重复；③ `added` 之和为 3，计数各 +1；重复调用只增加跳过数 |
 
-### 5.7 权限校验（4 条）
+### 5.7 权限校验（6 条）
 
 | 编号 | 模块 | 优先级 | 对应接口/安全项 | 前置条件 | 操作步骤 | 预期结果 |
 |---|---|---|---|---|---|---|
@@ -203,6 +206,8 @@
 | **TC-PERM-02** | 权限 | 高 | `/api/v1/admin/**`；S-11/S-08 | 无 Cookie | ① 调用 `GET /admin/teas`、`GET /admin/stats`、`POST /admin/upload`；② 查副作用 | ① 全部 401/`code=40100`，优先于参数校验；② 无数据/文件副作用；不返回管理端数据结构 |
 | **TC-PERM-03** | 权限/越权 | 高 | `GET /lists`、`GET /lists/{other_list_id}`、`PUT /lists/{list_id}/notes/2`、`POST /shares/revoke/TB`；S-12/S-13 | A、B 各登录；A 未收藏 `tea 2`，B 已收藏；TB 属 B | ① A 调 `GET /lists`；② B 调 `GET /lists`；③ A 读 B 的清单与写 `tea 2` 笔记；④ A 撤销 TB；⑤ 查两用户数据 | ① 只返回 A 的清单；② 只返回 B 的清单（含 `tea 2`）；③ `GET /lists/{B_list}` → 404/`40420`，写笔记 → 404/`40430`，B 的笔记不变；④ 403/`code=40300`，TB 仍有效；⑤ 无跨用户读写 |
 | **TC-PERM-04** | 权限/角色 | 中 | `POST /favorites/1`、`GET /admin/stats`；S-08/S-11/S-12 | `admin` 已登录 | ① admin 调用户端收藏；② SQL 将 `admin.role` 改为 `user`；③ 不重新登录，立即调 `/admin/stats`；④ 改回 `admin` 后再调；⑤ 核对已收藏状态 | ① 200/`code=0`（管理员可执行用户侧能力）；② 改库成功；③ 403/`code=40300`（角色实时读库，不受旧 Cookie 影响）；④ 200/`code=0`；⑤ 管理员会话未被强制退出，仅权限随角色变化 |
+| **TC-PERM-05** | 权限/审计 | 高 | `GET /api/v1/admin/operation-logs`；S-11/S-28 | `admin` 已登录；已有写操作日志 | ① 不带参数查询；② 传 `action=create_tea&target_type=tea`；③ 传 `page=0&page_size=999`；④ 传 `start_date` / `end_date`（含边界） | ① 200/`code=0`，`data` 含 `items/total/page/page_size`，条目含 `id/admin_id/admin_username/action/target_type/target_id/detail/ip_address/created_at`，排序 `created_at DESC, id DESC`；② 全部命中 `action=create_tea` 且 `target_type=tea`，`admin_username` 为操作管理员；③ `page` 夹取为 1、`page_size` 夹取为 50；④ 仅返回区间内记录，边界日包含，`ip_address` 为 `null` |
+| **TC-PERM-06** | 权限 | 高 | `GET /api/v1/admin/operation-logs`；S-11/S-08/S-19 | 普通用户已登录；另有游客客户端 | ① 普通用户调用；② 游客调用；③ 管理员传非法日期 `2026/11/11` 与 `start_date` 晚于 `end_date` | ① 403/`code=40300`；② 401/`code=40100`；③ 400/`code=40000`；三种情况均不返回任何日志数据，不产生新日志 |
 
 ### 5.8 文件上传（5 条）
 
@@ -276,34 +281,34 @@
 
 | 模块 | 用例数 | 编号区间 | 高 | 中 | 低 |
 |---|---:|---|---:|---:|---:|
-| 认证与会话 | 13 | TC-AUTH-01–13 | 9 | 4 | 0 |
+| 认证与会话 | 16 | TC-AUTH-01–16 | 10 | 6 | 0 |
 | 茶品录入与上下架 | 7 | TC-TEA-01–07 | 3 | 4 | 0 |
 | 筛选、搜索与分页 | 9 | TC-LIST-01–09 | 2 | 5 | 2 |
 | 收藏与取消收藏 | 7 | TC-FAV-01–07 | 4 | 2 | 1 |
 | 品鉴笔记 | 5 | TC-NOTE-01–05 | 3 | 2 | 0 |
 | 分享链路 | 10 | TC-SHARE-01–10 | 6 | 4 | 0 |
-| 权限校验 | 4 | TC-PERM-01–04 | 3 | 1 | 0 |
+| 权限校验 | 6 | TC-PERM-01–06 | 5 | 1 | 0 |
 | 文件上传 | 5 | TC-UPLOAD-01–05 | 3 | 2 | 0 |
 | 异常与防御 | 4 | TC-DEF-01–04 | 2 | 2 | 0 |
 | 我的与个性化 | 6 | TC-ME-01–03、TC-REC-01–03 | 2 | 4 | 0 |
 | 多清单 | 6 | TC-MLIST-01–06 | 4 | 2 | 0 |
 | 用户贡献与审核 | 8 | TC-CONTRIB-01–08 | 6 | 2 | 0 |
 | 头像与个人中心 | 5 | TC-AVATAR-01–05 | 3 | 2 | 0 |
-| **合计** | **89** | — | **50** | **36** | **3** |
+| **合计** | **94** | — | **53** | **38** | **3** |
 
 ### 6.2 正向 / 反向 / 边界覆盖（按主要目的归类）
 
 | 类型 | 数量 | 代表用例 |
 |---|---:|---|
-| 正向 | 33 | AUTH-01/04、TEA-01/05/07、LIST-01/02/05/08/09、FAV-01/03/06、NOTE-01/03、SHARE-01/05/08、PERM-04、UPLOAD-01/04、DEF-04、ME-02、REC-01/03、MLIST-01/05、CONTRIB-01/04/06/08、AVATAR-02 |
-| 反向 | 34 | AUTH-02/05/06/07/10/11/13、TEA-02/06、LIST-04、FAV-05、NOTE-02/05、SHARE-03/04/06/07/09、PERM-01/02/03、UPLOAD-02/03/05、DEF-01/03、ME-01、REC-02、MLIST-02/04、CONTRIB-02/03、AVATAR-01/03/05 |
+| 正向 | 34 | AUTH-01/04、TEA-01/05/07、LIST-01/02/05/08/09、FAV-01/03/06、NOTE-01/03、SHARE-01/05/08、PERM-04/05、UPLOAD-01/04、DEF-04、ME-02、REC-01/03、MLIST-01/05、CONTRIB-01/04/06/08、AVATAR-02 |
+| 反向 | 38 | AUTH-02/05/06/07/10/11/13/14/15/16、TEA-02/06、LIST-04、FAV-05、NOTE-02/05、SHARE-03/04/06/07/09、PERM-01/02/03/06、UPLOAD-02/03/05、DEF-01/03、ME-01、REC-02、MLIST-02/04、CONTRIB-02/03、AVATAR-01/03/05 |
 | 边界/并发 | 22 | AUTH-03/12、TEA-03/04、LIST-06/07、FAV-02/04/07、NOTE-04、SHARE-02/10、DEF-02、ME-03、MLIST-03/06、CONTRIB-05/07、AVATAR-04 |
 
 ### 6.3 强制覆盖项检查
 
 | 要求 | 覆盖用例 | 是否覆盖 |
 |---|---|---|
-| 越权访问 | PERM-01、PERM-02、PERM-03、NOTE-05、SHARE-07、SHARE-09、MLIST-02 | ✅ |
+| 越权访问 | PERM-01、PERM-02、PERM-03、PERM-06、NOTE-05、SHARE-07、SHARE-09、MLIST-02 | ✅ |
 | 并发重复提交 | FAV-02、FAV-04、SHARE-02、SHARE-10、MLIST-01、MLIST-06 | ✅ |
 | 超长字段 | AUTH-03、TEA-04、LIST-06、NOTE-04、DEF-02 | ✅ |
 | 非法枚举值 | TEA-02（category/season）、LIST-04（category/season/sort） | ✅ |
@@ -322,12 +327,12 @@
 | 控制编号 | 对应用例 |
 |---|---|
 | S-01–S-05 密码与认证 | AUTH-01–AUTH-05、AUTH-09 |
-| S-06–S-10 会话 | AUTH-01、AUTH-06–AUTH-09 |
-| S-11–S-14 授权 | PERM-01–PERM-04、NOTE-05、SHARE-07、SHARE-09、UPLOAD-05 |
+| S-06–S-10 会话 | AUTH-01、AUTH-06–AUTH-09、AUTH-14–AUTH-16 |
+| S-11–S-14 授权 | PERM-01–PERM-06、NOTE-05、SHARE-07、SHARE-09、UPLOAD-05 |
 | S-15–S-18 分享与上下架 | SHARE-01–SHARE-10、TEA-06、TEA-07、FAV-05、LIST-09 |
 | S-19–S-24 输入与上传 | AUTH-03、TEA-02–TEA-04、LIST-04、LIST-06、LIST-07、NOTE-04、UPLOAD-01–UPLOAD-05、DEF-01、DEF-02 |
 | S-25–S-27 一致性/重复提交 | FAV-01–FAV-04、FAV-07、SHARE-02、SHARE-08、SHARE-10、LIST-01 |
-| S-28–S-29 审计/日志 | TEA-01、TEA-05、AUTH-09、DEF-03、UPLOAD-01 |
+| S-28–S-29 审计/日志 | TEA-01、TEA-05、AUTH-09、DEF-03、UPLOAD-01、PERM-05 |
 | S-30–S-32 配置/上线/供应链 | DEF-01–DEF-04 |
 | S-33 登录失败锁定 | AUTH-10–AUTH-13 |
 | S-34 用户贡献与审核门禁 | CONTRIB-01–CONTRIB-08 |
@@ -339,8 +344,8 @@
 
 ### 7.1 执行顺序
 
-1. **安全门禁批次（P0）**：PERM-01、PERM-02、AUTH-06、AUTH-09、UPLOAD-02、UPLOAD-03、SHARE-04、DEF-03、DEF-04。全部通过后才进入功能批次。
-2. **认证主链路**：AUTH-01–AUTH-08。
+1. **安全门禁批次（P0）**：PERM-01、PERM-02、PERM-06、AUTH-06、AUTH-09、UPLOAD-02、UPLOAD-03、SHARE-04、DEF-03、DEF-04。全部通过后才进入功能批次。
+2. **认证主链路**：AUTH-01–AUTH-08、AUTH-14–AUTH-16。
 3. **茶品与列表**：TEA-01–TEA-07、LIST-01–LIST-09。
 4. **收藏/笔记/多清单**：FAV-01–FAV-07、NOTE-01–NOTE-05、MLIST-01–MLIST-06。
 5. **分享链路**：SHARE-01–SHARE-10。
@@ -351,7 +356,7 @@
 
 ### 7.2 每轮回归最小集
 
-- 认证：AUTH-01、AUTH-05、AUTH-06、AUTH-10。
+- 认证：AUTH-01、AUTH-05、AUTH-06、AUTH-10、AUTH-16。
 - 权限：PERM-01、PERM-02、PERM-03。
 - 数据归属：NOTE-05、SHARE-07、MLIST-02。
 - 多清单：MLIST-01、MLIST-02、MLIST-06。
@@ -386,7 +391,7 @@
 | 第二阶段 S1–S17（S14/S15/S16 已提前实现，见 5.1/5.10） | 未实现项不设用例；仅在 SECURITY §3/§6 记录预留与风险 |
 | 密码找回、邮箱/微信登录 | PRD FR-4.4 明确 MVP 不做 |
 | S14 登录失败锁定 | 已提前实现，用例见 AUTH-10–AUTH-13（S-33） |
-| 旧 Cookie 重放 | AUTH-08 步骤④记录为已知限制（无 `sessions` 表），不作为失败判定 |
+| 旧 Cookie 重放 | 登出后旧 Cookie 在 30 天内仍可重放，AUTH-08 步骤④记录为已知限制（无 `sessions` 表），不作为失败判定；修改密码已通过 `session_version` 立即吊销全部旧会话（AUTH-16） |
 | 性能/吞吐/长时间稳定性 | 不在本方案内；并发用例只验证唯一性与幂等 |
 | 前端 UI/兼容性/无障碍 | 不在本方案内；前端仅保留“守卫不是安全边界”的说明 |
 | 渗透测试/漏洞扫描 | 不在本方案内；依赖 `pip-audit` / `npm audit` 与上线检查单 |
@@ -402,3 +407,5 @@
 | v1.2 | 2026-11-09 | 批次三 S9 多清单：新增 5.11 多清单（MLIST-01–06）；FAV-01/02/03、NOTE-01–05、PERM-03、SHARE-01 更新为多清单路径与断言；端点覆盖 40 个；合计 76 条（高 41 / 中 32 / 低 3） |
 | v1.3 | 2026-11-09 | 批次四 S10–S13：新增 5.12 用户贡献与审核（CONTRIB-01–08）；覆盖端点 46 个；合计 84 条（高 47 / 中 34 / 低 3） |
 | v1.4 | 2026-11-10 | ADR-0004 头像：新增 5.13 头像与个人中心（AVATAR-01–05）；S-02 校验范围补 `/me/avatar`；覆盖端点 48 个；合计 89 条（高 50 / 中 36 / 低 3） |
+| v1.5 | 2026-11-11 | 自助修改密码：5.1 新增 AUTH-14–AUTH-16（旧密码错误、弱密码/新旧相同、改密后旧会话失效）；S-06–S-10 回溯补 AUTH-16；覆盖端点 49 个；合计 92 条（高 51 / 中 38 / 低 3） |
+| v1.6 | 2026-11-11 | 管理员操作日志查询：5.7 新增 PERM-05（管理员分页/筛选/日期边界/字段完整）与 PERM-06（普通用户 403、游客 401、非法日期 400）；覆盖端点 50 个；合计 94 条（高 53 / 中 38 / 低 3） |

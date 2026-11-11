@@ -8,12 +8,20 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import { deleteContribution, getMyContributions } from '@/api/contributions'
 import { useToastStore } from '@/stores/toast'
+import {
+  buildReadMap,
+  diffUnread,
+  loadReadMap,
+  saveReadMap,
+  type ContributionReadMap,
+} from '@/utils/contributionRead'
 import type { ContributionItem, ContributionStatus } from '@/types'
 
 const toast = useToastStore()
 const state = ref<'loading' | 'ready' | 'error'>('loading')
 const items = ref<ContributionItem[]>([])
 const deletingId = ref<number | null>(null)
+const readMap = ref<ContributionReadMap>(loadReadMap())
 
 const STATUS_META: Record<ContributionStatus, { label: string; tone: string }> = {
   pending: { label: '待审核', tone: 'warning' },
@@ -22,6 +30,20 @@ const STATUS_META: Record<ContributionStatus, { label: string; tone: string }> =
 }
 
 const pendingCount = computed(() => items.value.filter((item) => item.status === 'pending').length)
+const approvedCount = computed(
+  () => items.value.filter((item) => item.status === 'approved').length,
+)
+const rejectedCount = computed(
+  () => items.value.filter((item) => item.status === 'rejected').length,
+)
+const unreadItems = computed(() => diffUnread(items.value, readMap.value))
+const unreadIds = computed(() => new Set(unreadItems.value.map((item) => item.id)))
+
+function markAllRead() {
+  const next = buildReadMap(items.value)
+  saveReadMap(next)
+  readMap.value = next
+}
 
 function typeLabel(type: ContributionItem['type']) {
   return type === 'new_tea' ? '补充新茶' : '科普投稿'
@@ -82,14 +104,30 @@ onMounted(load)
       <header class="page-head">
         <div>
           <h1 class="page-head__title">我的提交</h1>
-          <p class="page-head__desc">
-            共 {{ items.length }} 条记录<span v-if="pendingCount">
-              · {{ pendingCount }} 条待审核</span
-            >
-          </p>
+          <p class="page-head__desc">共 {{ items.length }} 条记录</p>
         </div>
         <RouterLink class="btn btn--primary" :to="{ name: 'contribute' }">＋ 新建投稿</RouterLink>
       </header>
+
+      <div v-if="state === 'ready'" class="contrib-stats" aria-label="投稿审核统计">
+        <div class="contrib-stat">
+          <span class="contrib-stat__label">待审核</span>
+          <strong class="contrib-stat__value">{{ pendingCount }}</strong>
+        </div>
+        <div class="contrib-stat contrib-stat--success">
+          <span class="contrib-stat__label">已通过</span>
+          <strong class="contrib-stat__value">{{ approvedCount }}</strong>
+        </div>
+        <div class="contrib-stat contrib-stat--danger">
+          <span class="contrib-stat__label">未通过</span>
+          <strong class="contrib-stat__value">{{ rejectedCount }}</strong>
+        </div>
+      </div>
+
+      <div v-if="unreadItems.length" class="read-notice" role="status">
+        <span class="read-notice__text">有 {{ unreadItems.length }} 条投稿有新结果</span>
+        <button type="button" class="read-notice__action" @click="markAllRead">标记已读</button>
+      </div>
 
       <div v-if="state === 'loading'" class="page-state">
         <p class="page-state__desc">加载中…</p>
@@ -114,9 +152,12 @@ onMounted(load)
               <span class="contrib-card__type">{{ typeLabel(item.type) }}</span>
               <strong class="contrib-card__name">{{ summary(item) }}</strong>
             </div>
-            <span class="status-tag" :class="`status-tag--${STATUS_META[item.status].tone}`">
-              {{ STATUS_META[item.status].label }}
-            </span>
+            <div class="contrib-card__tags">
+              <span v-if="unreadIds.has(item.id)" class="contrib-card__new">新结果</span>
+              <span class="status-tag" :class="`status-tag--${STATUS_META[item.status].tone}`">
+                {{ STATUS_META[item.status].label }}
+              </span>
+            </div>
           </div>
 
           <p class="contrib-card__meta">
@@ -179,6 +220,63 @@ onMounted(load)
   margin-top: 6px;
   color: var(--color-text-secondary);
 }
+.contrib-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.contrib-stat {
+  display: flex;
+  flex: 1 1 120px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface);
+}
+.contrib-stat__label {
+  font-size: var(--text-caption);
+  color: var(--color-text-secondary);
+}
+.contrib-stat__value {
+  font-size: var(--text-h2);
+  color: var(--color-text-primary);
+}
+.contrib-stat--success .contrib-stat__value {
+  color: var(--color-success);
+}
+.contrib-stat--danger .contrib-stat__value {
+  color: var(--color-error);
+}
+.read-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-muted);
+}
+.read-notice__text {
+  font-size: var(--text-small);
+  color: var(--color-text-primary);
+}
+.read-notice__action {
+  padding: 4px 12px;
+  border: 1px solid var(--color-border-dark);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-surface);
+  color: var(--color-primary);
+  font-size: var(--text-caption);
+  cursor: pointer;
+}
+.read-notice__action:hover {
+  border-color: var(--color-primary);
+}
 .contrib-list {
   display: flex;
   flex-direction: column;
@@ -203,6 +301,18 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.contrib-card__tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.contrib-card__new {
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-muted);
+  color: var(--color-primary);
+  font-size: var(--text-caption);
 }
 .contrib-card__type {
   padding: 2px 10px;

@@ -2,7 +2,7 @@
 
 > 本文件是进入项目的入口：只保留**速览、索引、红线、现状基线**。
 > 详细业务与技术规则以 `docs/` 下的权威文档为准；详细流程以 [DEVELOPMENT_GUIDE.md](docs/development/DEVELOPMENT_GUIDE.md) 为准。
-> 项目阶段：**MVP 开发期**。第二阶段（PRD S1–S17）与暂不实现项（X1–X13）一律不开发。
+> 项目阶段：**MVP + 第二阶段扩展已完成**。PRD S1–S17 已全部实现并冻结；X1–X13 维持不开发；新增功能需求按 C 类先确认。
 
 ---
 
@@ -101,8 +101,8 @@ d:\项目二\
 | Element Plus 前台使用（已修复） | 前台 `AppToast` 自研；`main.ts` 仅在 `/admin` 路由按需加载 Element Plus | 前台禁止再引入；后台保持按需加载 |
 | Service 直连查询（已修复） | 查询已全部下沉到 `repositories/`；`check_layers.py` 基线为空 | 保持五层边界，禁止回流 |
 | Router/Service 返回 ORM（已修复） | 端点统一经 Schema 序列化后返回 | 保持统一响应体，禁止直接返回 ORM |
-| 业务端点未实现（已修复） | 55 个业务端点已按 API_CONTRACT 实现 | 新增端点必须同步契约与测试 |
-| 测试未覆盖 TEST_PLAN（已修复） | TEST_PLAN 89 条用例已落地，后端全量 170 条测试通过 | 新增业务代码必须同步补测 |
+| 业务端点未实现（已修复） | 58 个业务端点已按 API_CONTRACT 实现 | 新增端点必须同步契约与测试 |
+| 测试未覆盖 TEST_PLAN（已修复） | TEST_PLAN 94 条用例已落地，后端全量 170 条测试通过 | 新增业务代码必须同步补测 |
 | 例外登记 | 运行 `python scripts/check_layers.py` / `check_frontend.py` 查看最新列表 | 修复后同步更新脚本基线 |
 
 ## 4. 前端开发规范
@@ -148,7 +148,7 @@ d:\项目二\
 
 ## 7. API 接口规范
 
-- 统一前缀 `/api/v1`；共 **55 个业务端点**（auth 5 / me 3 / teas 9 / tips 1 / favorites 3 / lists 6 / shares 4 / admin 14 / contributions 3 / contents 3 / admin-contents 4）
+- 统一前缀 `/api/v1`；共 **58 个业务端点**（auth 6 / me 3 / teas 9 / tips 1 / favorites 3 / lists 6 / shares 4 / admin 15 / contributions 3 / contents 3 / admin-contents 5）
 - 统一响应 `{ code, message, data }`；成功判定只看 `code === 0`；成功 HTTP 状态统一 **200**；业务失败 `HTTP status = code // 100`；FastAPI 422 必须重映射为 400/`40000`
 - 认证：**HttpOnly Cookie `tea_session`**（itsdangerous 签名，30 天，`SameSite=Lax`），不使用 Token / Authorization 头；角色每次从 `users.role` 实时读库
 - JSON 字段 `snake_case`，与数据库列名一致；空值用 `null`
@@ -169,7 +169,7 @@ d:\项目二\
 
 ## 9. 测试要求
 
-- 测试方案：[TEST_PLAN.md](docs/testing/TEST_PLAN.md) v1.4 —— **89 条用例**（高 50 / 中 36 / 低 3），覆盖 48 端点 + 11 表约束 + 35 项安全控制
+- 测试方案：[TEST_PLAN.md](docs/testing/TEST_PLAN.md) v1.6 —— **94 条用例**（高 53 / 中 38 / 低 3），覆盖 50 端点 + 11 表约束 + 35 项安全控制
 - 后端：pytest + httpx（TestClient），断言同时检查 HTTP 状态码、业务 `code`、数据库最终状态
 - 前端：Vitest，仅覆盖纯函数（筛选/格式化/URL 组装）
 - 高优先级用例任一失败 = 阻断发布；错误响应不得泄露堆栈/SQL/表名
@@ -222,7 +222,7 @@ d:\项目二\
 4. **改完必测**：执行与改动相关的测试；未通过不得声称完成。
 5. **不得虚报测试结果**：未运行、失败、跳过、未覆盖都要如实说明。
 6. **决策留痕**：重要取舍写入对应文档与 ADR；C 类确认记录写入任务卡/build-log。
-7. **范围自律**：S1–S17 与 X1–X13 不开发；不做无关重构、不顺手升级依赖。
+7. **范围自律**：S1–S17 已实现，冻结现状，不擅自变更；X1–X13 维持不开发；不做无关重构、不顺手升级依赖。
 8. **不泄露敏感信息**：日志、响应、提交信息不含密码明文、Cookie 值、密钥；`.env` 不进 Git。
 9. **交付必留痕**：回填 build-log；接口/数据库变更同步文档。
 10. **基线自律**：不得新增 §3.1 之外的违规；触达历史遗留时按表中规则修复并更新检查基线。
@@ -269,5 +269,5 @@ B 类输出技术方案后即可编码；C 类必须等用户明确答复。
 - [x] `SECRET_KEY` / `DEBUG` 代码默认值已收紧（2026-11-09，缺失 `SECRET_KEY` 拒绝启动）；生产部署仍需注入随机密钥与种子管理员密码 —— 安全 P0
 - [x] bcrypt 已统一为 `cost=10`（`_BCRYPT_ROUNDS`，对齐 SECURITY S-01）
 - [x] `routers/admin.py` 等端点已按 API_CONTRACT 补齐
-- [x] TEST_PLAN 89 条用例已落地；后端全量 170 条测试通过（2026-11-10）
+- [x] TEST_PLAN 94 条用例已落地；后端全量 184 条测试通过（2026-11-11）
 - [x] §3.1 基线遗留已在 2026-11-09 审查中清理（五层 / 前台 UI 遗留均为 0）

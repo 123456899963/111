@@ -1,7 +1,10 @@
 """批次五后端测试
 
 用例：CONT-01 ~ CONT-05 冒烟 + CONT-06 ~ CONT-11 扩展（CRUD + meta 校验）
+CONT-12 ~ CONT-16：内容列表关键词搜索（GET /contents?keyword=）
 """
+
+import uuid
 
 from fastapi.testclient import TestClient
 
@@ -338,3 +341,107 @@ def test_cont_11_crud_records_operation_log():
         item.is_active = 0
         db.commit()
     db.close()
+
+
+# === 扩展用例 CONT-12 ~ CONT-16：关键词搜索 ===
+
+
+def _public_contents(**params) -> dict:
+    """调用前台内容列表，断言成功并返回 data 分页结构。"""
+    r = client.get("/api/v1/contents", params=params)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["code"] == 0
+    return body["data"]
+
+
+def _create_content(admin: TestClient, *, type_code: str, title: str, summary: str) -> int:
+    """创建一条用于搜索校验的条目，返回 id。"""
+    payload = {
+        "type_code": type_code,
+        "title": title,
+        "summary": summary,
+        "body": "关键词搜索测试正文",
+        "meta": (
+            {"material": "陶瓷", "volume": "150ml", "category": "盖碗"}
+            if type_code == "teaware"
+            else {"subtype": "standard", "difficulty": "beginner"}
+        ),
+        "sort_order": 99,
+    }
+    r = admin.post("/api/v1/admin/contents", json=payload)
+    assert r.status_code == 200, r.text
+    assert r.json()["code"] == 0
+    return r.json()["data"]["id"]
+
+
+def test_cont_12_keyword_matches_title():
+    """keyword 命中标题。"""
+    admin = _admin()
+    marker = f"kw-title-{uuid.uuid4().hex[:8]}"
+    item_id = _create_content(
+        admin, type_code="knowledge", title=f"{marker} 标题命中", summary="摘要不含搜索标记"
+    )
+    try:
+        data = _public_contents(keyword=marker)
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == item_id
+    finally:
+        admin.delete(f"/api/v1/admin/contents/{item_id}")
+
+
+def test_cont_13_keyword_matches_summary():
+    """keyword 命中摘要。"""
+    admin = _admin()
+    marker = f"kw-summary-{uuid.uuid4().hex[:8]}"
+    item_id = _create_content(
+        admin, type_code="knowledge", title="标题不含搜索标记", summary=f"{marker} 仅摘要命中"
+    )
+    try:
+        data = _public_contents(keyword=marker)
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == item_id
+    finally:
+        admin.delete(f"/api/v1/admin/contents/{item_id}")
+
+
+def test_cont_14_keyword_no_match_returns_empty():
+    """keyword 无命中 → 空列表且 code=0。"""
+    data = _public_contents(keyword="zzz-不存在的关键词-zzz")
+    assert data["total"] == 0
+    assert data["items"] == []
+
+
+def test_cont_15_keyword_wildcards_are_literal():
+    """keyword 为 % / _ 时按字面量匹配，不得返回全表。"""
+    baseline = _public_contents()["total"]
+    assert baseline > 0
+    for kw in ("%", "_"):
+        data = _public_contents(keyword=kw)
+        assert data["total"] < baseline, kw
+
+
+def test_cont_16_keyword_and_type_combined():
+    """keyword 与 type 同时生效（AND）。"""
+    admin = _admin()
+    marker = f"kw-and-{uuid.uuid4().hex[:8]}"
+    teaware_id = _create_content(
+        admin, type_code="teaware", title=f"{marker} 茶具条目", summary="搜索标记在标题"
+    )
+    knowledge_id = _create_content(
+        admin, type_code="knowledge", title=f"{marker} 知识条目", summary="搜索标记在标题"
+    )
+    try:
+        data = _public_contents(keyword=marker, type="teaware")
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == teaware_id
+
+        data = _public_contents(keyword=marker, type="knowledge")
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == knowledge_id
+
+        data = _public_contents(keyword=marker, type="culture")
+        assert data["total"] == 0
+    finally:
+        admin.delete(f"/api/v1/admin/contents/{teaware_id}")
+        admin.delete(f"/api/v1/admin/contents/{knowledge_id}")

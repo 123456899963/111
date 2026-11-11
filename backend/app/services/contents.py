@@ -28,6 +28,7 @@ from app.schemas.content import (
 
 DEFAULT_PAGE_SIZE = 12
 MAX_PAGE_SIZE = 50
+MAX_KEYWORD_LEN = 100
 
 
 # === 前台只读 ===
@@ -40,15 +41,25 @@ def list_content_types(db: Session) -> list[ContentTypeOut]:
 
 
 def list_contents(
-    db: Session, *, type_code: str | None, page: int, page_size: int
+    db: Session,
+    *,
+    type_code: str | None,
+    keyword: str | None,
+    page: int,
+    page_size: int,
 ) -> ContentListResponse:
     """前台内容列表（API_CONTRACT §4.2.11）。
 
     - type_code 为空则返回所有板块的活跃条目（不推荐但允许）
+    - keyword 非空时对 title / summary 模糊匹配（通配符转义在 Repository）
     - 按 sort_order ASC, created_at DESC 排序
     """
     page = max(1, page)
     page_size = min(max(1, page_size), MAX_PAGE_SIZE)
+
+    kw = (keyword or "").strip() or None
+    if kw is not None and len(kw) > MAX_KEYWORD_LEN:
+        raise TeaGuideError(40000, "keyword 长度不能超过 100 字符")
 
     repo = ContentRepository(db)
 
@@ -61,7 +72,9 @@ def list_contents(
             raise ContentTypeNotFound
         type_id = ct.id
 
-    items, total = repo.list_public_items(type_id=type_id, page=page, page_size=page_size)
+    items, total = repo.list_public_items(
+        type_id=type_id, keyword=kw, page=page, page_size=page_size
+    )
 
     return ContentListResponse(
         items=[_to_out(i, type_code) for i in items],

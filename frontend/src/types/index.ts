@@ -39,6 +39,12 @@ export interface RegisterPayload {
   password: string
 }
 
+/** 修改密码（API_CONTRACT §4.1.6） */
+export interface ChangePasswordPayload {
+  old_password: string
+  new_password: string
+}
+
 /** 用户等级（S15 / API_CONTRACT §4.7.1）：四档，按收藏数实时计算 */
 export interface UserLevel {
   name: '茶客' | '茶友' | '茶人' | '茶师'
@@ -370,6 +376,37 @@ export interface AdminStatsData {
   category_distribution: CategoryCount[]
 }
 
+/** 操作日志条目（API_CONTRACT §4.6.12）：admin_id 对应 operation_logs.user_id */
+export interface AdminOperationLogItem {
+  id: number
+  admin_id: number | null
+  admin_username: string | null
+  action: string
+  target_type: string
+  target_id: number | null
+  detail: string | null
+  ip_address: string | null
+  created_at: string
+}
+
+export interface AdminOperationLogListData {
+  items: AdminOperationLogItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface AdminOperationLogListParams {
+  action?: string
+  target_type?: string
+  admin_id?: number
+  /** YYYY-MM-DD（含边界） */
+  start_date?: string
+  end_date?: string
+  page?: number
+  page_size?: number
+}
+
 export interface AdminUploadData {
   url: string
   original_filename: string
@@ -483,6 +520,7 @@ export interface ContentItem {
 
 export interface ContentListParams {
   type?: ContentTypeCode
+  keyword?: string
   page?: number
   page_size?: number
 }

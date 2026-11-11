@@ -7,10 +7,11 @@
 
 from typing import Sequence
 
-from sqlalchemy import asc, desc, func, select
+from sqlalchemy import asc, desc, func, or_, select
 
 from app.core.database import SessionLocal
 from app.models.content import ContentItem, ContentType
+from app.repositories._common import escape_like
 
 
 class ContentRepository:
@@ -41,6 +42,7 @@ class ContentRepository:
     def list_public_items(
         self,
         type_id: int | None = None,
+        keyword: str | None = None,
         page: int = 1,
         page_size: int = 12,
     ) -> tuple[Sequence[ContentItem], int]:
@@ -48,6 +50,15 @@ class ContentRepository:
         stmt = select(ContentItem).where(ContentItem.is_active == 1)
         if type_id is not None:
             stmt = stmt.where(ContentItem.type_id == type_id)
+        if keyword:
+            # 转义 % / _ / \，避免用户输入被解释为通配符（与茶品搜索同一工具）
+            pattern = f"%{escape_like(keyword)}%"
+            stmt = stmt.where(
+                or_(
+                    ContentItem.title.like(pattern, escape="\\"),
+                    ContentItem.summary.like(pattern, escape="\\"),
+                )
+            )
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = self.db.execute(count_stmt).scalar_one()

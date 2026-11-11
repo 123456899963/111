@@ -3,7 +3,7 @@
 红线：
 - 所有端点先鉴权后校验参数：router 级 Depends(get_admin_user) 在最前执行
 - 前端路由守卫仅是体验层，不构成安全边界（SECURITY S-11）
-- 不提供用户管理/日志查询/审核队列/批量导入/物理删除
+- 不提供用户管理/审核队列外的日志写入/批量导入/物理删除
 """
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
@@ -28,6 +28,31 @@ router = APIRouter(dependencies=[Depends(get_admin_user)])
 def get_stats(db: Session = Depends(get_db)):
     """A2 仪表盘统计（API_CONTRACT §4.6.8）。"""
     return ok(admin_service.stats(db).model_dump(mode="json"))
+
+
+@router.get("/operation-logs")
+def list_operation_logs(
+    page: int = Query(1),
+    page_size: int = Query(admin_service.DEFAULT_LOG_PAGE_SIZE),
+    action: str | None = Query(None, description="动作精确匹配，如 create_tea"),
+    target_type: str | None = Query(None, description="目标类型，如 tea"),
+    admin_id: int | None = Query(None, description="操作人 user_id"),
+    start_date: str | None = Query(None, description="起始日期 YYYY-MM-DD（含）"),
+    end_date: str | None = Query(None, description="结束日期 YYYY-MM-DD（含）"),
+    db: Session = Depends(get_db),
+):
+    """A6 操作日志查询（API_CONTRACT §4.6.12）：仅管理员，时间倒序。"""
+    data = admin_service.list_operation_logs(
+        db,
+        page=page,
+        page_size=page_size,
+        action=action,
+        target_type=target_type,
+        admin_id=admin_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return ok(data.model_dump(mode="json"))
 
 
 @router.get("/teas")

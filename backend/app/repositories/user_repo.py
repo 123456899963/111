@@ -36,6 +36,15 @@ def update_avatar(db: Session, user_id: int, avatar_url: str) -> User | None:
     return user
 
 
+def update_password(db: Session, user: User, password_hash: str) -> User:
+    """更新密码并递增会话版本（改密吊销所有旧会话）。由调用方完成业务校验。"""
+    user.password_hash = password_hash
+    user.session_version = (user.session_version or 0) + 1
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def add_avatar_log(db: Session, user_id: int, detail: str) -> OperationLog:
     """头像变更留痕（SECURITY S-35）；由调用方提交事务。"""
     log = OperationLog(

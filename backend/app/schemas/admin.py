@@ -90,6 +90,32 @@ class AdminStatsResponse(BaseModel):
     category_distribution: list[CategoryDistribution]
 
 
+class AdminOperationLogItem(BaseModel):
+    """操作日志条目（API_CONTRACT §4.6.12）：admin_id 对应 operation_logs.user_id。"""
+
+    id: int
+    admin_id: int | None = None
+    admin_username: str | None = None
+    action: str
+    target_type: str
+    target_id: int | None = None
+    detail: str | None = None
+    # operation_logs 当前无 IP 列，字段预留恒为 null（新增列需 C 类迁移）
+    ip_address: str | None = None
+    created_at: datetime
+
+    @field_serializer("created_at")
+    def serialize_datetime(self, value: datetime) -> str:
+        return iso_z(value)
+
+
+class AdminOperationLogListResponse(BaseModel):
+    items: list[AdminOperationLogItem]
+    total: int
+    page: int
+    page_size: int
+
+
 class UploadResult(BaseModel):
     url: str
     original_filename: str

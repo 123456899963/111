@@ -19,6 +19,7 @@ from app.core.security import create_session_token
 from app.repositories import user_repo
 from app.schemas.auth import (
     USERNAME_PATTERN,
+    ChangePasswordRequest,
     LoginRequest,
     RegisterRequest,
     UsernameAvailabilityResponse,
@@ -41,9 +42,19 @@ _COOKIE_KWARGS = dict(
 )
 
 
-def _set_session_cookie(response: Response, user_id: int) -> None:
-    token = create_session_token(user_id)
+def _set_session_cookie(response: Response, user) -> None:
+    token = create_session_token(user.id, user.session_version)
     response.set_cookie(value=token, **_COOKIE_KWARGS)
+
+
+def _clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key="tea_session",
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=not settings.DEBUG,
+    )
 
 
 def _user_to_dict(user) -> dict:
@@ -72,7 +83,7 @@ def register(req: RegisterRequest, response: Response, db: Session = Depends(get
     """注册 → 自动登录 → Set-Cookie（PRD FR-4.1 / API_CONTRACT §4.1.2）。"""
     username = req.username.strip()
     user = auth_service.register(db, username, req.password)
-    _set_session_cookie(response, user.id)
+    _set_session_cookie(response, user)
     return ok(_user_to_dict(user))
 
 
@@ -85,20 +96,30 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
     username = req.username.strip()
     ip = request.client.host if request.client else "unknown"
     user = auth_service.login(db, username, req.password, ip=ip)
-    _set_session_cookie(response, user.id)
+    _set_session_cookie(response, user)
     return ok(_user_to_dict(user))
 
 
 @router.post("/logout")
 def logout(response: Response):
     """退出登录 → 清除 Cookie（API_CONTRACT §4.1.4）。幂等，未登录也返回成功。"""
-    response.delete_cookie(
-        key="tea_session",
-        path="/",
-        httponly=True,
-        samesite="lax",
-        secure=not settings.DEBUG,
-    )
+    _clear_session_cookie(response)
+    return ok()
+
+
+@router.put("/password")
+def change_password(
+    req: ChangePasswordRequest,
+    response: Response,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """修改密码（API_CONTRACT §4.1.6）。
+
+    成功后递增 session_version，旧 Cookie 全部失效，并清除当前 Cookie 要求重新登录。
+    """
+    auth_service.change_password(db, current_user, req.old_password, req.new_password)
+    _clear_session_cookie(response)
     return ok()
 
 

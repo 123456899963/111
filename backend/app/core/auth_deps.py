@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.response import UserForbidden, UserUnauthorized
-from app.core.security import verify_session_token
+from app.core.security import parse_session_token
 from app.models.user import User
 from app.services import auth as auth_service
 
@@ -21,17 +21,18 @@ def get_current_user(
 ) -> User:
     """从 HttpOnly Cookie 解析当前登录用户。
 
-    无 Cookie / 签名无效 / 过期 / 用户不存在 → 40100。
+    无 Cookie / 签名无效 / 过期 / 用户不存在 / 会话版本不匹配（改密后旧 Cookie）→ 40100。
     """
     if not tea_session:
         raise UserUnauthorized
 
-    user_id = verify_session_token(tea_session)
-    if user_id is None:
+    parsed = parse_session_token(tea_session)
+    if parsed is None:
         raise UserUnauthorized
+    user_id, session_version = parsed
 
     user = auth_service.get_by_id(db, user_id)
-    if user is None:
+    if user is None or user.session_version != session_version:
         raise UserUnauthorized
     return user
 
@@ -43,10 +44,14 @@ def get_optional_user(
     """可选登录态（公开分享页计算 is_owner）：无/无效 Cookie 返回 None。"""
     if not tea_session:
         return None
-    user_id = verify_session_token(tea_session)
-    if user_id is None:
+    parsed = parse_session_token(tea_session)
+    if parsed is None:
         return None
-    return auth_service.get_by_id(db, user_id)
+    user_id, session_version = parsed
+    user = auth_service.get_by_id(db, user_id)
+    if user is None or user.session_version != session_version:
+        return None
+    return user
 
 
 def get_admin_user(current_user: User = Depends(get_current_user)) -> User:

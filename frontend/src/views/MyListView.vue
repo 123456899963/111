@@ -10,10 +10,20 @@ import { createList, deleteList, getListDetail, getMyLists, updateListTitle } fr
 import { getMyStats } from '@/api/me'
 import { removeFavorite } from '@/api/favorites'
 import { isValidListTitle } from '@/utils/list'
+import { CATEGORY_LABELS } from '@/utils/teaQuery'
+import { buildExportFilename, downloadTextFile, toCsv } from '@/utils/export'
 import { useToastStore } from '@/stores/toast'
 import type { ListData, ListItem, ListShareBrief, ListSummary, UserStats } from '@/types'
 
 const MAX_LISTS = 10
+
+const CSV_COLUMNS = [
+  { key: 'name', label: '茶名' },
+  { key: 'category', label: '茶类' },
+  { key: 'origin', label: '产地' },
+  { key: 'season', label: '季节' },
+  { key: 'favorited_at', label: '收藏时间' },
+]
 
 const route = useRoute()
 const toast = useToastStore()
@@ -41,6 +51,7 @@ const noteOpen = ref(false)
 const noteTarget = ref<ListItem | null>(null)
 const shareOpen = ref(false)
 const removingId = ref<number | null>(null)
+const exportPanel = ref<HTMLDetailsElement | null>(null)
 
 const items = computed(() => list.value?.items ?? [])
 const noteCount = computed(() => items.value.filter((item) => !!item.tasting_note).length)
@@ -137,6 +148,54 @@ function formatDate(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
   return date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+
+/** 导出用行数据：列字段取自页面已有接口数据 */
+function exportRows() {
+  return items.value.map((item) => ({
+    tea_id: item.tea_id,
+    name: item.name,
+    category: CATEGORY_LABELS[item.category],
+    origin: item.origin,
+    season: item.season ?? '',
+    favorited_at: formatDate(item.favorited_at),
+  }))
+}
+
+function closeExportMenu() {
+  if (exportPanel.value) exportPanel.value.open = false
+}
+
+function exportCsv() {
+  if (!list.value || !items.value.length) return
+  const csv = toCsv(exportRows(), CSV_COLUMNS)
+  downloadTextFile(buildExportFilename(list.value.title, 'csv'), csv, 'text/csv;charset=utf-8')
+  closeExportMenu()
+  toast.success('CSV 已导出')
+}
+
+function exportJson() {
+  if (!list.value || !items.value.length) return
+  const payload = {
+    list: { name: list.value.title, description: null },
+    items: items.value.map((item) => ({
+      tea_id: item.tea_id,
+      name: item.name,
+      category: CATEGORY_LABELS[item.category],
+      origin: item.origin,
+      season: item.season ?? null,
+      favorited_at: item.favorited_at,
+      tasting_note: item.tasting_note ?? null,
+      is_available: item.is_available,
+    })),
+  }
+  downloadTextFile(
+    buildExportFilename(list.value.title, 'json'),
+    JSON.stringify(payload, null, 2),
+    'application/json;charset=utf-8',
+  )
+  closeExportMenu()
+  toast.success('JSON 已导出')
 }
 
 function startEditTitle() {
@@ -332,6 +391,13 @@ function onShareUpdate(share: ListShareBrief | null) {
           <button type="button" class="btn btn--primary" @click="shareOpen = true">
             ↗️ 分享清单
           </button>
+          <details v-if="items.length" ref="exportPanel" class="export">
+            <summary class="export__toggle">⬇️ 导出</summary>
+            <div class="export__menu">
+              <button type="button" class="export__item" @click="exportCsv">导出 CSV</button>
+              <button type="button" class="export__item" @click="exportJson">导出 JSON</button>
+            </div>
+          </details>
           <RouterLink class="btn btn--secondary" :to="{ name: 'contribute' }">
             ✍️ 投稿新茶 / 科普
           </RouterLink>
@@ -651,6 +717,76 @@ function onShareUpdate(share: ListShareBrief | null) {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* 导出下拉（原生 details，不依赖 Element Plus） */
+.export {
+  position: relative;
+}
+
+.export__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  padding: 0 20px;
+  border: 1px solid var(--color-border-dark);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-small);
+  font-weight: 500;
+  white-space: nowrap;
+  list-style: none;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.export__toggle::-webkit-details-marker {
+  display: none;
+}
+
+.export__toggle:hover,
+.export[open] .export__toggle {
+  background: var(--color-bg-muted);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.export__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 132px;
+  padding: 6px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.export__item {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: var(--text-small);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.export__item:hover {
+  background: var(--color-bg-muted);
+  color: var(--color-primary-dark);
 }
 
 .icon-btn {

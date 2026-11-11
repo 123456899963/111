@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppFooter from '@/components/AppFooter.vue'
@@ -19,6 +19,10 @@ const pageSize = 12
 const loading = ref(true)
 const headerItem = ref<ContentTypeItem | null>(null)
 
+const keyword = ref('')
+const searchInput = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
 async function loadTypes() {
   try {
     types.value = await getContentTypes()
@@ -33,6 +37,7 @@ async function loadList() {
   try {
     const data = await getContentList({
       type: typeCode.value,
+      keyword: keyword.value || undefined,
       page: page.value,
       page_size: pageSize,
     })
@@ -53,9 +58,34 @@ function onPageChange(p: number) {
   void loadList()
 }
 
+function clearSearch() {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchInput.value = ''
+  if (!keyword.value) return
+  keyword.value = ''
+  page.value = 1
+  void loadList()
+}
+
 onMounted(async () => {
   await loadTypes()
   await loadList()
+})
+
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+})
+
+// 关键词输入 300ms 防抖；变化后回到第 1 页重新查询
+watch(searchInput, (value) => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    const next = value.trim()
+    if (next === keyword.value) return
+    keyword.value = next
+    page.value = 1
+    void loadList()
+  }, 300)
 })
 
 // 五个板块共用 /contents/:code，切换时组件实例被复用，
@@ -99,6 +129,26 @@ watch(
 
       <!-- 列表 -->
       <section class="content-list-page__grid-section">
+        <div class="content-list-page__search">
+          <input
+            v-model="searchInput"
+            class="content-list-page__search-input"
+            type="text"
+            maxlength="100"
+            placeholder="搜索标题或摘要"
+            aria-label="搜索本板块内容"
+          />
+          <button
+            v-if="searchInput"
+            class="content-list-page__search-clear"
+            type="button"
+            aria-label="清空搜索"
+            @click="clearSearch"
+          >
+            ×
+          </button>
+        </div>
+
         <div v-if="loading" class="content-list-page__loading">加载中...</div>
 
         <div v-else-if="items.length === 0" class="content-list-page__empty">
@@ -191,6 +241,48 @@ watch(
   max-width: 560px;
   margin: 0 auto;
   line-height: 1.8;
+}
+
+.content-list-page__search {
+  position: relative;
+  max-width: 480px;
+  margin: 0 auto 32px;
+}
+.content-list-page__search-input {
+  width: 100%;
+  height: 44px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  padding: 0 44px 0 20px;
+  font-size: var(--text-body);
+  color: var(--color-text-primary);
+  outline: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.content-list-page__search-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-card);
+}
+.content-list-page__search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.content-list-page__search-clear:hover {
+  color: var(--color-primary);
 }
 
 .content-list-page__loading,

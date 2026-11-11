@@ -16,7 +16,7 @@
 - 构建六大茶类的结构化知识库，茶品信息字段标准化、可筛选、可检索。
 - 打通「发现茶 → 查看详情 → 收藏 / 写笔记 / 分享」的 MVP 核心闭环。
 - 三种角色支撑：游客（只读浏览）、注册用户（收藏、笔记、分享）、管理员（茶品与小贴士维护）。
-- 建立规范驱动的工程体系：五层后端架构、统一 API 契约、安全控制项（S-01~S-32）、60 条测试用例与静态检查脚本。
+- 建立规范驱动的工程体系：五层后端架构、统一 API 契约、安全控制项（S-01~S-35）、94 条测试用例与静态检查脚本。
 
 **MVP 边界**（不在本期范围）：单一默认收藏清单「我的收藏」；3 维筛选（茶类 / 产地 / 季节，AND 逻辑）；链接分享；不做用户贡献内容与审核流程。第二阶段需求（PRD S1–S17）与暂不实现项（X1–X13）一律未开发。
 
@@ -45,11 +45,11 @@
 - 茶品管理：新增 / 编辑（PUT 全量替换）/ 上架 / 下架（二次确认，软失效不物理删除）、茶类 / 状态 / 关键词筛选、分页、含下架列表。
 - 官方小贴士维护（省略保持不变、置 null 清空）。
 - 图片上传：仅 JPEG / PNG / WebP，≤5MB，服务端魔数校验，UUID 文件名，落盘 `uploads/YYYY/MM/`。
-- 所有写操作同步写入 `operation_logs` 操作日志（同事务）。
+- 所有写操作同步写入 `operation_logs` 操作日志（同事务）；后台「操作日志」页只读查询（动作 / 目标类型 / 操作人 / 日期筛选 + 分页）。
 
 ### 3.4 接口概览
 
-统一前缀 `/api/v1`，统一响应体 `{ code, message, data }`。共 **29 个业务端点**（auth 5 / teas 6 / favorites 3 / lists 3 / shares 4 / admin 8）+ 1 个健康检查端点 `/api/v1/health`。完整契约见 [docs/api/API_CONTRACT.md](docs/api/API_CONTRACT.md) 与 [docs/api/openapi.yaml](docs/api/openapi.yaml)。
+统一前缀 `/api/v1`，统一响应体 `{ code, message, data }`。共 **58 个业务端点**（auth 6 / me 3 / teas 9 / tips 1 / favorites 3 / lists 6 / shares 4 / admin 15 / contributions 3 / contents 3 / admin-contents 5）+ 1 个健康检查端点 `/api/v1/health`。完整契约见 [docs/api/API_CONTRACT.md](docs/api/API_CONTRACT.md) 与 [docs/api/openapi.yaml](docs/api/openapi.yaml)。
 
 ## 4. 系统技术栈
 
@@ -91,7 +91,7 @@
 │       ├── api/                # Axios 实例与请求封装（baseURL=/api/v1，withCredentials）
 │       ├── assets/  components/  router/  stores/  styles/  types/  utils/
 │       ├── views/              # 前台页面（首页/列表/详情/我的清单/分享/登录/注册/404）
-│       └── views/admin/        # 管理员后台 5 页（动态 import 按需加载）
+│       └── views/admin/        # 管理员后台 8 页（动态 import 按需加载）
 ├── database/
 │   └── init.sql                # 建库 + 建表 + 索引 + 种子数据
 ├── docs/                       # 权威文档（PRD / 架构 / API 契约 / 安全 / 设计 / 测试）
@@ -200,17 +200,17 @@ python -m app.scripts.rotate_admin_password --password "新密码"
 | 前端 lint / 类型 / 格式 / 构建 | `cd frontend; npm run lint; npm run typecheck; npm run format:check; npm run build` |
 | 全量静态检查（链接 / 常量 / 分层 / UI / 记录 / 密钥） | `python scripts/check_all.py` |
 
-测试用例依据 [docs/testing/TEST_PLAN.md](docs/testing/TEST_PLAN.md)（60 条用例：高 32 / 中 25 / 低 3），覆盖 29 个业务端点、7 张表约束与 32 项安全控制；后端测试使用真实 MySQL 测试库 `tea_guide_test`（与开发库隔离），断言同时检查 HTTP 状态码、业务 `code` 与数据库最终状态。详细逐条记录见 [docs/testing/TEST_REPORT.md](docs/testing/TEST_REPORT.md)。
+测试用例依据 [docs/testing/TEST_PLAN.md](docs/testing/TEST_PLAN.md)（TEST_PLAN v1.6 共 94 条用例（高 53 / 中 38 / 低 3），覆盖 58 个业务端点、13 张表约束与 35 项安全控制；G5 阶段 60 条用例的逐条历史记录见 [docs/testing/TEST_REPORT.md](docs/testing/TEST_REPORT.md)）。
 
 ### 10.2 测试结果（2026-11-09 实际执行）
 
 | 项 | 结果 |
 |---|---|
-| 后端 pytest 全量 | **106 passed**（0 失败、0 跳过；含 20 线程并发收藏 / 分享真实并发用例） |
-| TEST_PLAN 60 条系统用例 | **60 / 60 通过，高优先级 32 / 32 通过**（2026-11-08 G5 系统测试 + 缺陷修复复测） |
-| 前端 Vitest | **30 passed**（4 个 spec 文件，纯函数用例） |
+| 后端 pytest 全量 | **170 passed**（0 失败、0 跳过；含 20 线程并发收藏 / 分享真实并发用例） |
+| TEST_PLAN G5 阶段 60 条用例 | **60 / 60 通过，高优先级 32 / 32 通过**（2026-11-08 历史记录；TEST_PLAN 已扩展至 92 条） |
+| 前端 Vitest | **50 passed**（6 个 spec 文件，纯函数用例） |
 | 前端 ESLint / vue-tsc / Prettier / 生产构建 | 全部通过（构建存在主 chunk >500 kB 体积告警，非失败） |
-| `scripts/check_all.py` 静态检查 | 全部通过（205 条文档链接、29/60/32/7 常量一致、五层分层 0 违规、153 个文件无敏感信息泄露） |
+| `scripts/check_all.py` 静态检查 | 全部通过（273 条文档链接、57/92/35/13 常量一致、五层分层 0 违规、236 个文件无敏感信息泄露） |
 | GitHub Actions CI | **未运行**（工作流已配置，尚未在远端实际执行，不标记为通过） |
 
 ## 11. 系统截图
@@ -252,7 +252,7 @@ python -m app.scripts.rotate_admin_password --password "新密码"
 | 后端依赖清单 | ✅ | `requirements.txt` 完整，含 `uvicorn[standard]` 可用于生产 |
 | 配置模板 | ✅ | `.env.example` 完整；缺失 `SECRET_KEY` 时后端拒绝启动，避免弱密钥上线 |
 | 数据库初始化脚本 | ✅ | `database/init.sql` 可建库建表 + 种子数据 |
-| 数据库迁移 | ⚠️ | Alembic 环境已就绪但 baseline 迁移未生成，暂以 init.sql 为准 |
+| 数据库迁移 | ⚠️ | 已生成 0001–0010 迁移；全新环境 `init.sql` + `alembic stamp head`，既有环境 `alembic upgrade head` |
 | Web 服务器 / 容器配置 | ⚠️ | **仓库内无 Nginx 配置、Dockerfile / docker-compose**，需在部署阶段编写 |
 | 实机部署验证 | ❌ | **尚未在任何服务器环境实际部署验证**，以下步骤未实机执行 |
 | 管理员口令 | ⚠️ | 种子管理员口令为开发用途，部署后必须立即轮换 |

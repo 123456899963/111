@@ -783,3 +783,110 @@ def test_admin_upload_04_path_traversal_attempt_is_stored_safely():
         if url:
             _remove_upload(url)
         _cleanup_logs_after(log_id)
+
+
+# ===== OPERATION LOGS / 操作日志查询（API_CONTRACT §4.6.12） =====
+
+
+def test_admin_oplog_01_list_returns_pagination_and_fields():
+    admin = _admin_client()
+    tea = _create_tea(admin)
+    try:
+        resp = admin.get("/api/v1/admin/operation-logs", params={"page": 1, "page_size": 5})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["code"] == 0
+
+        data = body["data"]
+        assert set(data) == {"items", "total", "page", "page_size"}
+        assert data["page"] == 1
+        assert data["page_size"] == 5
+        assert data["total"] >= 1
+        assert len(data["items"]) <= 5
+
+        item = data["items"][0]
+        assert set(item) == {
+            "id",
+            "admin_id",
+            "admin_username",
+            "action",
+            "target_type",
+            "target_id",
+            "detail",
+            "ip_address",
+            "created_at",
+        }
+        assert item["created_at"].endswith("Z")
+        assert data["items"] == sorted(
+            data["items"], key=lambda row: (row["created_at"], row["id"]), reverse=True
+        )
+    finally:
+        _cleanup_teas([tea["id"]])
+
+
+def test_admin_oplog_02_page_and_page_size_are_clamped():
+    admin = _admin_client()
+    resp = admin.get("/api/v1/admin/operation-logs", params={"page": 0, "page_size": 999})
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["page"] == 1
+    assert data["page_size"] == 50
+
+
+def test_admin_oplog_03_normal_user_gets_403():
+    username = f"oplog{_uid()}"
+    try:
+        register = client.post(
+            "/api/v1/auth/register",
+            json={"username": username, "password": "tea2026"},
+        )
+        assert register.status_code == 200
+        normal = TestClient(app)
+        normal.cookies = register.cookies
+
+        resp = normal.get("/api/v1/admin/operation-logs")
+        assert resp.status_code == 403
+        assert resp.json()["code"] == 40300
+        assert resp.json()["data"] is None
+    finally:
+        _cleanup_user(username)
+
+
+def test_admin_oplog_04_guest_gets_401():
+    resp = client.get("/api/v1/admin/operation-logs")
+    assert resp.status_code == 401
+    assert resp.json()["code"] == 40100
+    assert resp.json()["data"] is None
+
+
+def test_admin_oplog_05_action_filter_and_invalid_date():
+    admin = _admin_client()
+    tea = _create_tea(admin)
+    try:
+        resp = admin.get(
+            "/api/v1/admin/operation-logs",
+            params={"action": "create_tea", "target_type": "tea", "page_size": 50},
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["total"] >= 1
+        assert all(item["action"] == "create_tea" for item in data["items"])
+        assert all(item["target_type"] == "tea" for item in data["items"])
+
+        matched = [item for item in data["items"] if item["target_id"] == tea["id"]]
+        assert matched
+        assert matched[0]["admin_id"] == admin.get("/api/v1/auth/me").json()["data"]["id"]
+        assert matched[0]["admin_username"] == settings.ADMIN_USERNAME
+
+        bad = admin.get("/api/v1/admin/operation-logs", params={"start_date": "2026/11/11"})
+        assert bad.status_code == 400
+        assert bad.json()["code"] == 40000
+
+        reversed_range = admin.get(
+            "/api/v1/admin/operation-logs",
+            params={"start_date": "2026-11-12", "end_date": "2026-11-11"},
+        )
+        assert reversed_range.status_code == 400
+        assert reversed_range.json()["code"] == 40000
+    finally:
+        _cleanup_teas([tea["id"]])

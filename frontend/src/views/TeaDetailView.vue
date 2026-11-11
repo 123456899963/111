@@ -11,6 +11,7 @@ import { useToastStore } from '@/stores/toast'
 import { getHotTeas, getRelatedTeas, getTeaDetail } from '@/api/teas'
 import { getFavoriteStatus } from '@/api/favorites'
 import { clearPendingAction, loadPendingAction, savePendingAction } from '@/utils/pendingAction'
+import { addHistory } from '@/utils/viewHistory'
 import type { Tea, TeaListItem } from '@/types'
 
 const route = useRoute()
@@ -131,6 +132,13 @@ async function load() {
     }
     favoriteCount.value = res.data.favorite_count
     state.value = 'ready'
+    addHistory({
+      tea_id: res.data.id,
+      name: res.data.name,
+      category: res.data.category,
+      cover_image: res.data.main_image_url ?? null,
+      viewed_at: new Date().toISOString(),
+    })
     void loadRelated(tea.value.id)
   } catch (err) {
     const code = getErrorCode(err)
