@@ -7,6 +7,63 @@
 | 记录顺序 | **最新条目置顶**（按日期倒序） |
 | 定位 | 事实流水，不替代任何权威文档 |
 
+## 2026-11-11｜内容列表页搜索区重设计（工具条化）
+
+- 任务编号 / 分级：TASK-20261111-content-search-layout / **A**（纯前台布局与样式，不改接口、数据与业务规则）
+- 背景：内容板块（`/contents/:code`）搜索框原为 Hero 下方居中的 480px 胶囊，与上下文割裂、缺少归属感。
+- 改动：`frontend/src/views/ContentListView.vue`
+  - Hero 改为两栏：左侧 icon + 大标题 + 描述，右侧 300px 紧凑搜索框（放大镜图标 + 清空按钮），搜索框与标题同排垂直居中。
+  - 结果统计（「共 N 篇内容」/「找到 N 篇与「kw」相关的内容」）单独一行置于卡片网格上方。
+  - 移动端（≤767px）Hero 纵向堆叠，搜索框撑满宽度。
+  - 仅引用既有 CSS 变量，未新增硬编码色值。
+- 测试（2026-11-11 实跑）：
+  - `cd frontend; npm run lint / typecheck / format:check` 通过
+  - Playwright + 本机 Edge，1440×960 实机截图：默认态（共 33 篇）与输入「西湖」态（找到 1 篇）均正常，标题与搜索同排、结果统计与网格对齐
+  - `python scripts/check_frontend.py`、`check_links.py` 通过
+- 附带发现与处理：回归时发现 8000 端口运行的是旧后端进程（OpenAPI 中 `/contents` 缺 `keyword` 参数，搜索不生效）；重启后端后 `keyword=西湖 → total=1`、`keyword=zzzz → total=0`，确认内容搜索功能本身正常，无需代码改动。
+- 契约 / 数据 / 安全影响：无。
+- 遗留：无。
+- 回滚方式：还原 `ContentListView.vue` 单文件即可。
+
+## 2026-11-11｜P2 工程加固：登出吊销 / 告警清理 / chunk 拆分 / Docker 部署 / Gitee CI / 截图
+
+- 任务编号 / 分级：TASK-20261111-p2-hardening / **B + C**（登出吊销、部署与 CI 属 C，已按用户确认方案实施；其余为 B/A）
+- 背景：MVP 与第二阶段功能完成后，处理工程化待办：会话吊销、弃用告警、首屏体积、部署配套、CI 与文档截图。
+- 改动：
+  1. **登出会话吊销（C，用户已确认）**
+     - `repositories/user_repo.py` 新增 `revoke_sessions`；`services/auth.py` 新增 `logout`；`routers/auth.py` 登出改为读取可选会话并递增 `users.session_version`。
+     - 旧 Cookie 重放返回 `40100`；因无 `sessions` 表，吊销粒度为用户级（该账号全部设备会话失效）。
+     - 同步 SECURITY S-10 / G-12、API_CONTRACT §1.5、§4.1.4（v1.10）、TEST_PLAN AUTH-08、openapi、README。
+  2. **弃用告警清理**
+     - 新增 `core/clock.py::utcnow()`；8 个模型与 2 个测试文件替换 `datetime.utcnow()`；`core/config.py` 改用 `SettingsConfigDict`。
+     - pytest 告警由数百条降至 1 条（仅第三方 `StarletteDeprecationWarning`）。
+  3. **前端 chunk 拆分**
+     - 路由除首页外全部懒加载；`vite.config.ts` 增加 manualChunks（vue/pinia/router、qrcode、element-plus）。
+     - 主入口 chunk 约 1.1 MB → **95.81 kB**（gzip 34.36 kB）；Element Plus 后台异步包 998 kB 仍触发 >500 kB 提示。
+  4. **修复游客访问缺陷（截图验证中发现）**
+     - `api/request.ts` 的 `PUBLIC_PATHS` 增加 `/auth/me` 与 `/auth/logout`。此前游客启动 `hydrate()` 探测会话返回 401 时会触发全局拦截器跳转登录页，导致所有公开页面无法直接访问。
+  5. **Docker Compose 部署（C，用户已确认）**
+     - 新增 `deploy/Dockerfile.backend`、`deploy/Dockerfile.frontend`、`deploy/nginx.conf`、`docker-compose.yml`、`deploy/env.example`、`.dockerignore`。
+     - `web(8080) → api(8000) → mysql:5.7`；MySQL 首次启动执行 `database/init.sql`；`uploads` 绑定挂载复用既有图片。
+  6. **Gitee Go CI**
+     - 新增 `.workflow/ci.yml`：后端 Ruff + 静态检查、前端 lint/format/typecheck/test/build；保留 `.github/workflows/ci.yml` 作为备份。
+     - Gitee Go 云端无 MySQL，pytest 不在该流水线执行。
+  7. **README 截图与基线数字**
+     - 新增 `docs/images/` 9 张实机截图（前台 6 + 后台 3），README §11 更新；同步 13 张表、184 条测试、73 条 Vitest 等数字。
+- 测试（2026-11-11 实跑）：
+  - `cd backend; python -m ruff check app tests` / `ruff format --check` 通过
+  - `cd backend; python -m pytest -q` → **184 passed，1 warning**（第三方 httpx/starlette 提示）
+  - `cd frontend; npm run lint / format:check / typecheck / test:run / build` → 全过；**Vitest 73 passed（9 files）**
+  - `python scripts/check_all.py` → 全过（284 条链接、常量 58/94/35/13、五层 0 违规、244 文件无敏感信息）
+  - 截图经 Playwright 驱动本机 Edge 实机抓取并逐张目检；游客首页/列表/详情/分享页均正常渲染
+  - `.workflow/ci.yml` 与 `docker-compose.yml` 通过 PyYAML 语法解析
+- 契约 / 数据 / 安全影响：登出行为变更已同步契约与安全文档；无表结构变更（复用 0011 的 `session_version`）。
+- 遗留 / 未验证：
+  - 本机未安装 Docker，`docker compose config` 与容器构建未执行，未在真实服务器部署验证。
+  - Gitee Go 流水线未在远端实际触发；其内置 Node/Python 版本较旧，前端步骤在流水线内自行安装 Node 20。
+  - Element Plus 后台异步 chunk 仍 >500 kB，不影响前台首屏。
+- 回滚方式：回退本批次提交；无新增数据库迁移，无需回滚结构。
+
 ## 2026-11-11｜茶品配图重做：Bing → 百度图片 + 相关性校验
 
 - 任务编号 / 分级：TASK-20261111-tea-image-redo / **B**

@@ -4,10 +4,11 @@
 """
 
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi.testclient import TestClient
 
+from app.core.clock import utcnow
 from app.core.database import SessionLocal
 from app.main import app
 from app.models.favorite import FavoriteItem
@@ -119,7 +120,7 @@ def test_login_unlocks_after_window_expires():
         # 把失败记录整体前移 16 分钟（窗口 15 分钟），模拟自然过期
         db = SessionLocal()
         try:
-            stale = datetime.utcnow() - timedelta(minutes=16)
+            stale = utcnow() - timedelta(minutes=16)
             db.query(LoginAttempt).update({LoginAttempt.failed_at: stale})
             db.commit()
         finally:

@@ -375,10 +375,10 @@ def test_tc_auth_07_tampered_foreign_and_expired_session():
         _cleanup_user(username)
 
 
-# ===== TC-AUTH-08：登出 Cookie 属性与旧 Cookie 重放（风险观察） =====
+# ===== TC-AUTH-08：登出 Cookie 属性与旧 Cookie 重放（登出吊销） =====
 
 
-def test_tc_auth_08_logout_clears_cookie_and_replay_risk():
+def test_tc_auth_08_logout_clears_cookie_and_replay_revoked():
     username = f"auth8{_uid()}"
     client, token = _register(username)
     try:
@@ -398,10 +398,19 @@ def test_tc_auth_08_logout_clears_cookie_and_replay_risk():
 
         assert client.get("/api/v1/auth/me").status_code == 401
 
-        # 已知限制（S-10，无 sessions 表）：旧 Cookie 仍可重放，仅记录风险
+        # 登出吊销（S-10）：旧 Cookie 重放必须 401，且 session_version 已递增
         replay = TestClient(app)
         replay.cookies.set("tea_session", token)
-        assert replay.get("/api/v1/auth/me").status_code == 200
+        replay_resp = replay.get("/api/v1/auth/me")
+        assert replay_resp.status_code == 401
+        assert replay_resp.json()["code"] == 40100
+
+        db = SessionLocal()
+        try:
+            user = user_repo.get_by_username(db, username)
+            assert user is not None and user.session_version == 1
+        finally:
+            db.close()
     finally:
         _cleanup_user(username)
 

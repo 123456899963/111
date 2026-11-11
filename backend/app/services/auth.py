@@ -103,3 +103,13 @@ def change_password(db: Session, user: User, old_password: str, new_password: st
     if old_password == new_password:
         raise ValidationError
     user_repo.update_password(db, user, hash_password(new_password))
+
+
+def logout(db: Session, user: User | None) -> None:
+    """登出吊销：有效会话时递增会话版本，使旧 Cookie 立即失效（SECURITY S-10）。
+
+    未登录或 Cookie 无效时不做任何数据库操作，保持接口幂等。
+    由于没有 sessions 表，吊销粒度是用户级——该用户所有设备会话同时失效。
+    """
+    if user is not None:
+        user_repo.revoke_sessions(db, user)

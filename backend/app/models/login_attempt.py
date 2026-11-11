@@ -10,6 +10,7 @@ from sqlalchemy import DateTime, Index, String, text
 from sqlalchemy.dialects.mysql import INTEGER as MySQLInteger
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.clock import utcnow
 from app.core.database import Base
 
 
@@ -22,7 +23,7 @@ class LoginAttempt(Base):
     username: Mapped[str] = mapped_column(String(32), nullable=False)
     ip: Mapped[str] = mapped_column(String(45), nullable=False)
     failed_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+        DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
 
     __table_args__ = (

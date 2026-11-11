@@ -125,7 +125,7 @@
 | **TC-AUTH-05** | 认证 | 高 | `POST /api/v1/auth/login`；S-04/S-03 | 准备 `ghost` 不存在 | ① 登录 `ghost/Any123`；② 登录 `user_a/WrongPwd`；③ 对比两次响应 | ① ② 均 HTTP 401、`code=40110`、message 完全相同“用户名或密码错误”；③ 不区分用户名不存在/密码错误，不设置 Cookie，响应时间差不超过 100 ms |
 | **TC-AUTH-06** | 认证 | 高 | `GET /auth/me`、`POST /favorites/1`、`GET /lists`、`PUT /lists/1`、`POST /shares/generate`、`POST /shares/TB/copy`；S-08/S-09/S-11 | 无 Cookie / 无有效会话 | ① 逐个调用上述接口；② 查 `favorite_items`、`collection_lists`、`share_tokens` | ① 全部 HTTP 401、`code=40100`；② 数据库无任何新增/修改；③ 不返回业务数据 |
 | **TC-AUTH-07** | 认证 | 中 | `GET /api/v1/auth/me`；S-06/S-09 | 已有合法 `tea_session` | ① 篡改 Cookie 最后一个字符后请求；② 用另一 `SECRET_KEY` 签发的同结构 Cookie 请求；③ 用 `verify_session_token(token, max_age_days=0)` 验证过期分支 | ① ② ③ 均判定无效 → HTTP 401/`code=40100`；不泄露“签名错误/过期/用户不存在”的具体原因 |
-| **TC-AUTH-08** | 认证 | 中 | `POST /api/v1/auth/logout`；S-07/S-10 | `user_a` 已登录 | ① 调登出；② 记录 `Set-Cookie`；③ 用未携带旧 Cookie 的客户端调 `/auth/me`；④（风险观察）手工重放旧 Cookie | ① 200/`code=0`、`data=null`；② 删除 Cookie：`Max-Age=0`、Path=/、HttpOnly、SameSite=Lax；③ 401/`40100`；④ 旧 Cookie 仍有效——属 S-10 已知限制，仅记录风险，不计入本用例失败 |
+| **TC-AUTH-08** | 认证 | 中 | `POST /api/v1/auth/logout`；S-07/S-10 | `user_a` 已登录 | ① 调登出；② 记录 `Set-Cookie`；③ 用未携带旧 Cookie 的客户端调 `/auth/me`；④ 用新客户端重放旧 Cookie；⑤ 查 `users.session_version` | ① 200/`code=0`、`data=null`；② 删除 Cookie：`Max-Age=0`、Path=/、HttpOnly、SameSite=Lax；③ 401/`40100`；④ 旧 Cookie 已被吊销 → 401/`40100`；⑤ `session_version` 较登出前 +1 |
 | **TC-AUTH-09** | 认证 | 高 | 注册/登录/`/auth/me`；S-02/S-03/S-29 | 可读取后端日志文件 | ① 依次执行注册、登录、`/auth/me`；② 递归遍历响应 JSON 的 key 与 value；③ 在后端日志中检索本次密码明文与 `password` 关键字 | ① 响应中不存在 `password`/`password_hash` 字段或明文值；② 日志中无密码明文、无 Cookie 值；③ 错误日志只含异常类型/堆栈，不含请求体 |
 | **TC-AUTH-10** | 认证 | 高 | `POST /api/v1/auth/login`；S-33/S-14 | 同一用户名 15 分钟内无失败记录 | ① 用错误密码连续登录 5 次；② 第 6 次改用**正确**密码登录 | ① 前 5 次均 401/`40110`；② 第 6 次 HTTP 429、`code=42900`、message“尝试过于频繁，请 15 分钟后再试”，不下发 Cookie；`login_attempts` 有 5 行记录 |
 | **TC-AUTH-11** | 认证 | 高 | `POST /api/v1/auth/login`；S-33 | 已触发 AUTH-10 的锁定 | ① 锁定期内用正确密码登录；② 锁定期内用错误密码登录；③ 查响应体 | ① ② 均 429/`42900`；③ 两者 message 完全一致，不暴露账号是否存在、不返回密码校验结果 |
@@ -391,7 +391,7 @@
 | 第二阶段 S1–S17（S14/S15/S16 已提前实现，见 5.1/5.10） | 未实现项不设用例；仅在 SECURITY §3/§6 记录预留与风险 |
 | 密码找回、邮箱/微信登录 | PRD FR-4.4 明确 MVP 不做 |
 | S14 登录失败锁定 | 已提前实现，用例见 AUTH-10–AUTH-13（S-33） |
-| 旧 Cookie 重放 | 登出后旧 Cookie 在 30 天内仍可重放，AUTH-08 步骤④记录为已知限制（无 `sessions` 表），不作为失败判定；修改密码已通过 `session_version` 立即吊销全部旧会话（AUTH-16） |
+| 旧 Cookie 重放 | 已关闭：登出/改密均递增 `users.session_version`，旧 Cookie 立即 `40100`（AUTH-08、AUTH-16）；未登出期间被窃取的 Cookie 仍属残余风险 |
 | 性能/吞吐/长时间稳定性 | 不在本方案内；并发用例只验证唯一性与幂等 |
 | 前端 UI/兼容性/无障碍 | 不在本方案内；前端仅保留“守卫不是安全边界”的说明 |
 | 渗透测试/漏洞扫描 | 不在本方案内；依赖 `pip-audit` / `npm audit` 与上线检查单 |

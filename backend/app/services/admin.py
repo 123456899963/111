@@ -257,9 +257,7 @@ def list_operation_logs(
         )
         for log, username in rows
     ]
-    return AdminOperationLogListResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    return AdminOperationLogListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 def _parse_log_date(value: str | None, field: str) -> datetime | None:

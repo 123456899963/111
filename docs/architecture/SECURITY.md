@@ -108,7 +108,7 @@ MySQL（不对公网暴露；最小权限账号）
 | **S-07** | Cookie 属性安全、有效期 30 天 | `routers/auth.py` [register / login Set-Cookie](file:///d:/项目二/backend/app/routers/auth.py#L13-L40)；`core/config.py` [SESSION_EXPIRE_DAYS](file:///d:/项目二/backend/app/core/config.py#L17-L19) | `HttpOnly=true`、`SameSite=Lax`、`Path=/`、`Max-Age=2592000`；生产 HTTPS 下 `Secure=true`；不设置 `Domain`；登出/改密 `delete_cookie` 使用相同 `path`/`samesite`。`SameSite=Lax` + 仅同源 JSON 写接口 + CORS 白名单共同缓解 CSRF，MVP 不引入独立 CSRF token（若未来改为跨站部署或表单提交，再补 token 与 Origin 校验）。**当前代码缺 `secure` 参数，见 §5 G-02** | AUTH-01、AUTH-08 |
 | **S-08** | 每次请求验签并实时读取角色 | `core/auth_deps.py` `get_current_user` / `get_admin_user` / `get_optional_user`；各 Router 通过 `Depends` 注入 | 验签取得 `uid` + `sv` → 按 `uid` 查 `users` → 不存在或 `sv != users.session_version` 返回 `40100`；`get_admin_user` 再判断 `role == 'admin'`，否则 `40300`；角色每次查库，Cookie 中不缓存角色，改库后立即生效 | AUTH-04、AUTH-06、AUTH-16、PERM-04 |
 | **S-09** | 会话过期语义明确 | `core/security.py` [parse_session_token max_age](file:///d:/项目二/backend/app/core/security.py)；`config.py` `SESSION_EXPIRE_DAYS=30` | `SignatureExpired` / `BadSignature` 统一 `40100`；不区分“过期/伪造/用户不存在/会话版本失效”，避免信息泄露 | AUTH-07 |
-| **S-10** | 会话撤销边界与改密吊销 | DATA_MODEL §1（不建 `sessions` 表）；`users.session_version`（0011 迁移）；`routers/auth.py` `logout` 只清 Cookie、`PUT /auth/password` 递增版本；`repositories/user_repo.py` `update_password` | 登出仅清除浏览器 Cookie，**未改密的旧 Cookie 在 30 天内仍可重放**（MVP 风险接受）；**修改密码时 `session_version + 1` 并在同一事务提交，Cookie 载荷 `sv` 不匹配即 `40100`，该用户所有旧会话立即失效**；响应同时清除当前 Cookie 要求重新登录 | AUTH-08（登出重放，已知限制）、AUTH-16 |
+| **S-10** | 会话撤销边界与登出/改密吊销 | DATA_MODEL §1（不建 `sessions` 表）；`users.session_version`（0011 迁移）；`routers/auth.py` `logout` 递增版本、`PUT /auth/password` 递增版本；`repositories/user_repo.py` `revoke_sessions` / `update_password` | **登出时若携带有效 Cookie，则 `session_version + 1` 并提交，该用户全部旧 Cookie 立即失效（`40100`）**；未登录/无效 Cookie 仅清 Cookie，保持幂等。**修改密码同样 `session_version + 1`**。因无 `sessions` 表，吊销粒度为用户级：登出会使该用户所有设备会话失效；未登出前被窃取的 Cookie 在 30 天内仍可能有效（残余风险，见 §5 G-12）。响应同时清除当前 Cookie | AUTH-08、AUTH-16 |
 
 ### 2.3 授权与资源归属
 
@@ -229,7 +229,7 @@ MySQL（不对公网暴露；最小权限账号）
 | G-09 | 笔记无长度上限，但 MySQL `TEXT` 上限 65,535 字节 | `schemas`（待补） | 超长笔记触发 DB 错误 → 500 | **P1** | Pydantic/Service 限制 20,000 字符，超限 `40000`（S-24） |
 | G-10 | 登录未做等时比对 | `services/auth.py` [login](file:///d:/项目二/backend/app/services/auth.py#L21-L26) | 响应时间可区分账号是否存在（低风险） | **P2** | 对不存在用户执行 dummy bcrypt 校验（S-04） |
 | G-11 | 无登录失败锁定/全站限流 | 全局限流未配置 | 暴力尝试、资源耗尽 | **风险接受** | PRD FR-4.4 明确不做锁定；上线可选 Nginx `limit_req`（§6） |
-| G-12 | 登出后旧 Cookie 仍可在 30 天内重放 | 无 `sessions` 表（S-10） | 令牌泄露后无法强制失效 | **风险接受** | 文档明示；若需求变化，新增 `sessions` 表 + 会话版本号 |
+| G-12 | 未登出即被窃取的 Cookie 仍可在 30 天内重放 | 无 `sessions` 表（S-10） | 令牌泄露后难以按设备撤销 | **已缓解（2026-11-11）** | 登出/改密均递增 `session_version`，吊销该用户全部旧会话；残余风险为“用户未主动登出期间令牌被窃取”，后续可引入 `sessions` 表做设备级撤销 |
 
 ---
 
@@ -264,3 +264,4 @@ MySQL（不对公网暴露；最小权限账号）
 | v1.2 | 2026-11-09 | 批次四：新增 S-34 用户贡献与审核门禁（S10–S13：提交需登录、仅本人可见/删除、仅 pending 可处理、审核仅管理员、映射与查重校验、拒绝理由必填、操作日志留痕）；适用范围改为 MVP + S1–S17 全项；配套用例增至 84 条 |
 | v1.3 | 2026-11-10 | ADR-0004 头像：新增 S-35 头像变更（登录鉴权、服务端生成地址、魔数+5 MB 限制、预置白名单、`operation_logs` 留痕）；S-02 字段范围补 `avatar_url` 与 `/me/avatar`；配套用例增至 89 条 |
 | v1.4 | 2026-11-11 | 自助修改密码（`PUT /auth/password`）：会话载荷增加 `sv`（`users.session_version`，0011 迁移）；S-06/S-08 同步载荷与校验语义，S-10 更新为“登出仍不可吊销、改密可吊销全部旧会话”；A07 风险条目同步；新增 AUTH-14～AUTH-16 用例 |
+| v1.5 | 2026-11-11 | 登出会话吊销：`POST /auth/logout` 携带有效 Cookie 时递增 `users.session_version`，旧 Cookie 立即 `40100`；S-10 更新为“登出与改密均可吊销全部旧会话（用户级）”；G-12 风险由“接受”改为“已缓解”；AUTH-08 期望同步 |

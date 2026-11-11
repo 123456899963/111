@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 
+from app.core.clock import utcnow
 from app.core.database import SessionLocal
 from app.main import app
 from app.models.favorite import FavoriteItem
@@ -185,7 +186,7 @@ def test_s7_latest_tips_excludes_off_shelf():
     off_id = _make_tea(name="S7下架贴士", is_active=False)
     db = SessionLocal()
     try:
-        db.add(TeaTips(tea_id=off_id, official_note="下架茶贴士", updated_at=datetime.utcnow()))
+        db.add(TeaTips(tea_id=off_id, official_note="下架茶贴士", updated_at=utcnow()))
         db.commit()
     finally:
         db.close()
@@ -214,7 +215,7 @@ def test_s17_hot_weights_recent_favorites():
                 user_id=user.id,
                 tea_id=b_id,
                 list_id=list_obj.id,
-                created_at=datetime.utcnow(),
+                created_at=utcnow(),
             )
         )
         db.commit()

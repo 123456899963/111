@@ -45,6 +45,14 @@ def update_password(db: Session, user: User, password_hash: str) -> User:
     return user
 
 
+def revoke_sessions(db: Session, user: User) -> User:
+    """递增会话版本，使该用户全部旧 Cookie 立即失效（登出吊销，SECURITY S-10）。"""
+    user.session_version = (user.session_version or 0) + 1
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def add_avatar_log(db: Session, user_id: int, detail: str) -> OperationLog:
     """头像变更留痕（SECURITY S-35）；由调用方提交事务。"""
     log = OperationLog(

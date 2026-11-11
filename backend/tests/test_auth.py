@@ -180,16 +180,24 @@ def test_me_with_login_returns_user():
 def test_logout_clears_cookie():
     username = _unique_username()
     try:
-        client.post(
+        register = client.post(
             "/api/v1/auth/register",
             json={"username": username, "password": "tea2026"},
         )
+        token = register.cookies.get("tea_session")
+        assert token
         resp = client.post("/api/v1/auth/logout")
         assert resp.status_code == 200
         assert resp.json()["code"] == 0
         # 登出后 /me 应返回 401
         me_resp = client.get("/api/v1/auth/me")
         assert me_resp.status_code == 401
+        # 登出吊销（S-10）：旧 Cookie 重放必须 401
+        replay = TestClient(app)
+        replay.cookies.set("tea_session", token)
+        replay_resp = replay.get("/api/v1/auth/me")
+        assert replay_resp.status_code == 401
+        assert replay_resp.json()["code"] == 40100
     finally:
         _cleanup_user(username)
 

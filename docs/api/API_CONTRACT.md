@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.9** |
+| 文档版本 | **v1.10** |
 | 创建日期 | 2026-11-06 |
 | 契约基线 | [PRD.md](../product/PRD.md) v1.1 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.4 · [database/init.sql](../../database/init.sql) · [MODULE_DESIGN.md](../architecture/MODULE_DESIGN.md) |
 | 本契约地位 | 前后端联调与字段命名的唯一依据。脚手架中与本契约不一致的字段，以本契约（数据库列名）为准 |
@@ -119,7 +119,7 @@
 | 传递方式 | 浏览器/前端自动携带；Axios 必须 `withCredentials: true`（已配置） |
 | 登录 | `POST /auth/login` 校验成功后 `Set-Cookie: tea_session=...` |
 | 注册 | `POST /auth/register` 成功后自动登录并 `Set-Cookie`（PRD FR-4.1） |
-| 退出 | `POST /auth/logout` 删除 Cookie，服务端无状态可清理 |
+| 退出 | `POST /auth/logout` 删除 Cookie；携带有效 Cookie 时服务端递增 `users.session_version`，吊销该用户全部旧会话 |
 | 失效 | 签名无效、过期、用户不存在、`sv` 与 `users.session_version` 不一致 → `40100`；前端提示“登录已过期”并弹登录面板 |
 | 改密吊销 | `PUT /auth/password` 成功后 `session_version + 1`，该用户所有旧 Cookie 立即失效 |
 | 角色 | `role` 每次从 `users.role` 读取；`admin` 才可访问 `/admin/*` |
@@ -720,7 +720,10 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 ```
 
 - **错误**：无业务错误；`50000` 除外。
-- **规则**：服务端不维护会话表，清除 Cookie 即完成退出。
+- **规则**：
+  - 携带有效 `tea_session` 时，服务端将 `users.session_version + 1` 并提交事务，该用户全部旧 Cookie 立即失效（后续请求 `40100`）。
+  - 未登录或 Cookie 无效时不做数据库操作，仅清除客户端 Cookie，接口保持幂等。
+  - 因无 `sessions` 表，吊销粒度为用户级：登出会使该用户所有设备会话失效。
 
 #### 4.1.5 当前用户信息
 
@@ -2781,3 +2784,4 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 | **v1.7** | 2026-11-11 | 补录批次五 R1–R5 内容板块 8 个端点：新增 §4.9（`GET /content-types`、`GET /contents`、`GET /contents/{item_id}`、`GET/POST /admin/contents`、`GET/PUT/DELETE /admin/contents/{item_id}`）；新增错误码 `40450`/`40460` 的文档说明；接口总览补齐至 56 个业务端点 |
 | **v1.8** | 2026-11-11 | 新增 §4.1.6 用户自助修改密码 `PUT /auth/password`：Cookie 载荷增加 `sv`（`users.session_version`），改密后旧会话立即失效；接口总览 56 → 57 个业务端点 |
 | **v1.9** | 2026-11-11 | 新增 §4.6.12 管理员操作日志查询 `GET /admin/operation-logs`（分页 + 动作/目标类型/管理员/日期筛选，`created_at DESC, id DESC`，LEFT JOIN 取 `admin_username`）；§5.7/§6.3 同步日志可读；`ip_address` 为预留字段恒 `null`；接口总览 57 → 58 个业务端点 |
+| **v1.10** | 2026-11-11 | §4.1.4 登出语义更新：携带有效 Cookie 时递增 `users.session_version`，旧 Cookie 立即失效；未登录/无效 Cookie 仅清 Cookie；接口总数不变 |

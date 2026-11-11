@@ -13,6 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.mysql import INTEGER as MySQLInteger
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.clock import utcnow
 from app.core.database import Base
 
 
@@ -42,7 +43,7 @@ class FavoriteItem(Base):
     )
     tasting_note: Mapped[str | None] = mapped_column(Text, nullable=True)  # 私有品鉴笔记
     created_at: Mapped[datetime] = mapped_column(  # 收藏时间
-        DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+        DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
 
     __table_args__ = (
@@ -79,7 +80,7 @@ class ShareToken(Base):
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+        DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
 
     __table_args__ = (

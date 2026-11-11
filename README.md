@@ -59,7 +59,7 @@
 | UI | 前台自研组件（`:root` CSS 变量 + BEM，视觉还原自 `原型/`）；Element Plus **仅用于管理员后台**且按需动态加载 |
 | 后端 | Python 3.11+ / FastAPI / SQLAlchemy 2.0（同步模式）/ Alembic / PyMySQL |
 | 安全 | bcrypt（cost=10）密码哈希 / itsdangerous 签名 Cookie 会话 |
-| 数据库 | MySQL 5.7.19 · InnoDB · utf8mb4 / utf8mb4_unicode_ci，共 7 张表 |
+| 数据库 | MySQL 5.7.19 · InnoDB · utf8mb4 / utf8mb4_unicode_ci，共 13 张表 |
 | 测试 | 后端 pytest + httpx（TestClient，真实 MySQL 测试库）；前端 Vitest（纯函数） |
 | 包管理 | npm（`frontend/package-lock.json` 为唯一 lockfile）；Python venv + pip |
 | 部署形态 | 开发期 Vite proxy 同源；生产 Nginx 反代 + Uvicorn（见 §13） |
@@ -77,11 +77,11 @@
 │   │   ├── routers/            # 路由层：auth / teas / favorites / lists / shares / admin
 │   │   ├── services/           # 业务规则与事务边界
 │   │   ├── repositories/       # SQLAlchemy 查询封装
-│   │   ├── models/             # ORM 实体（7 张表一一对应）
+│   │   ├── models/             # ORM 实体（13 张表一一对应）
 │   │   ├── schemas/            # Pydantic DTO
 │   │   ├── scripts/            # 管理员工具（rotate_admin_password）
 │   │   └── alembic/            # 迁移环境（baseline 迁移尚未生成，见 §12）
-│   ├── tests/                  # pytest 用例（106 条）
+│   ├── tests/                  # pytest 用例（184 条）
 │   ├── uploads/                # 图片本地存储（不进 Git）
 │   ├── run.py                  # 开发启动脚本
 │   ├── requirements.txt
@@ -110,7 +110,7 @@
 mysql -u root -p < database/init.sql
 ```
 
-脚本将创建数据库 `tea_guide`（utf8mb4 / utf8mb4_unicode_ci）、7 张表（`users` / `teas` / `tea_tips` / `collection_lists` / `favorite_items` / `share_tokens` / `operation_logs`）及种子数据（管理员账号 1 个、六大茶类示例茶品各 1 款、对应小贴士）。
+脚本将创建数据库 `tea_guide`（utf8mb4 / utf8mb4_unicode_ci）、13 张表（`users` / `teas` / `tea_tips` / `collection_lists` / `favorite_items` / `share_tokens` / `operation_logs` / `tea_media` / `login_attempts` / `contributions` / `tea_name_category_map` / `content_types` / `content_items`）及种子数据（管理员账号 1 个、六大茶类示例茶品各 1 款、对应小贴士）。
 
 注意事项：
 
@@ -202,47 +202,83 @@ python -m app.scripts.rotate_admin_password --password "新密码"
 
 测试用例依据 [docs/testing/TEST_PLAN.md](docs/testing/TEST_PLAN.md)（TEST_PLAN v1.6 共 94 条用例（高 53 / 中 38 / 低 3），覆盖 58 个业务端点、13 张表约束与 35 项安全控制；G5 阶段 60 条用例的逐条历史记录见 [docs/testing/TEST_REPORT.md](docs/testing/TEST_REPORT.md)）。
 
-### 10.2 测试结果（2026-11-09 实际执行）
+### 10.2 测试结果（2026-11-11 实际执行）
 
 | 项 | 结果 |
 |---|---|
-| 后端 pytest 全量 | **170 passed**（0 失败、0 跳过；含 20 线程并发收藏 / 分享真实并发用例） |
-| TEST_PLAN G5 阶段 60 条用例 | **60 / 60 通过，高优先级 32 / 32 通过**（2026-11-08 历史记录；TEST_PLAN 已扩展至 92 条） |
-| 前端 Vitest | **50 passed**（6 个 spec 文件，纯函数用例） |
-| 前端 ESLint / vue-tsc / Prettier / 生产构建 | 全部通过（构建存在主 chunk >500 kB 体积告警，非失败） |
-| `scripts/check_all.py` 静态检查 | 全部通过（273 条文档链接、57/92/35/13 常量一致、五层分层 0 违规、236 个文件无敏感信息泄露） |
-| GitHub Actions CI | **未运行**（工作流已配置，尚未在远端实际执行，不标记为通过） |
+| 后端 pytest 全量 | **184 passed**（0 失败、0 跳过；含 20 线程并发收藏 / 分享真实并发用例；`datetime.utcnow` / Pydantic `class Config` 弃用告警已清理） |
+| TEST_PLAN G5 阶段 60 条用例 | **60 / 60 通过，高优先级 32 / 32 通过**（2026-11-08 历史记录；TEST_PLAN 已扩展至 94 条） |
+| 前端 Vitest | **73 passed**（9 个 spec 文件，纯函数用例） |
+| 前端 ESLint / vue-tsc / Prettier / 生产构建 | 全部通过（主入口 chunk 已降至约 96 kB；后台 Element Plus 异步 chunk 仍触发 >500 kB 提示，非失败） |
+| `scripts/check_all.py` 静态检查 | 全部通过（284 条文档链接、58/94/35/13 常量一致、五层分层 0 违规、244 个文件无敏感信息泄露） |
+| Gitee Go CI（`.workflow/ci.yml`） | **未运行**（流水线文件已提交，尚未在 Gitee 远端实际触发，不标记为通过） |
+| GitHub Actions CI | **未运行**（保留为备份工作流，尚未在远端实际执行） |
 
 ## 11. 系统截图
 
-> **当前缺失。** 仓库中尚未收录系统截图。
+以下截图于 2026-11-11 在本地开发环境（视口 1440×900）实机截取，文件存放于 `docs/images/`。
 
-建议交付前补充以下页面截图（启动前后端后截取，放入 `docs/images/` 并更新本节）：
+### 11.1 前台
 
-- 前台：首页（Hero + 六大茶类入口 + 热门轨道）、茶品列表页（筛选面板展开态）、茶品详情页、我的清单页、分享公开页。
-- 后台：管理员登录页、数据概览页、茶品管理列表页、茶品编辑页。
+**首页（Hero 搜索 + 六大茶类入口 + 热门茶品）**
+
+![首页](docs/images/home.png)
+
+**茶品列表（三维筛选 + 分页）**
+
+![茶品列表](docs/images/tea-list.png)
+
+**茶品详情（主图 + 冲泡参考 + 品鉴特征）**
+
+![茶品详情](docs/images/tea-detail.png)
+
+**六大茶类对比**
+
+![六大茶类对比](docs/images/compare.png)
+
+**茶文化内容列表**
+
+![茶文化内容](docs/images/content-list.png)
+
+**分享公开页（免登录只读）**
+
+![分享公开页](docs/images/share.png)
+
+### 11.2 管理员后台
+
+**管理员登录**
+
+![管理员登录](docs/images/admin-login.png)
+
+**数据概览**
+
+![数据概览](docs/images/admin-dashboard.png)
+
+**茶品管理**
+
+![茶品管理](docs/images/admin-teas.png)
 
 ## 12. 当前已知问题和后续改进方向
 
 ### 已知问题 / 限制
 
-1. **系统截图缺失**：README §11 待补充真实页面截图。
-2. **CI 远程触发待落地**：ci.yml 三 job 命令已本地等效实跑全绿（2026-11-10，含修复后端/前端格式漂移）；远程仓库在 Gitee，GitHub Actions 不会触发，迁移 Gitee Go 或镜像 GitHub 待决策。
-3. **Alembic 全新环境接管方式**：baseline 迁移（0001）已生成且版本链推进至 0010；`init.sql` 已随批次演进包含最新全部结构与种子，全新环境流程为 `init.sql 建库 → alembic stamp head`（2026-11-10 部署演练修正：旧流程 stamp 0001 后 upgrade 会与 init.sql 已有列冲突）。既有旧环境直接 `alembic upgrade head`。
-4. **构建体积告警**：前端主 chunk 超过 500 kB（Element Plus 已拆分为 admin 异步 chunk），后续可进一步拆分优化。
+1. ~~系统截图缺失~~（已完成 2026-11-11）：README §11 已收录前台 6 张 + 后台 3 张实机截图（`docs/images/`）。
+2. **CI 远程触发**：已新增 Gitee Go 流水线 [.workflow/ci.yml](.workflow/ci.yml)（后端静态检查 + 前端全检查），保留 [.github/workflows/ci.yml](.github/workflows/ci.yml) 作为备份；**尚未在 Gitee 远端实际触发验证**。Gitee Go 云端环境无 MySQL，pytest 仍以本地 / GitHub Actions service container 为准。
+3. **Alembic 全新环境接管方式**：baseline 迁移（0001）已生成且版本链推进至 0011；`init.sql` 已随批次演进包含最新全部结构与种子，全新环境流程为 `init.sql 建库 → alembic stamp head`（2026-11-10 部署演练修正：旧流程 stamp 0001 后 upgrade 会与 init.sql 已有列冲突）。既有旧环境直接 `alembic upgrade head`。
+4. **构建体积告警**：路由已改为按页面懒加载，主入口 chunk 由约 1.1 MB 降至约 96 kB（gzip 34 kB），Vue/Pinia/Router 与 qrcode 独立分包；Element Plus 仅在后台加载，其 vendor chunk 约 998 kB（gzip 321 kB），构建仍提示 >500 kB，属后台异步包，不影响前台首屏。
 5. **随机关联推荐成本**：热门 / 随机推荐使用 `ORDER BY RAND()`，当前数据量级（<1000）下可接受，数据量增长后需改为随机偏移方案。
-6. **登出后旧 Cookie 重放**：Cookie 会话登出仅清除客户端，服务端未做会话吊销（安全设计已知限制，SECURITY S-10 已记录）。
-7. **种子数据量小**：示例茶品仅 6 款（每类 1 款），详情页「同类推荐」在同类数据增加后才能展示效果。
-8. **登出 / 上架等写操作依赖人工冒烟外的自动化覆盖已补齐，但生产环境 Nginx 的 `client_max_body_size 6m` 配置与 413 复测属部署项，尚未执行。**
+6. ~~登出后旧 Cookie 重放~~（已修复 2026-11-11）：登出时递增 `users.session_version`，旧 Cookie 立即 `40100`；因无 `sessions` 表，吊销为**用户级**（该账号所有设备会话同时失效）。
+7. **种子数据量**：`init.sql` 示例茶品为每类 1 款；开发环境已通过脚本扩充至 211 款（见 build-log 2026-11-11），生产数据需按运营计划导入。
+8. **生产网关 413 复测**：`deploy/nginx.conf` 已配置 `client_max_body_size 6m`，但尚未在真实 Nginx 环境做超限上传复测。
 
 ### 后续改进方向（均未实现，属规划项）
 
-- ~~生成 Alembic baseline 迁移~~（已完成：0001_baseline 起 10 个迁移；全新环境改为 `stamp head` 接管，见已知问题 3）。
-- 补充 Docker Compose（`web` + `api` + `mysql`）一键部署与真实服务器部署验证。
-- 在 GitHub Actions 实跑 CI 并回填结果。
+- ~~生成 Alembic baseline 迁移~~（已完成：0001_baseline 起 11 个迁移；全新环境改为 `stamp head` 接管，见已知问题 3）。
+- ~~补充 Docker Compose（`web` + `api` + `mysql`）一键部署~~（已完成配置，待真实服务器验证，见 §13）。
+- 在 Gitee Go 与 GitHub Actions 远端实跑 CI 并回填结果。
 - PRD 第二阶段需求（S1–S17，如更丰富的用户能力与运营能力）按后续计划评估；暂不实现项（X1–X13）维持不开发。
 
-## 13. 部署条件检查与部署步骤
+## 13. 部署（Docker Compose 推荐）
 
 ### 13.1 部署条件检查结论
 
@@ -250,29 +286,36 @@ python -m app.scripts.rotate_admin_password --password "新密码"
 |---|---|---|
 | 前端生产构建 | ✅ | `npm run build` 通过，产出 `frontend/dist/` |
 | 后端依赖清单 | ✅ | `requirements.txt` 完整，含 `uvicorn[standard]` 可用于生产 |
-| 配置模板 | ✅ | `.env.example` 完整；缺失 `SECRET_KEY` 时后端拒绝启动，避免弱密钥上线 |
-| 数据库初始化脚本 | ✅ | `database/init.sql` 可建库建表 + 种子数据 |
-| 数据库迁移 | ⚠️ | 已生成 0001–0010 迁移；全新环境 `init.sql` + `alembic stamp head`，既有环境 `alembic upgrade head` |
-| Web 服务器 / 容器配置 | ⚠️ | **仓库内无 Nginx 配置、Dockerfile / docker-compose**，需在部署阶段编写 |
-| 实机部署验证 | ❌ | **尚未在任何服务器环境实际部署验证**，以下步骤未实机执行 |
+| 配置模板 | ✅ | `deploy/env.example` 完整；缺失 `SECRET_KEY` 时后端拒绝启动 |
+| 数据库初始化脚本 | ✅ | `database/init.sql` 可建库建表 + 种子数据（MySQL 5.7 容器自动执行） |
+| 数据库迁移 | ⚠️ | 已生成 0001–0011 迁移；全新环境 `init.sql` + `alembic stamp head`，既有环境 `alembic upgrade head` |
+| Web 服务器 / 容器配置 | ✅（待实机验证） | 仓库提供 `docker-compose.yml`、`deploy/Dockerfile.backend`、`deploy/Dockerfile.frontend`、`deploy/nginx.conf` |
+| 实机部署验证 | ❌ | **尚未在服务器环境实际执行**；本次仅完成 YAML 语法校验（本机未安装 Docker） |
 | 管理员口令 | ⚠️ | 种子管理员口令为开发用途，部署后必须立即轮换 |
 
-**结论：具备基本部署条件（可构建、可配置、依赖明确），但缺少部署配置文件与实机验证，首次部署需人工编写 Nginx 配置并逐项核对。**
+**结论：一键部署文件已就绪，首次部署仍建议按下列步骤逐项核对，并完成一次真实服务器的健康检查与主链路冒烟。**
 
-### 13.2 部署步骤（依据架构文档整理，**尚未实机验证**）
+### 13.2 Docker Compose 部署步骤
 
-目标形态（[TECH_STACK.md](docs/architecture/TECH_STACK.md) §3.6）：浏览器 → Nginx（80/443）→ 静态托管 `dist/` + 反代 `/api`、`/uploads` → Uvicorn（127.0.0.1:8000）→ MySQL。
+目标形态：浏览器 → `web`（Nginx，8080）→ 静态 `dist/` + 反代 `/api`、`/uploads` → `api`（Uvicorn:8000）→ `mysql`（5.7）。
 
-1. **服务器准备**：安装 Python 3.11+、Node.js 20+、MySQL 5.7.19+、Nginx。
-2. **数据库初始化**：`mysql -u root -p < database/init.sql`。
-3. **后端部署**：
-   - `cd backend; python -m venv .venv; pip install -r requirements.txt`
-   - 编写 `.env`：注入随机 `SECRET_KEY`、真实 `MYSQL_PASSWORD`、初始 `ADMIN_PASSWORD`；确认 `DEBUG=false`
-   - 生产启动（不开热重载）：`uvicorn app.main:app --host 127.0.0.1 --port 8000`
-4. **前端部署**：`cd frontend; npm ci; npm run build`，将 `dist/` 交给 Nginx 托管。
-5. **Nginx 配置**（需新建）：站点根目录指向 `frontend/dist/`；`location /api/` 与 `location /uploads/` 反代至 `http://127.0.0.1:8000`；`client_max_body_size 6m;`（对齐应用层 6MB 请求体上限）；SPA 路由需配置 `try_files $uri /index.html;`。
-6. **管理员口令轮换**：`cd backend; python -m app.scripts.rotate_admin_password --password "新密码"`。
-7. **上线验证**：访问 `https://<域名>/api/v1/health` 应返回 `{"code":0,...}`；验证注册 / 登录 / 收藏 / 分享主链路；复测超大请求体返回 413。
+1. **准备环境变量**：`cp deploy/env.example .env`，填写 `MYSQL_ROOT_PASSWORD`、`MYSQL_APP_PASSWORD`、`SECRET_KEY`、`ADMIN_PASSWORD`。
+2. **启动**：`docker compose up -d --build`。
+3. **等待就绪**：`mysql` 健康检查通过后 `api` 启动，`api` 健康检查通过后 `web` 启动；MySQL 首次初始化会自动执行 `database/init.sql`。
+4. **访问验证**：浏览器打开 `http://<服务器IP>:8080`；`GET /api/v1/health` 应返回 `{"code":0,...}`。
+5. **管理员口令轮换**：`docker compose exec api python -m app.scripts.rotate_admin_password --password "新密码"`。
+6. **数据持久化**：MySQL 数据在 `mysql_data` 卷；图片通过 `./backend/uploads` 绑定挂载，重启/重建容器不丢失。
+7. **更新发布**：`git pull && docker compose up -d --build`。
+8. **HTTPS**：生产环境建议在 `web` 前再挂一层反向代理或扩展 `deploy/nginx.conf` 配置证书。
+
+### 13.3 手工部署（备选）
+
+1. 服务器安装 Python 3.11+、Node.js 20+、MySQL 5.7.19+、Nginx。
+2. `mysql -u root -p < database/init.sql`。
+3. 后端：`cd backend; python -m venv .venv; pip install -r requirements.txt`；编写 `.env` 注入随机 `SECRET_KEY`、真实 `MYSQL_PASSWORD`、`ADMIN_PASSWORD`，确认 `DEBUG=false`；`uvicorn app.main:app --host 127.0.0.1 --port 8000`。
+4. 前端：`cd frontend; npm ci; npm run build`，将 `dist/` 交给 Nginx。
+5. Nginx：静态根指向 `dist/`；`/api/`、`/uploads/` 反代 `http://127.0.0.1:8000`；`client_max_body_size 6m;`；SPA 回退 `try_files $uri /index.html;`（可参考 `deploy/nginx.conf`）。
+6. 上线验证：`/api/v1/health`、注册 / 登录 / 收藏 / 分享主链路、超大请求体 413。
 
 ---
 

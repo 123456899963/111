@@ -16,6 +16,9 @@ const PUBLIC_PATHS = [
   '/auth/register',
   '/auth/username-availability',
   '/auth/password',
+  // 游客启动时 hydrate 探测会话，未登录返回 401 属正常，不应跳转登录页
+  '/auth/me',
+  '/auth/logout',
 ]
 
 // —— 响应拦截器：统一错误处理 ——

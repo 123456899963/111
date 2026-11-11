@@ -118,18 +118,31 @@ watch(
         <span class="current">{{ headerItem?.name ?? typeCode }}</span>
       </nav>
 
-      <!-- 板块头部 -->
+      <!-- 板块头部：标题与搜索同排 -->
       <section v-if="headerItem" class="content-list-page__hero">
-        <span class="content-list-page__icon">{{ headerItem.icon ?? '📖' }}</span>
-        <h1 class="content-list-page__title">{{ headerItem.name }}</h1>
-        <p v-if="headerItem.description" class="content-list-page__desc">
-          {{ headerItem.description }}
-        </p>
-      </section>
+        <div class="content-list-page__hero-main">
+          <div class="content-list-page__hero-title">
+            <span class="content-list-page__icon">{{ headerItem.icon ?? '📖' }}</span>
+            <h1 class="content-list-page__title">{{ headerItem.name }}</h1>
+          </div>
+          <p v-if="headerItem.description" class="content-list-page__desc">
+            {{ headerItem.description }}
+          </p>
+        </div>
 
-      <!-- 列表 -->
-      <section class="content-list-page__grid-section">
         <div class="content-list-page__search">
+          <svg
+            class="content-list-page__search-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
           <input
             v-model="searchInput"
             class="content-list-page__search-input"
@@ -148,6 +161,19 @@ watch(
             ×
           </button>
         </div>
+      </section>
+
+      <!-- 列表 -->
+      <section class="content-list-page__grid-section">
+        <!-- 结果统计 -->
+        <p class="content-list-page__result">
+          <template v-if="keyword">
+            找到 <strong>{{ total }}</strong> 篇与「{{ keyword }}」相关的内容
+          </template>
+          <template v-else>
+            共 <strong>{{ total }}</strong> 篇内容
+          </template>
+        </p>
 
         <div v-if="loading" class="content-list-page__loading">加载中...</div>
 
@@ -219,65 +245,103 @@ watch(
 }
 
 .content-list-page__hero {
-  text-align: center;
-  padding: 32px 0 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 8px 0 28px;
   border-bottom: 1px solid var(--color-border-light);
-  margin-bottom: 48px;
+  margin-bottom: 24px;
+}
+.content-list-page__hero-main {
+  min-width: 0;
+}
+.content-list-page__hero-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .content-list-page__icon {
-  font-size: 48px;
-  display: block;
-  margin-bottom: 12px;
+  font-size: 36px;
+  line-height: 1;
 }
 .content-list-page__title {
   font-family: var(--font-display);
   font-size: var(--text-h1);
   color: var(--color-primary-dark);
-  margin: 0 0 8px;
+  margin: 0;
 }
 .content-list-page__desc {
   font-size: var(--text-body);
   color: var(--color-text-secondary);
-  max-width: 560px;
-  margin: 0 auto;
+  max-width: 640px;
+  margin: 10px 0 0;
   line-height: 1.8;
+}
+
+/* —— 结果统计 —— */
+.content-list-page__result {
+  margin: 0 0 16px;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+.content-list-page__result strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
 }
 
 .content-list-page__search {
   position: relative;
-  max-width: 480px;
-  margin: 0 auto 32px;
+  flex: 0 0 300px;
+  align-self: center;
+}
+.content-list-page__search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  transition: color 0.2s;
+}
+.content-list-page__search:focus-within .content-list-page__search-icon {
+  color: var(--color-primary);
 }
 .content-list-page__search-input {
   width: 100%;
-  height: 44px;
+  height: 38px;
   border-radius: var(--radius-full);
   border: 1px solid var(--color-border);
   background: var(--color-bg-surface);
-  padding: 0 44px 0 20px;
-  font-size: var(--text-body);
+  padding: 0 34px 0 38px;
+  font-size: var(--text-small);
   color: var(--color-text-primary);
   outline: none;
   transition:
     border-color 0.2s,
     box-shadow 0.2s;
 }
+.content-list-page__search-input::placeholder {
+  color: var(--color-text-muted);
+}
 .content-list-page__search-input:focus {
   border-color: var(--color-primary);
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.08);
 }
 .content-list-page__search-clear {
   position: absolute;
-  right: 8px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: var(--radius-full);
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
 }
@@ -403,8 +467,14 @@ watch(
     grid-template-columns: 1fr;
   }
   .content-list-page__hero {
-    padding: 24px 0 32px;
-    margin-bottom: 32px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 4px 0 20px;
+    margin-bottom: 16px;
+  }
+  .content-list-page__search {
+    flex: 1 1 auto;
   }
 }
 </style>

@@ -14,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.mysql import INTEGER as MySQLInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.clock import utcnow
 from app.core.database import Base
 
 
@@ -73,13 +74,13 @@ class Tea(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+        DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utcnow,
+        onupdate=utcnow,
         server_default=text("CURRENT_TIMESTAMP"),
     )
 
@@ -114,7 +115,7 @@ class TeaMedia(Base):
     image_url: Mapped[str] = mapped_column(String(500), nullable=False)
     sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+        DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
 
     __table_args__ = (Index("idx_tea_media_tea", "tea_id", "sort_order"),)
@@ -144,13 +145,13 @@ class TeaTips(Base):
 
     # 时间戳（S7 首页最新小贴士按 updated_at 倒序）
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+        DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utcnow,
+        onupdate=utcnow,
         server_default=text("CURRENT_TIMESTAMP"),
     )
 

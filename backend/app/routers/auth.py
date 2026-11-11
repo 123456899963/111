@@ -11,7 +11,7 @@ import re
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session
 
-from app.core.auth_deps import get_current_user
+from app.core.auth_deps import get_current_user, get_optional_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.response import ValidationError, ok
@@ -101,8 +101,17 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
 
 
 @router.post("/logout")
-def logout(response: Response):
-    """退出登录 → 清除 Cookie（API_CONTRACT §4.1.4）。幂等，未登录也返回成功。"""
+def logout(
+    response: Response,
+    current_user=Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    """退出登录（API_CONTRACT §4.1.4）。
+
+    有效会话时递增 session_version 吊销该用户全部旧 Cookie（SECURITY S-10）；
+    未登录/无效 Cookie 仅清 Cookie，接口保持幂等。
+    """
+    auth_service.logout(db, current_user)
     _clear_session_cookie(response)
     return ok()
 

@@ -4,6 +4,7 @@ from sqlalchemy import DateTime, Enum, String, text
 from sqlalchemy.dialects.mysql import INTEGER as MySQLInteger
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.clock import utcnow
 from app.core.database import Base
 
 
@@ -26,7 +27,7 @@ class User(Base):
         MySQLInteger(unsigned=True), nullable=False, default=0, server_default=text("0")
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.utcnow, server_default=text("CURRENT_TIMESTAMP")
+        DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP")
     )
 
     # level 字段 MVP 不建，S15（等级展示）第二阶段再评估

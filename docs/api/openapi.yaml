@@ -136,7 +136,7 @@ paths:
     post:
       tags: [认证]
       summary: 退出登录
-      description: 删除 tea_session Cookie；未登录调用也返回成功（幂等）。
+      description: 删除 tea_session Cookie；携带有效会话时服务端递增 session_version 吊销该用户全部旧 Cookie（40100）；未登录调用也返回成功（幂等）。
       operationId: logout
       security:
         - {}

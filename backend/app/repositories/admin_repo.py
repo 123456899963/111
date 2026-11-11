@@ -113,9 +113,7 @@ def list_operation_logs(
 
     左连 users：账号删除后 user_id 为 NULL，日志仍保留（admin_username 为 NULL）。
     """
-    query = db.query(OperationLog, User.username).outerjoin(
-        User, User.id == OperationLog.user_id
-    )
+    query = db.query(OperationLog, User.username).outerjoin(User, User.id == OperationLog.user_id)
 
     if action:
         query = query.filter(OperationLog.action == action)

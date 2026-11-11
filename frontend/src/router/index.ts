@@ -1,51 +1,60 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
-// 前台页面（直接 import，首屏加载）
+// 首页保持同步加载；其余页面按路由懒加载，降低首屏主 chunk 体积
 import HomeView from '@/views/HomeView.vue'
-import TeaListView from '@/views/TeaListView.vue'
-import TeaDetailView from '@/views/TeaDetailView.vue'
-import CompareView from '@/views/CompareView.vue'
-import MyListView from '@/views/MyListView.vue'
-import ContributeView from '@/views/ContributeView.vue'
-import MyContributionsView from '@/views/MyContributionsView.vue'
-import ProfileView from '@/views/ProfileView.vue'
-import ShareView from '@/views/ShareView.vue'
-import LoginView from '@/views/LoginView.vue'
-import RegisterView from '@/views/RegisterView.vue'
-import NotFound from '@/views/NotFound.vue'
 
 const routes: RouteRecordRaw[] = [
   // —— 前台 ——
   { path: '/', name: 'home', component: HomeView, meta: { title: '茶·图鉴' } },
-  { path: '/teas', name: 'tea-list', component: TeaListView, meta: { title: '茶品列表' } },
-  { path: '/teas/:id', name: 'tea-detail', component: TeaDetailView, meta: { title: '茶品详情' } },
-  { path: '/compare', name: 'compare', component: CompareView, meta: { title: '六大茶类对比' } },
+  {
+    path: '/teas',
+    name: 'tea-list',
+    component: () => import('@/views/TeaListView.vue'),
+    meta: { title: '茶品列表' },
+  },
+  {
+    path: '/teas/:id',
+    name: 'tea-detail',
+    component: () => import('@/views/TeaDetailView.vue'),
+    meta: { title: '茶品详情' },
+  },
+  {
+    path: '/compare',
+    name: 'compare',
+    component: () => import('@/views/CompareView.vue'),
+    meta: { title: '六大茶类对比' },
+  },
   {
     path: '/my',
     name: 'my-list',
-    component: MyListView,
+    component: () => import('@/views/MyListView.vue'),
     meta: { title: '我的收藏', requiresAuth: true },
   },
   {
     path: '/profile',
     name: 'profile',
-    component: ProfileView,
+    component: () => import('@/views/ProfileView.vue'),
     meta: { title: '个人中心', requiresAuth: true },
   },
   {
     path: '/contribute',
     name: 'contribute',
-    component: ContributeView,
+    component: () => import('@/views/ContributeView.vue'),
     meta: { title: '投稿', requiresAuth: true },
   },
   {
     path: '/my/contributions',
     name: 'my-contributions',
-    component: MyContributionsView,
+    component: () => import('@/views/MyContributionsView.vue'),
     meta: { title: '我的提交', requiresAuth: true },
   },
-  { path: '/c/:shareId', name: 'share', component: ShareView, meta: { title: '分享清单' } },
+  {
+    path: '/c/:shareId',
+    name: 'share',
+    component: () => import('@/views/ShareView.vue'),
+    meta: { title: '分享清单' },
+  },
 
   // —— 内容板块（批次五 R1–R5）——
   {
@@ -62,8 +71,18 @@ const routes: RouteRecordRaw[] = [
   },
 
   // —— 认证 ——
-  { path: '/login', name: 'login', component: LoginView, meta: { title: '登录' } },
-  { path: '/register', name: 'register', component: RegisterView, meta: { title: '注册' } },
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/views/LoginView.vue'),
+    meta: { title: '登录' },
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/views/RegisterView.vue'),
+    meta: { title: '注册' },
+  },
 
   // —— 管理员后台（动态 import，按需加载）——
   {
@@ -136,7 +155,7 @@ const routes: RouteRecordRaw[] = [
   },
 
   // —— 404 ——
-  { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFound },
+  { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/views/NotFound.vue') },
 ]
 
 const router = createRouter({
