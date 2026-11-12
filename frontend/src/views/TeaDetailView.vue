@@ -88,6 +88,68 @@ const hasBrew = computed(
     (tea.value.water_temp != null || tea.value.tea_amount != null || tea.value.brew_time != null),
 )
 
+/** 分步冲泡教程（ADR-0005）：逐茶维护，null 时退回三格速查卡；默认只露速查条，步骤全部收起 */
+const brewingGuide = computed(() => tea.value?.brewing_guide ?? null)
+const guideExpanded = ref(false)
+const canExpandGuide = computed(() => (brewingGuide.value?.steps.length ?? 0) > 0)
+
+/** 折叠动画时长，需与 .brew-card__collapse 的 transition 时长一致 */
+const GUIDE_ANIM_MS = 320
+
+/** 展开前的滚动位置：收起时同步折叠与回位动画，做到「像没动过一样」 */
+let scrollBeforeExpand = 0
+let guideAnimating = false
+let guideRafId = 0
+
+function easeInOutCubic(progress: number) {
+  return progress < 0.5 ? 4 * progress ** 3 : 1 - (-2 * progress + 2) ** 3 / 2
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+function stopGuideAnimation() {
+  if (guideRafId) {
+    cancelAnimationFrame(guideRafId)
+    guideRafId = 0
+  }
+  guideAnimating = false
+}
+
+function toggleGuide() {
+  if (guideAnimating) return
+
+  if (!guideExpanded.value) {
+    scrollBeforeExpand = window.scrollY
+    guideExpanded.value = true
+    return
+  }
+
+  const from = window.scrollY
+  const to = scrollBeforeExpand
+  guideExpanded.value = false
+  if (from === to || prefersReducedMotion()) return
+
+  // 折叠高度与滚动回位用同一时长、同一缓动逐帧推进，避免「内容瞬间塌掉 + 长距离滚动」的割裂
+  guideAnimating = true
+  const startedAt = performance.now()
+
+  const step = (now: number) => {
+    const progress = Math.min((now - startedAt) / GUIDE_ANIM_MS, 1)
+    window.scrollTo(0, from + (to - from) * easeInOutCubic(progress))
+    if (progress < 1) {
+      guideRafId = requestAnimationFrame(step)
+      return
+    }
+    guideRafId = 0
+    guideAnimating = false
+    window.scrollTo(0, to)
+  }
+
+  guideRafId = requestAnimationFrame(step)
+}
+
 const favoriteText = computed(() => favoriteCount.value.toLocaleString('zh-CN'))
 
 /** 购买入口：仅按茶名跳转淘宝搜索，不接入交易（茶名为空时不渲染） */
@@ -95,7 +157,11 @@ const purchaseUrl = computed(() => (tea.value ? buildTaobaoSearchUrl(tea.value.n
 
 watch(
   () => route.params.id,
-  () => void load(),
+  () => {
+    stopGuideAnimation()
+    guideExpanded.value = false
+    void load()
+  },
   { immediate: true },
 )
 
@@ -320,15 +386,76 @@ function retry() {
 
             <p class="detail-header__origin">{{ tea.origin }}</p>
 
-            <div v-if="hasBrew" class="brew-card">
-              <h3 class="brew-card__title">冲泡参考</h3>
-              <div class="brew-card__grid">
+            <div v-if="hasBrew || brewingGuide" class="brew-card">
+              <h3 class="brew-card__title">
+                {{ brewingGuide ? '冲泡教程' : '冲泡参考' }}
+              </h3>
+              <p v-if="brewingGuide?.intro" class="brew-card__intro">{{ brewingGuide.intro }}</p>
+
+              <div v-if="hasBrew" class="brew-card__grid">
                 <div v-for="item in brewItems" :key="item.label" class="brew-card__item">
                   <span class="brew-card__icon">{{ item.icon }}</span>
                   <span class="brew-card__label">{{ item.label }}</span>
                   <span class="brew-card__value">{{ item.value }}</span>
                 </div>
               </div>
+
+              <div
+                v-if="brewingGuide"
+                class="brew-card__collapse"
+                :class="{ 'brew-card__collapse--open': guideExpanded }"
+                :aria-hidden="!guideExpanded"
+              >
+                <div class="brew-card__collapse-inner">
+                  <ol class="brew-steps">
+                    <li v-for="(step, index) in brewingGuide.steps" :key="index" class="brew-step">
+                      <span class="brew-step__index">{{ index + 1 }}</span>
+                      <div class="brew-step__body">
+                        <h4 class="brew-step__title">{{ step.title }}</h4>
+                        <p class="brew-step__detail">{{ step.detail }}</p>
+                        <p v-if="step.tip" class="brew-step__tip">小提示：{{ step.tip }}</p>
+                      </div>
+                    </li>
+                  </ol>
+
+                  <p v-if="brewingGuide.caution" class="brew-card__caution">
+                    ⚠️ {{ brewingGuide.caution }}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                v-if="canExpandGuide"
+                type="button"
+                class="brew-card__toggle"
+                :aria-expanded="guideExpanded"
+                @click="toggleGuide"
+              >
+                <span>
+                  {{
+                    guideExpanded
+                      ? '收起教程'
+                      : `展开冲泡教程（共 ${brewingGuide?.steps.length} 步）`
+                  }}
+                </span>
+                <svg
+                  class="brew-card__chevron"
+                  :class="{ 'brew-card__chevron--up': guideExpanded }"
+                  viewBox="0 0 12 12"
+                  width="10"
+                  height="10"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2 4l4 4 4-4"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
             </div>
 
             <div class="detail-header__actions">
@@ -730,11 +857,128 @@ function retry() {
   margin-bottom: 24px;
 }
 
+/* 折叠容器：用 grid 行高过渡，展开/收起是连续高度动画而非瞬间塌陷 */
+.brew-card__collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 320ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+.brew-card__collapse--open {
+  grid-template-rows: 1fr;
+}
+
+.brew-card__collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .brew-card__title {
   font-size: var(--text-small);
   font-weight: 600;
   color: var(--color-text-secondary);
   margin: 0 0 16px;
+}
+
+.brew-card__intro {
+  margin: -8px 0 16px;
+  font-size: var(--text-small);
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+}
+
+.brew-card__caution {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--color-warning);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  font-size: var(--text-caption);
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.brew-card__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 9px 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: var(--text-caption);
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.brew-card__toggle:hover {
+  background: var(--color-bg-muted);
+}
+
+.brew-card__chevron {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.brew-card__chevron--up {
+  transform: rotate(180deg);
+}
+
+.brew-steps {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.brew-step {
+  display: flex;
+  gap: 12px;
+}
+
+.brew-step__index {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brew-step__body {
+  min-width: 0;
+}
+
+.brew-step__title {
+  margin: 0 0 4px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.brew-step__detail {
+  margin: 0;
+  font-size: var(--text-small);
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+}
+
+.brew-step__tip {
+  margin: 4px 0 0;
+  font-size: var(--text-caption);
+  line-height: 1.6;
+  color: var(--color-text-muted);
 }
 
 .brew-card__grid {

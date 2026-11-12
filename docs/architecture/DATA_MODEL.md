@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.6（已确认）** |
+| 文档版本 | **v1.7（已确认）** |
 | 创建日期 | 2026-11-06 |
 | 修订记录 | v1.0（2026-11-06）：基于 PRD v1.1 与已确认技术架构完成数据模型定稿；确认 7 张表、清单独立建表、`share_tokens` 改挂 `list_id`、`operation_logs` 最小留痕、不建 `sessions` 表 |
 | 分析依据 | [PRD.md](../product/PRD.md) v1.1 · [TECH_STACK.md](TECH_STACK.md) v1.0 · [ARCHITECTURE.md](ARCHITECTURE.md) · [MODULE_DESIGN.md](MODULE_DESIGN.md) · `backend/app/models/` |
@@ -60,8 +60,11 @@
 | 9 | `login_attempts` | 登录失败记录（S14，v1.2 新增） | 低（24 小时清理） | 模块 4（S14 锁定） |
 | 10 | `contributions` | 用户贡献提交与审核状态（S10–S13，v1.4 新增） | < 1,000 | S10/S11/S12/S13 |
 | 11 | `tea_name_category_map` | 名品-茶类映射（S10 第一层校验，v1.4 新增） | 20–200 | S10 |
+| 12 | `content_types` | 五大内容板块类型（内容平台） | 固定 5 | 内容板块 |
+| 13 | `content_items` | 内容条目（茶具/产地/茶文化/品牌/知识） | < 1,000 | 内容板块 |
+| 14 | `tea_brewing_guides` | 分步冲泡教程（v1.7 新增，ADR-0005） | ≈ `teas` | 模块 3 |
 
-> v1.4 起共 **11 张表**（批次四新增 `contributions`、`tea_name_category_map`，S10–S13 用户贡献与审核）。§1.1 基线核对为 v1.0 时点的历史记录，保留不改。
+> v1.7 起共 **14 张表**（新增 `tea_brewing_guides`，与茶品 1:1；同时补记内容平台两张表）。§1.1 基线核对为 v1.0 时点的历史记录，保留不改。
 
 ---
 
@@ -74,6 +77,7 @@ erDiagram
     collection_lists ||--o{ favorite_items : "1:N 条目"
     teas ||--o{ favorite_items : "1:N 被收藏"
     teas ||--|| tea_tips : "1:1 小贴士"
+    teas ||--|| tea_brewing_guides : "1:1 冲泡教程（ADR-0005）"
     teas ||--o{ tea_media : "1:N 图片集（S4）"
     collection_lists ||--o{ share_tokens : "1:N 分享令牌"
     users ||--o{ operation_logs : "1:N 操作"
@@ -239,6 +243,17 @@ erDiagram
 - **上限**：单茶最多 9 张，由应用层校验（MySQL 5.7 无有效 CHECK）。
 - **关系**：N:1 `teas`。
 - **迁移**：`0002_content_expansion`（2026-11-09）。
+
+### 4.3.2 `tea_brewing_guides` — 分步冲泡教程（ADR-0005）
+
+- **业务用途**：详情页「冲泡教程」；把原来只有三格数字的冲泡参考升级为 3–8 步、可逐茶维护的操作指引，新手可照着泡。
+- **字段**：`id` INT UNSIGNED PK；`tea_id` INT UNSIGNED NOT NULL；`intro` VARCHAR(200) NULL（一句话总览）；`steps` JSON NOT NULL（`[{"title","detail","tip"}]`，3–8 条）；`caution` TEXT NULL（新手易错）；`created_at` / `updated_at` DATETIME。
+- **主/外键**：PK `id`；FK `tea_id → teas.id`，`ON DELETE CASCADE ON UPDATE CASCADE`。教程是茶的从属内容，脱离茶无意义。
+- **索引**：`uk_tea_brewing_guides_tea_id`（唯一 tea_id）→ 详情页 1:1 查询，同时固化 1:1 基数。
+- **校验**：步数 3–8、`title` 1–30 字、`detail` 1–200 字、`tip` ≤100 字、`intro` ≤200 字、`caution` ≤500 字，全部由 Pydantic + Service 校验（MySQL 5.7 的 JSON 无内部约束）。
+- **空值语义**：无行 = 未维护 → API `brewing_guide=null` → 前端退回三格速查卡。
+- **关系**：1:1 `teas`。
+- **迁移**：`0012_brewing_guides`（2026-11-12）。
 
 ### 4.4 `collection_lists` — 用户收藏清单（S9 多清单）
 
@@ -597,3 +612,4 @@ erDiagram
 | **v1.4** | 2026-11-09 | 批次四 S10–S13（0006 迁移）：新增 `contributions`（JSON payload + pending/approved/rejected）与 `tea_name_category_map`（22 条种子）；共 11 张表 |
 | **v1.5** | 2026-11-10 | ADR-0004 用户头像（0010 迁移）：`users` 增 `avatar_url VARCHAR(255) NULL`（上传 `/uploads/...` 或预置 `/avatars/tea-0X.svg`）；表数量不变 |
 | **v1.6** | 2026-11-11 | 自助修改密码（0011 迁移）：`users` 增 `session_version INT UNSIGNED NOT NULL DEFAULT 0`，Cookie 载荷携带 `sv`，改密后 +1 吊销所有旧会话；表数量不变 |
+| **v1.7** | 2026-11-12 | ADR-0005 分步冲泡教程（0012 迁移）：新增 `tea_brewing_guides`（`tea_id` 唯一、`steps` JSON、`intro`/`caution`）；补记内容平台 `content_types`/`content_items`；共 14 张表 |

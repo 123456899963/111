@@ -65,6 +65,20 @@ export interface UserStats {
 // ===== 茶品 =====
 export type TeaCategory = 'green' | 'white' | 'yellow' | 'red' | 'oolong' | 'dark'
 
+/** 冲泡教程单步（ADR-0005）：标题 + 动作说明 + 可选提示 */
+export interface BrewingStep {
+  title: string
+  detail: string
+  tip?: string | null
+}
+
+/** 冲泡教程（ADR-0005）：逐茶独立维护，3–8 步 */
+export interface BrewingGuide {
+  intro?: string | null
+  steps: BrewingStep[]
+  caution?: string | null
+}
+
 /** 茶品详情（API_CONTRACT §2.3 TeaDetail） */
 export interface Tea {
   id: number
@@ -102,6 +116,9 @@ export interface Tea {
   tips_suitable?: string | null
   tips_misconception?: string | null
   tips_official_note?: string | null
+
+  /** 分步冲泡教程（ADR-0005）：null 时详情页退回三格速查卡 */
+  brewing_guide?: BrewingGuide | null
 
   /** 已通过审核的用户科普投稿（S11 / S12），空数组由前端隐藏 */
   contributed_articles?: TeaArticle[]
@@ -367,6 +384,17 @@ export interface AdminToggleData {
   id: number
   is_active: boolean
   updated_at: string
+}
+
+/** 管理员整篇保存冲泡教程（ADR-0005） */
+export interface AdminBrewingGuidePayload {
+  intro?: string | null
+  steps: BrewingStep[]
+  caution?: string | null
+}
+
+export interface AdminBrewingGuideData extends BrewingGuide {
+  tea_id: number
 }
 
 export interface AdminStatsData {

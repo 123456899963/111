@@ -1623,3 +1623,38 @@ gba(250,248,245,0.12)，无方向、无渐变，肉眼不可辨认为独立图�
 - 遗留：
   - 淘宝搜索页可能要求登录或滑块验证，无法保证直达商品结果；移动端可能提示下载 App
   - 仅按茶名关键词搜索，无法锁定具体商品、品牌或规格
+
+## 2026-11-12 冲泡参考升级为分步冲泡教程
+
+- 任务编号：TASK-20261112-01
+- 分级：C
+- 判定理由：新增第 14 张表、1 个 Alembic 迁移、2 个管理员端点（业务端点 58 → 60），属数据库结构与 API 契约变更
+- 用户确认记录：2026-11-12 对话确认 —— 决策见 [ADR-0005](../docs/development/ADR/ADR-0005-tea-brewing-guide.md)；已确认「每款茶单独录入」「速查条 + 步骤默认全部收起、点击展开」（后续微调：按钮加箭头、折叠与滚动回位同步动画）「存量茶自动生成草稿」「自由步骤 + 模板填充」「教程录入内嵌茶品编辑页」
+- 变更：
+  - 后端：新增 `models/tea.py::TeaBrewingGuide`（1:1，`steps` JSON，3–8 步）与 `Tea.brewing_guide` 关系；Alembic `0012_brewing_guides`；`database/init.sql` 第 14 张表
+  - 后端：`schemas/tea.py` 新增 `BrewingStep/BrewingGuide`，`TeaDetail` 增加 `brewing_guide`；`repositories/tea_repo.py` joinedload；`repositories/admin_repo.py` 新增教程 CRUD
+  - 后端：`services/admin.py` / `routers/admin.py` 新增 `PUT/DELETE /api/v1/admin/teas/{tea_id}/brewing-guide`，`operation_logs` 记 `update_brewing_guide` / `delete_brewing_guide`；DELETE 幂等，未删除时 `deleted=false`
+  - 后端：新增幂等脚本 `app/scripts/seed_brewing_guides.py`，按茶类模板 + 本茶水温/投茶量/时间生成 6 步草稿，只补无教程茶品，支持 `--dry-run`
+  - 前端：`types/index.ts` 增加 `BrewingGuide` 等类型；`TeaDetailView.vue` 教程卡（速查三格默认可见，步骤与注意事项默认收起；按钮右侧下箭头随展开翻转；折叠为 320ms `grid-template-rows` 过渡，收起时用同 320ms `easeInOutCubic` 逐帧补偿滚动回到展开前位置，遵循 `prefers-reduced-motion`），无教程时回退原三格卡
+  - 前端：`utils/brewing.ts::buildBrewingDraft` 纯函数；`AdminTeaEdit.vue` 内嵌教程录入区块（总览/步骤上移下移删除/添加步骤/按茶类生成草稿/删除教程/当前 N/8 步）
+  - 文档：API_CONTRACT v1.11（新增 §4.6.13/§4.6.14）、openapi.yaml（60 operations）、DATA_MODEL v1.7、MODULE_DESIGN、ARCHITECTURE 数据层图示、PAGE_SPECS v2.1、PRD v1.3、TEST_PLAN v1.7（100 条）、docs/api/README、AGENTS、`scripts/check_constants.py` 基线（60/100/35/14）
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | python -m ruff check / format --check | 通过 | 无告警 |
+  | pytest | 通过 | **190 passed，1 warning**（第三方 httpx/starlette 提示）；新增 `tests/test_brewing_guides.py` 6 条 |
+  | npm run lint / typecheck / format:check | 通过 | 无错误 |
+  | npm run test:run | 通过 | 11 文件 / **82 用例**（新增 `brewing.spec.ts` 4 条） |
+  | python scripts/check_all.py | 通过 | 299 链接、常量 60/100/35/14、五层 0 违规、前台 UI 0、密钥 0 |
+  | Alembic | 通过 | 开发库与测试库 `tea_guide_test` 均升级至 `0012_brewing_guides` |
+  | 种子脚本 | 通过 | `--dry-run` 待生成 211 → 实际生成 211 款草稿；再次 `--dry-run` 为 0（幂等） |
+  | 浏览器冒烟（前台） | 通过 | `/teas/212` 默认仅显示标题、简介与速查三格；按钮右侧下箭头展开后翻转朝上并显示 1–6 步与注意事项；收起时折叠高度（grid 行高 320ms）与滚动回位（同 320ms easeInOutCubic 逐帧补偿）同步执行，采样呈先加速后减速的连续缓变（1201→618，8 个中间值），最终 scrollY 回 618（Y1=618，偏差 0px），箭头恢复朝下；无白屏 |
+  | 浏览器冒烟（后台） | 通过 | `/admin/teas/212/edit` 教程区块显示 6 张步骤卡、「当前 6 / 8 步」与「添加步骤」「按茶类生成草稿」按钮；仅只读检查，未保存 |
+
+- 契约 / 数据 / 安全影响：新增 2 个管理员端点与 1 张表；管理员门禁沿用 S-27/S-28，无新增安全项；茶品详情仅新增可选字段，旧客户端不受影响。
+- 遗留：
+  - 草稿内容为茶类通用手法，个别名茶仍需管理员逐款润色（ADR-0005 已登记）
+  - 步骤 JSON 的字段约束依赖 Pydantic 与前端校验，数据库层无 CHECK（MySQL 5.7 限制）
+  - 收起动画依赖 `grid-template-rows` 过渡，需现代浏览器（Chrome 107+ / Safari 16+）；不支持时退化为瞬时折叠，不影响功能
+- 回滚方式：停用前端教程卡与后台区块后，回退代码；数据库执行 `alembic downgrade 0011_user_session_version` 删除 `tea_brewing_guides`（不影响 `teas` 与 `tea_tips`）。

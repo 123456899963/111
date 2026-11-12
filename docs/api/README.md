@@ -10,7 +10,7 @@
 
 | 文件 | 内容 | 权威性 |
 |---|---|---|
-| [API_CONTRACT.md](API_CONTRACT.md) | 58 个业务端点的请求/响应、错误码、分页与排序、认证约定 | 字段与行为描述的唯一依据 |
+| [API_CONTRACT.md](API_CONTRACT.md) | 60 个业务端点的请求/响应、错误码、分页与排序、认证约定 | 字段与行为描述的唯一依据 |
 | [openapi.yaml](openapi.yaml) | 机器可读的 OpenAPI 定义，供文档与联调工具使用 | 与 API_CONTRACT 必须逐字一致 |
 
 两份文件**同时有效**：任何改动必须一起改，不允许只改其一。
@@ -45,3 +45,4 @@
 | 2026-11-07 | 新增本索引与接口变更同步清单 | 用户要求建立知识沉淀机制 |
 | 2026-11-11 | 新增 `PUT /auth/password`，业务端点 56 → 57 | 用户确认采用 `session_version` 方案 |
 | 2026-11-11 | 新增 `GET /admin/operation-logs` 管理员操作日志查询，业务端点 57 → 58 | 用户确认新增后台日志查询页 |
+| 2026-11-12 | 新增 `PUT/DELETE /admin/teas/{tea_id}/brewing-guide`，业务端点 58 → 60；茶品详情返回 `brewing_guide` | 用户确认分步冲泡教程（ADR-0005） |

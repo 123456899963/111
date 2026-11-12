@@ -1,7 +1,7 @@
 -- ============================================================
 -- 茶·图鉴 —— 数据库初始化脚本（MySQL 5.7.19+）
 -- 依据：docs/architecture/DATA_MODEL.md v1.0
--- 范围：MVP 9 张表 + S10–S13 贡献 2 张表（共 11 张） + 索引 + 最少种子数据
+-- 范围：MVP 9 张表 + 贡献 2 张表 + 内容平台 2 张表 + 冲泡教程 1 张表（共 14 张）
 -- 编码：UTF-8（无 BOM） / 字符集 utf8mb4 / 排序规则 utf8mb4_unicode_ci
 --
 -- 使用方式（在 MySQL 客户端中执行）：
@@ -114,6 +114,25 @@ CREATE TABLE tea_media (
     ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
   COMMENT = '茶品图片集（PRD S4，ADR-0003；物理删除，上限 9 张由应用层校验）';
+
+-- ------------------------------------------------------------
+-- 3.2 tea_brewing_guides —— 分步冲泡教程（ADR-0005，与茶品 1:1）
+-- steps 为 JSON 数组：[{"title","detail","tip"}]；3–8 步与字段长度由应用层校验
+-- ------------------------------------------------------------
+CREATE TABLE tea_brewing_guides (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  tea_id     INT UNSIGNED NOT NULL,
+  intro      VARCHAR(200) DEFAULT NULL COMMENT '一句话总览',
+  steps      JSON         NOT NULL     COMMENT '步骤数组：[{title,detail,tip}]',
+  caution    TEXT         DEFAULT NULL COMMENT '新手易错/注意事项',
+  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_tea_brewing_guides_tea_id (tea_id),
+  CONSTRAINT fk_tea_brewing_guides_tea FOREIGN KEY (tea_id) REFERENCES teas (id)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
+  COMMENT = '茶品分步冲泡教程，与茶品 1:1（ADR-0005）';
 
 -- ------------------------------------------------------------
 -- 4. collection_lists —— 用户收藏清单（PRD §4.2 / FR-5.1 / FR-5.2，S9 多清单）

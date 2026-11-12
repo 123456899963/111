@@ -185,7 +185,11 @@ def get_by_id(db: Session, tea_id: int, *, with_tips: bool = True) -> Tea | None
     """按主键查询；with_tips=False 时跳过小贴士/图片集联表（收藏等无需详情场景）。"""
     query = db.query(Tea)
     if with_tips:
-        query = query.options(joinedload(Tea.tips), selectinload(Tea.media_images))
+        query = query.options(
+            joinedload(Tea.tips),
+            joinedload(Tea.brewing_guide),
+            selectinload(Tea.media_images),
+        )
     return query.filter(Tea.id == tea_id).first()
 
 

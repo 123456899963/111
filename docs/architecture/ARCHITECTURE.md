@@ -89,7 +89,7 @@ graph TB
 
     subgraph 数据层["数据层 — MySQL 5.7.19.0"]
         UserDB[users 表]
-        TeaDB[teas + tea_tips 表]
+        TeaDB[teas + tea_tips + tea_brewing_guides 表]
         FavDB[favorite_items 表]
         ListDB[collection_lists 表]
         ShareDB[share_tokens 表]

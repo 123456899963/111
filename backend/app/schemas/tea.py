@@ -67,6 +67,46 @@ class TeaArticleItem(BaseModel):
         return iso_z(v)
 
 
+class BrewingStep(BaseModel):
+    """冲泡教程单步（ADR-0005）：标题 + 动作说明 + 可选小提示。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=30)
+    detail: str = Field(min_length=1, max_length=200)
+    tip: str | None = Field(default=None, max_length=100)
+
+    @field_validator("title", "detail", "tip", mode="before")
+    @classmethod
+    def _strip_text(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            trimmed = value.strip()
+            return trimmed or None
+        return value
+
+
+class BrewingGuide(BaseModel):
+    """茶品冲泡教程（ADR-0005）：3–8 步，整篇读写。"""
+
+    intro: str | None = Field(default=None, max_length=200)
+    steps: list[BrewingStep] = Field(min_length=3, max_length=8)
+    caution: str | None = Field(default=None, max_length=500)
+
+    @field_validator("intro", "caution", mode="before")
+    @classmethod
+    def _normalize_text(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            trimmed = value.strip()
+            return trimmed or None
+        return value
+
+
+class BrewingGuideUpdateRequest(BrewingGuide):
+    """管理员整篇保存教程（ADR-0005）：步数与字段长度在 Schema 层校验。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class TeaDetail(BaseModel):
     """茶品详情（API_CONTRACT §2.3）：含扁平化 tips_* 派生字段"""
 
@@ -107,6 +147,9 @@ class TeaDetail(BaseModel):
     tips_misconception: str | None = None
     tips_official_note: str | None = None
 
+    # 分步冲泡教程（ADR-0005）：null 表示未维护，前端退回三格速查卡
+    brewing_guide: BrewingGuide | None = None
+
     # 用户科普投稿（S11 / S12）：仅含审核通过项，空列表时前端隐藏
     contributed_articles: list[TeaArticleItem] = Field(default_factory=list)
 
@@ -125,6 +168,12 @@ class TeaDetail(BaseModel):
             columns["tips_suitable"] = tips.suitable if tips else None
             columns["tips_misconception"] = tips.misconception if tips else None
             columns["tips_official_note"] = tips.official_note if tips else None
+            guide = getattr(data, "brewing_guide", None)
+            columns["brewing_guide"] = (
+                {"intro": guide.intro, "steps": guide.steps, "caution": guide.caution}
+                if guide
+                else None
+            )
             media = getattr(data, "media_images", None) or []
             columns["image_set"] = [m.image_url for m in media]
             return columns

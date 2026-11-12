@@ -1197,6 +1197,68 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /admin/teas/{tea_id}/brewing-guide:
+    put:
+      tags: [管理员]
+      summary: 整篇保存冲泡教程（ADR-0005）
+      description: |
+        3–8 步整篇覆盖；教程不存在时创建，存在时覆盖，不做局部合并。
+        可选字段省略按 null 处理。写入 operation_logs(update_brewing_guide)。
+      operationId: adminUpdateBrewingGuide
+      security:
+        - teaSession: []
+      parameters:
+        - $ref: '#/components/parameters/TeaIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrewingGuideUpdateRequest'
+      responses:
+        '200':
+          description: 保存后的教程
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrewingGuideEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TeaNotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [管理员]
+      summary: 删除冲泡教程（ADR-0005）
+      description: |
+        幂等：教程不存在时返回 deleted=false。删除后公开详情 brewing_guide=null。
+        仅在确实删除时写入 operation_logs(delete_brewing_guide)。
+      operationId: adminDeleteBrewingGuide
+      security:
+        - teaSession: []
+      parameters:
+        - $ref: '#/components/parameters/TeaIdPath'
+      responses:
+        '200':
+          description: 删除结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrewingGuideDeleteEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TeaNotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /admin/teas/{tea_id}/tips:
     put:
       tags: [管理员]
@@ -2526,6 +2588,11 @@ components:
             tips_official_note:
               type: string
               nullable: true
+            brewing_guide:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/BrewingGuide'
+              description: 分步冲泡教程（ADR-0005）；null 表示未维护，前端退回三格速查卡
             contributed_articles:
               type: array
               description: 已通过审核的用户科普投稿（S11/S12），按时间倒序；空数组隐藏
@@ -3413,6 +3480,89 @@ components:
         tips_official_note:
           type: string
           nullable: true
+
+    BrewingStep:
+      type: object
+      required: [title, detail]
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 30
+          example: 温杯洁具
+        detail:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: 先用热水把茶具烫洗一遍并倒掉，提升杯温便于闻香。
+        tip:
+          type: string
+          nullable: true
+          maxLength: 100
+          example: 玻璃杯、盖碗或紫砂壶都可以。
+
+    BrewingGuide:
+      type: object
+      required: [steps]
+      properties:
+        intro:
+          type: string
+          nullable: true
+          maxLength: 200
+          example: 绿茶重在鲜爽，水温不宜过高，不闷盖、快出汤。
+        steps:
+          type: array
+          minItems: 3
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/BrewingStep'
+        caution:
+          type: string
+          nullable: true
+          maxLength: 500
+          example: 不要用刚烧开的沸水直冲，也不要盖盖子闷泡。
+
+    BrewingGuideUpdateRequest:
+      $ref: '#/components/schemas/BrewingGuide'
+
+    BrewingGuideData:
+      allOf:
+        - $ref: '#/components/schemas/BrewingGuide'
+        - type: object
+          required: [tea_id]
+          properties:
+            tea_id:
+              type: integer
+              format: int64
+              example: 1
+
+    BrewingGuideEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/BrewingGuideData'
+
+    BrewingGuideDeleteEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [tea_id, deleted]
+              properties:
+                tea_id:
+                  type: integer
+                  format: int64
+                  example: 1
+                deleted:
+                  type: boolean
+                  example: true
 
     TipsData:
       type: object

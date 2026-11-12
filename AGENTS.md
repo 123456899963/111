@@ -101,8 +101,8 @@ d:\项目二\
 | Element Plus 前台使用（已修复） | 前台 `AppToast` 自研；`main.ts` 仅在 `/admin` 路由按需加载 Element Plus | 前台禁止再引入；后台保持按需加载 |
 | Service 直连查询（已修复） | 查询已全部下沉到 `repositories/`；`check_layers.py` 基线为空 | 保持五层边界，禁止回流 |
 | Router/Service 返回 ORM（已修复） | 端点统一经 Schema 序列化后返回 | 保持统一响应体，禁止直接返回 ORM |
-| 业务端点未实现（已修复） | 58 个业务端点已按 API_CONTRACT 实现 | 新增端点必须同步契约与测试 |
-| 测试未覆盖 TEST_PLAN（已修复） | TEST_PLAN 94 条用例已落地，后端全量 170 条测试通过 | 新增业务代码必须同步补测 |
+| 业务端点未实现（已修复） | 60 个业务端点已按 API_CONTRACT 实现 | 新增端点必须同步契约与测试 |
+| 测试未覆盖 TEST_PLAN（已修复） | TEST_PLAN 100 条用例已落地，后端全量 190 条测试通过 | 新增业务代码必须同步补测 |
 | 例外登记 | 运行 `python scripts/check_layers.py` / `check_frontend.py` 查看最新列表 | 修复后同步更新脚本基线 |
 
 ## 4. 前端开发规范
@@ -136,7 +136,7 @@ d:\项目二\
 
 ## 6. 数据库规范
 
-- 共 **13 张表**：`users` / `teas` / `tea_tips` / `collection_lists` / `favorite_items` / `share_tokens` / `operation_logs` / `tea_media` / `login_attempts` / `contributions` / `tea_name_category_map` / `content_types` / `content_items`
+- 共 **14 张表**：`users` / `teas` / `tea_tips` / `tea_brewing_guides` / `collection_lists` / `favorite_items` / `share_tokens` / `operation_logs` / `tea_media` / `login_attempts` / `contributions` / `tea_name_category_map` / `content_types` / `content_items`
 - **一切结构变更走 Alembic 迁移，禁止手工 ALTER TABLE**
 - MySQL 5.7 无有效 CHECK：枚举用 ENUM，数值/长度范围由 Pydantic + Service 层校验
 - 时间统一 `DATETIME` + UTC，API 输出 ISO8601 带 `Z`，前端按 Asia/Shanghai 渲染
@@ -148,7 +148,7 @@ d:\项目二\
 
 ## 7. API 接口规范
 
-- 统一前缀 `/api/v1`；共 **58 个业务端点**（auth 6 / me 3 / teas 9 / tips 1 / favorites 3 / lists 6 / shares 4 / admin 15 / contributions 3 / contents 3 / admin-contents 5）
+- 统一前缀 `/api/v1`；共 **60 个业务端点**（auth 6 / me 3 / teas 9 / tips 1 / favorites 3 / lists 6 / shares 4 / admin 17 / contributions 3 / contents 3 / admin-contents 5）
 - 统一响应 `{ code, message, data }`；成功判定只看 `code === 0`；成功 HTTP 状态统一 **200**；业务失败 `HTTP status = code // 100`；FastAPI 422 必须重映射为 400/`40000`
 - 认证：**HttpOnly Cookie `tea_session`**（itsdangerous 签名，30 天，`SameSite=Lax`），不使用 Token / Authorization 头；角色每次从 `users.role` 实时读库
 - JSON 字段 `snake_case`，与数据库列名一致；空值用 `null`
@@ -169,7 +169,7 @@ d:\项目二\
 
 ## 9. 测试要求
 
-- 测试方案：[TEST_PLAN.md](docs/testing/TEST_PLAN.md) v1.6 —— **94 条用例**（高 53 / 中 38 / 低 3），覆盖 50 端点 + 11 表约束 + 35 项安全控制
+- 测试方案：[TEST_PLAN.md](docs/testing/TEST_PLAN.md) v1.7 —— **100 条用例**（高 56 / 中 41 / 低 3），覆盖 60 端点 + 14 表约束 + 35 项安全控制
 - 后端：pytest + httpx（TestClient），断言同时检查 HTTP 状态码、业务 `code`、数据库最终状态
 - 前端：Vitest，仅覆盖纯函数（筛选/格式化/URL 组装）
 - 高优先级用例任一失败 = 阻断发布；错误响应不得泄露堆栈/SQL/表名
@@ -269,5 +269,5 @@ B 类输出技术方案后即可编码；C 类必须等用户明确答复。
 - [x] `SECRET_KEY` / `DEBUG` 代码默认值已收紧（2026-11-09，缺失 `SECRET_KEY` 拒绝启动）；生产部署仍需注入随机密钥与种子管理员密码 —— 安全 P0
 - [x] bcrypt 已统一为 `cost=10`（`_BCRYPT_ROUNDS`，对齐 SECURITY S-01）
 - [x] `routers/admin.py` 等端点已按 API_CONTRACT 补齐
-- [x] TEST_PLAN 94 条用例已落地；后端全量 184 条测试通过（2026-11-11）
+- [x] TEST_PLAN 100 条用例已落地；后端全量 190 条测试通过（2026-11-12）
 - [x] §3.1 基线遗留已在 2026-11-09 审查中清理（五层 / 前台 UI 遗留均为 0）

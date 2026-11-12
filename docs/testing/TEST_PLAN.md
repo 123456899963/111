@@ -2,11 +2,11 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.6** |
+| 文档版本 | **v1.7** |
 | 创建日期 | 2026-11-07 |
-| 测试对象 | MVP 后端 50 个 REST 端点 + 11 张表约束 + 安全控制 S-01–S-35 |
-| 依据 | [PRD.md](../product/PRD.md) v1.1 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.9 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.6 · [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) v1.0 · [SECURITY.md](../architecture/SECURITY.md) v1.4 |
-| 用例总数 | **94 条**（高 53 / 中 38 / 低 3） |
+| 测试对象 | MVP 后端 60 个 REST 端点 + 14 张表约束 + 安全控制 S-01–S-35 |
+| 依据 | [PRD.md](../product/PRD.md) v1.3 · [API_CONTRACT.md](../api/API_CONTRACT.md) v1.11 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.7 · [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) v1.0 · [SECURITY.md](../architecture/SECURITY.md) v1.4 |
+| 用例总数 | **100 条**（高 56 / 中 41 / 低 3） |
 | 覆盖类型 | 正向、反向、边界；含越权、并发重复提交、超长字段、非法枚举 |
 | 交付边界 | 用例按模块在 `backend/tests/`（pytest）与 `frontend/src/utils/*.spec.ts`（Vitest 纯函数）落地 |
 
@@ -146,6 +146,17 @@
 | **TC-TEA-05** | 管理员/茶品 | 高 | `PUT /api/v1/admin/teas/1`；S-19/S-20/S-28 | `tea 1` 已存在；`admin` 已登录 | ① 提交完整茶品字段，`season=null`、省略 `representative_variety`；② 请求体加入 `id=999`、`is_active=false`、`favorite_count=123`；③ 查 `teas` 与 `operation_logs` | ① 200/`code=0`，`season` 与 `representative_variety` 均为 `null`（PUT 全量替换）；② `id`、`is_active`、`favorite_count` 均不变；③ `updated_at` 更新，`operation_logs` 新增 `update_tea` |
 | **TC-TEA-06** | 管理员/茶品 | 高 | `PATCH /admin/teas/7/toggle`、`GET /teas`、`GET /teas?keyword=测试`、`GET /teas/hot`、`GET /teas/random`、`GET /teas/7`、`POST /favorites/7`；S-18 | `tea 7` 在架；A 已收藏 `tea 7` 且 TA 含 `tea 7` | ① `admin` 调 toggle 下架；② 依次调列表、关键词搜索、热门、随机、详情；③ A 调收藏 `tea 7`；④ 查 `teas`、`favorite_items`、`favorite_count` | ① 200/`code=0`、`is_active=false`；② 列表/搜索/热门/随机均不含 `id=7`；详情 404/`code=40401`；③ 收藏 404/`code=40401`；④ `teas` 行保留，`favorite_items` 行保留，`favorite_count` 不变，图片不删 |
 | **TC-TEA-07** | 管理员/茶品 | 中 | `PATCH /admin/teas/7/toggle`、`GET /lists`、`GET /shares/TA`、`POST /shares/TB/copy`；S-18 | 承接 TC-TEA-06 或重新下架 | ① A 调 `GET /lists`；② 游客调 `GET /shares/TA`；③ B 调一键收藏 TB（TB 含 `tea 7`）；④ `admin` 再次 toggle 上架；⑤ 复查列表/详情 | ① `tea 7` 条目保留且 `is_available=false`；② 分享条目保留且 `is_available=false`；③ `tea 7` 计入 `skipped`，不新增收藏；④ 200、`is_active=true`；⑤ 列表/详情恢复可见，清单/分享 `is_available=true` |
+
+### 5.2.1 冲泡教程（6 条，ADR-0005）
+
+| 编号 | 模块 | 优先级 | 对应接口/安全项 | 前置条件 | 操作步骤 | 预期结果 |
+|---|---|---|---|---|---|---|
+| **TC-BREW-01** | 管理员/教程 | 高 | `PUT /admin/teas/{id}/brewing-guide`、`GET /teas/{id}`；S-27/S-28 | `admin` 已登录；存在在架茶 T（无教程） | ① PUT 提交 `intro` + 6 步 + `caution`；② 游客 GET 茶详情；③ 管理员 GET `/admin/teas/{id}`；④ 查 `operation_logs` | ① 200/`code=0`，返回 `tea_id` 与完整教程；② `brewing_guide` 字段与提交一致；③ 同样返回教程；④ 新增 `action=update_brewing_guide` 日志 |
+| **TC-BREW-02** | 管理员/教程 | 高 | `PUT /admin/teas/{id}/brewing-guide` | 承接 TC-BREW-01 | ① 再次 PUT 不同文案的 3 步教程；② 查 `tea_brewing_guides` 行数；③ GET 公开详情 | ① 200/`code=0`；② 仍为 1 行（整篇覆盖，不新增）；③ 返回第二次内容，步数 3 |
+| **TC-BREW-03** | 管理员/教程 | 中 | `PUT /admin/teas/{id}/brewing-guide`；S-19/S-24 | `admin` 已登录 | ① `steps` 2 条；② 9 条；③ `title` 31 字；④ `detail` 201 字；⑤ `tip` 101 字；⑥ `intro` 201 字；⑦ `caution` 501 字；⑧ 提交未知字段；⑨ 标题或说明为纯空白 | ①–⑨ 均 400/`40000`；响应不含 Pydantic 原始结构、SQL、表名；DB 不写入非法数据 |
+| **TC-BREW-04** | 教程/越权 | 高 | `PUT`、`DELETE /admin/teas/{id}/brewing-guide`；S-27/S-28 | 游客未登录；普通用户 B 已登录 | ① 游客 PUT；② 游客 DELETE；③ B 用户 PUT；④ B 用户 DELETE | ①–② 401/`40100`；③–④ 403/`40300`；教程内容不变，`operation_logs` 无新增 |
+| **TC-BREW-05** | 管理员/教程 | 中 | `DELETE /admin/teas/{id}/brewing-guide`、`GET /teas/{id}` | 教程存在 | ① 首次 DELETE；② 再次 DELETE；③ GET 公开详情；④ 查 `operation_logs` | ① 200、`deleted=true`；② 200、`deleted=false`（幂等）；③ `brewing_guide=null`；④ 仅首次删除写 `delete_brewing_guide` |
+| **TC-BREW-06** | 草稿脚本 | 中 | `python -m app.scripts.seed_brewing_guides` | 存在无教程的茶品；已有教程的茶品 | ① `--dry-run` 统计；② 实跑；③ 再跑一次；④ 抽查六大茶类草稿 | ① 仅统计不写库；② 为缺失茶品各插入 1 条 6 步教程；③ 待生成数为 0，已有教程未被覆盖；④ 六大茶类均 6 步，`title/detail` 非空，能通过 `BrewingGuide` 校验 |
 
 ### 5.3 筛选、搜索与分页（9 条）
 

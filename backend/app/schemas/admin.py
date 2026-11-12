@@ -11,7 +11,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, field_serializer, field_validator
 
 from app.schemas._common import iso_z
-from app.schemas.tea import _normalize_optional_text
+from app.schemas.tea import BrewingStep, _normalize_optional_text
 
 
 class AdminTeaListItem(BaseModel):
@@ -76,6 +76,22 @@ class ToggleResponse(BaseModel):
     @field_serializer("updated_at")
     def serialize_datetime(self, value: datetime) -> str:
         return iso_z(value)
+
+
+class BrewingGuideResponse(BaseModel):
+    """冲泡教程保存结果（ADR-0005）。"""
+
+    tea_id: int
+    intro: str | None = None
+    steps: list[BrewingStep]
+    caution: str | None = None
+
+
+class BrewingGuideDeleteResponse(BaseModel):
+    """冲泡教程删除结果：不存在时 deleted=false，重复调用幂等。"""
+
+    tea_id: int
+    deleted: bool
 
 
 class CategoryDistribution(BaseModel):

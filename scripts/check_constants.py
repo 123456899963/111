@@ -8,10 +8,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED = {
-    "openapi_operations": 58,
-    "test_cases": 94,
+    "openapi_operations": 60,
+    "test_cases": 100,
     "security_controls": 35,
-    "database_tables": 13,
+    "database_tables": 14,
 }
 
 METHOD_RE = re.compile(r"^\s{4}(get|post|put|patch|delete):\s*$")
@@ -54,12 +54,12 @@ def main() -> int:
             errors.append(f"{key}: 期望 {expected}，实际 {actual[key]}")
 
     claims = [
-        ("AGENTS.md", "58 个业务端点"),
-        ("AGENTS.md", "94 条用例"),
+        ("AGENTS.md", "60 个业务端点"),
+        ("AGENTS.md", "100 条用例"),
         ("AGENTS.md", "35 项"),
-        ("AGENTS.md", "13 张表"),
-        ("docs/api/README.md", "58 个业务端点"),
-        ("docs/testing/TEST_PLAN.md", "94 条"),
+        ("AGENTS.md", "14 张表"),
+        ("docs/api/README.md", "60 个业务端点"),
+        ("docs/testing/TEST_PLAN.md", "100 条"),
     ]
     for path, phrase in claims:
         if phrase not in read(path):

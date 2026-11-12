@@ -5,6 +5,8 @@
 
 import request from './request'
 import type {
+  AdminBrewingGuideData,
+  AdminBrewingGuidePayload,
   AdminContentCreatePayload,
   AdminContentListData,
   AdminContentListParams,
@@ -70,6 +72,21 @@ export function toggleAdminTea(id: number) {
 /** PUT /admin/teas/{id}/tips 官方小贴士（省略保持 / null 清空） */
 export function updateAdminTips(id: number, payload: AdminTipsPayload) {
   return request.put<unknown, ApiEnvelope<AdminTipsData>>(`/admin/teas/${id}/tips`, payload)
+}
+
+/** PUT /admin/teas/{id}/brewing-guide 整篇保存冲泡教程（3–8 步，ADR-0005） */
+export function updateAdminBrewingGuide(id: number, payload: AdminBrewingGuidePayload) {
+  return request.put<unknown, ApiEnvelope<AdminBrewingGuideData>>(
+    `/admin/teas/${id}/brewing-guide`,
+    payload,
+  )
+}
+
+/** DELETE /admin/teas/{id}/brewing-guide 删除冲泡教程（幂等，ADR-0005） */
+export function deleteAdminBrewingGuide(id: number) {
+  return request.delete<unknown, ApiEnvelope<{ tea_id: number; deleted: boolean }>>(
+    `/admin/teas/${id}/brewing-guide`,
+  )
 }
 
 /** POST /admin/upload 图片上传（JPEG/PNG/WebP ≤ 5MB） */

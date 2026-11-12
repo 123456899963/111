@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     Enum,
@@ -92,6 +93,9 @@ class Tea(Base):
 
     # 关联
     tips: Mapped["TeaTips | None"] = relationship(back_populates="tea", uselist=False)
+    brewing_guide: Mapped["TeaBrewingGuide | None"] = relationship(
+        back_populates="tea", uselist=False
+    )
     media_images: Mapped[list["TeaMedia"]] = relationship(
         back_populates="tea",
         order_by="TeaMedia.sort_order",
@@ -156,3 +160,39 @@ class TeaTips(Base):
     )
 
     tea: Mapped[Tea] = relationship(back_populates="tips")
+
+
+class TeaBrewingGuide(Base):
+    """茶品分步冲泡教程（ADR-0005，与茶品 1:1）
+
+    steps 为 JSON 数组：[{"title": str, "detail": str, "tip": str | null}]
+    步数与字段长度由 Pydantic + Service 校验（MySQL 5.7 JSON 无内部约束）。
+    """
+
+    __tablename__ = "tea_brewing_guides"
+
+    id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True), primary_key=True, autoincrement=True
+    )
+    tea_id: Mapped[int] = mapped_column(
+        MySQLInteger(unsigned=True),
+        ForeignKey("teas.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+    intro: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    steps: Mapped[list[dict]] = mapped_column(JSON, nullable=False)
+    caution: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, server_default=text("CURRENT_TIMESTAMP")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    tea: Mapped[Tea] = relationship(back_populates="brewing_guide")

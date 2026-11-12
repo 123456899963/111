@@ -9,7 +9,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.operation_log import OperationLog
-from app.models.tea import Tea, TeaTips
+from app.models.tea import Tea, TeaBrewingGuide, TeaTips
 from app.models.user import User
 from app.repositories._common import escape_like
 
@@ -95,6 +95,28 @@ def create_tips(db: Session, tea_id: int, values: dict) -> TeaTips:
 def update_tips(db: Session, tips: TeaTips, values: dict) -> None:
     for key, value in values.items():
         setattr(tips, key, value)
+    db.flush()
+
+
+def get_brewing_guide(db: Session, tea_id: int) -> TeaBrewingGuide | None:
+    return db.query(TeaBrewingGuide).filter(TeaBrewingGuide.tea_id == tea_id).first()
+
+
+def create_brewing_guide(db: Session, tea_id: int, values: dict) -> TeaBrewingGuide:
+    guide = TeaBrewingGuide(tea_id=tea_id, **values)
+    db.add(guide)
+    db.flush()
+    return guide
+
+
+def update_brewing_guide(db: Session, guide: TeaBrewingGuide, values: dict) -> None:
+    for key, value in values.items():
+        setattr(guide, key, value)
+    db.flush()
+
+
+def delete_brewing_guide(db: Session, guide: TeaBrewingGuide) -> None:
+    db.delete(guide)
     db.flush()
 
 

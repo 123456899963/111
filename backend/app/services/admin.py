@@ -22,6 +22,8 @@ from app.schemas.admin import (
     AdminStatsResponse,
     AdminTeaListItem,
     AdminTeaListResponse,
+    BrewingGuideDeleteResponse,
+    BrewingGuideResponse,
     CategoryDistribution,
     TipsResponse,
     ToggleResponse,
@@ -31,6 +33,7 @@ from app.schemas.admin import (
 from app.schemas.tea import (
     CATEGORY_VALUES,
     SORT_VALUES,
+    BrewingGuideUpdateRequest,
     TeaCreateRequest,
     TeaDetail,
     TeaUpdateRequest,
@@ -208,6 +211,63 @@ def update_tips(db: Session, *, admin_id: int, tea_id: int, req) -> TipsResponse
 
     response_values = {field: values[column] for field, column in TIPS_FIELD_TO_COLUMN.items()}
     return TipsResponse(tea_id=tea_id, **response_values)
+
+
+def update_brewing_guide(
+    db: Session, *, admin_id: int, tea_id: int, req: BrewingGuideUpdateRequest
+) -> BrewingGuideResponse:
+    """整篇保存冲泡教程（ADR-0005）：不存在则创建，存在则覆盖。"""
+    tea = tea_repo.get_by_id(db, tea_id)
+    if tea is None:
+        raise TeaNotFound
+
+    values = req.model_dump()
+    guide = admin_repo.get_brewing_guide(db, tea_id)
+    if guide is None:
+        admin_repo.create_brewing_guide(db, tea_id, values)
+    else:
+        admin_repo.update_brewing_guide(db, guide, values)
+
+    admin_repo.add_operation_log(
+        db,
+        user_id=admin_id,
+        action="update_brewing_guide",
+        target_id=tea_id,
+        detail=f"更新冲泡教程：{tea.name}",
+    )
+    db.commit()
+
+    guide = admin_repo.get_brewing_guide(db, tea_id)
+    return BrewingGuideResponse(
+        tea_id=tea_id,
+        intro=guide.intro if guide else None,
+        steps=guide.steps if guide else [],
+        caution=guide.caution if guide else None,
+    )
+
+
+def delete_brewing_guide(
+    db: Session, *, admin_id: int, tea_id: int
+) -> BrewingGuideDeleteResponse:
+    """删除冲泡教程（ADR-0005）：幂等，不存在时返回 deleted=false。"""
+    tea = tea_repo.get_by_id(db, tea_id)
+    if tea is None:
+        raise TeaNotFound
+
+    guide = admin_repo.get_brewing_guide(db, tea_id)
+    if guide is None:
+        return BrewingGuideDeleteResponse(tea_id=tea_id, deleted=False)
+
+    admin_repo.delete_brewing_guide(db, guide)
+    admin_repo.add_operation_log(
+        db,
+        user_id=admin_id,
+        action="delete_brewing_guide",
+        target_id=tea_id,
+        detail=f"删除冲泡教程：{tea.name}",
+    )
+    db.commit()
+    return BrewingGuideDeleteResponse(tea_id=tea_id, deleted=True)
 
 
 def list_operation_logs(

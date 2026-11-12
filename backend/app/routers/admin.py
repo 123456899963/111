@@ -15,7 +15,12 @@ from app.core.response import ok
 from app.schemas.admin import TipsUpdateRequest
 from app.schemas.content import ContentCreateRequest, ContentUpdateRequest
 from app.schemas.contribution import RejectRequest
-from app.schemas.tea import TeaCreateRequest, TeaMediaCreateRequest, TeaUpdateRequest
+from app.schemas.tea import (
+    BrewingGuideUpdateRequest,
+    TeaCreateRequest,
+    TeaMediaCreateRequest,
+    TeaUpdateRequest,
+)
 from app.services import admin as admin_service
 from app.services import contents as content_service
 from app.services import contributions as contribution_service
@@ -127,6 +132,29 @@ def update_tips(
 ):
     """A5 官方小贴士编辑（API_CONTRACT §4.6.6）。"""
     data = admin_service.update_tips(db, admin_id=admin.id, tea_id=tea_id, req=payload)
+    return ok(data.model_dump(mode="json"))
+
+
+@router.put("/teas/{tea_id}/brewing-guide")
+def update_brewing_guide(
+    tea_id: int,
+    payload: BrewingGuideUpdateRequest,
+    admin=Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """A5 冲泡教程整篇保存（ADR-0005）：3–8 步，逐茶独立维护。"""
+    data = admin_service.update_brewing_guide(db, admin_id=admin.id, tea_id=tea_id, req=payload)
+    return ok(data.model_dump(mode="json"))
+
+
+@router.delete("/teas/{tea_id}/brewing-guide")
+def delete_brewing_guide(
+    tea_id: int,
+    admin=Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """A5 删除冲泡教程（ADR-0005）：幂等，前台退回三格速查卡。"""
+    data = admin_service.delete_brewing_guide(db, admin_id=admin.id, tea_id=tea_id)
     return ok(data.model_dump(mode="json"))
 
 

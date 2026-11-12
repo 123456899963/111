@@ -1,11 +1,11 @@
 # 茶·图鉴 —— 页面功能规格文档（PAGE_SPECS）
 
-> **版本**：v2.0（MVP 全量完成，含管理员后台）
-> **日期**：2026-11-05
+> **版本**：v2.1（新增详情页分步冲泡教程与后台教程编辑区块，ADR-0005）
+> **日期**：2026-11-12
 > **适用范围**：学生端（游客 + 注册用户）全部 MVP 页面 + 管理员后台 A1-A5
 > **与 PRD 对应**：v1.1 定稿 M1-M7 模块
 > **与设计规范对应**：docs/design/DESIGN_SYSTEM.md（方案一：清新水墨）
-> **v2.0 变更**：完成全部第二批功能（详情页/收藏清单/分享清单/管理员后台）+ 修复 5 个问题（S1-S3 严重 + M1-M3 中等）
+> **v2.1 变更**：详情页「冲泡参考」升级为「冲泡教程」（速查三格 + 步骤默认收起、点击展开 + 注意事项）；A4/A5 茶品表单新增「冲泡教程」编辑区块（3–8 步、模板填充、删除教程）
 
 ---
 
@@ -195,7 +195,7 @@ common.js 的 `getPagePrefix()` 自动检测当前页面层级：
 | **头部** | 主图（大图）+ 图片上叠加的茶类标签（**可点击**）+ 名称 + 产地 + 季节 | TEAS[id] | 点茶类标签跳列表页带 `?category={tea.category}`；主图 onerror 显示灰底 |
 | **行动按钮栏** | ❤️ 收藏 / ✏️ 写笔记 / ↗️ 分享 | localStorage + 模态框 | 收藏 toggle + Toast；笔记弹模态框（localStorage tea_notes）；分享弹模态框（生成 shareId + localStorage 写入 + 正确路径 `/c/{shareId}/index.html`） |
 | **购买入口** | 茶名右侧（与标题同一行、右对齐）的主按钮「🛒 去淘宝搜索同款」+ 下方小字「跳转第三方平台，本站不参与交易」 | `tea.name` 前端拼接 | 新标签页打开 `https://s.taobao.com/search?q={encodeURIComponent(茶名)}`；仅 `ready` 状态且茶名非空时渲染；`target="_blank" rel="noopener noreferrer"`；不接入商品、下单、支付 |
-| **冲泡参考卡** | 🌡 水温 / 🫖 投茶量 / ⏱ 浸泡时间 | tea.waterTemp / tea.teaAmount / tea.brewTime | — |
+| **冲泡教程卡** | 标题「冲泡教程」；顶部三格速查（🌡 水温 / 🫖 投茶量 / ⏱ 浸泡时间）；教程总览一句话；默认不展开步骤，底部按钮「展开冲泡教程（共 N 步）」+ 右侧下箭头，展开全部步骤与「⚠️ 注意事项」；无自定义教程时标题退回「冲泡参考」且只显示三格 | `tea.brewing_guide` + `tea.water_temp/tea_amount/brew_time` | 步骤含序号、标题、动作说明、可选小提示；展开状态仅前端，切换茶品时重置；展开/收起为 320ms 高度折叠与箭头翻转，收起时同步逐帧平滑滚回展开前的滚动位置（`easeInOutCubic`，系统「减少动态效果」时直接跳回）；`brewing_guide=null` 时整块不渲染教程区，三格全空则整卡隐藏 |
 | **四大感官卡** | 外形 / 汤色 / 香气 / 滋味 | tea.shape / tea.soup / tea.aroma / tea.taste | 每块左侧 emoji + 文字描述 |
 | **小贴士卡** | 4 块可独立显隐：历史文化 / 适合人群 / 常见误区 / 官方备注 | tea.tips.history / suitable / misconception / officialNote | **空内容整块隐藏**（display:none） |
 | **同类推荐区** | 最多 4 张 card-hot（同 category，排除自身） | getRelatedTeas(tea, 4) | 点卡跳其他详情页 |
@@ -375,7 +375,7 @@ share.js 从 `window.location.pathname.split('/')[3]` 提取 shareId。
 | 项 | 内容 |
 |---|---|
 | 路由 | `原型/admin/teas/new.html` |
-| 表单分块 | ① 基础信息（名称 + 茶类 + 产地 + 季节）② 冲泡参考（水温/投茶量/时间）③ 四大感官（外形/汤色/香气/滋味）④ 小贴士 4 块 + 主图 URL |
+| 表单分块 | ① 基础信息（名称 + 茶类 + 产地 + 季节）② 冲泡参考（水温/投茶量/时间）③ 四大感官（外形/汤色/香气/滋味）④ 小贴士 4 块 + 主图 URL ⑤ 冲泡教程（总览 + 3–8 步 + 注意事项，支持「按茶类生成草稿」、增删/上下移、删除教程） |
 | 必填校验 | 名称 ≥1 字 / 茶类必选 / 产地必选（其他字段可留空） |
 | 保存后 | 写入 localStorage admin_teas_edited（new 数组 push）→ Toast → 跳 A3 |
 

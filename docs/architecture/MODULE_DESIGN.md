@@ -21,10 +21,10 @@
 |---|---|---|---|---|---|
 | M1 | 茶品列表页 + 筛选 | `/api/v1/teas` | `GET ""`（列表+筛选+排序+分页）、`GET /categories`、`GET /origins` | `/teas` · TeaListView | `teas` |
 | M2 | 首页 | `/api/v1/teas` | `GET /hot`（热门推荐）、`GET /random`（随机发现）、`GET /categories`（六大茶类计数） | `/` · HomeView | `teas` |
-| M3 | 茶品详情页 | `/api/v1/teas` | `GET /{tea_id}`（详情 + 小贴士） | `/teas/:id` · TeaDetailView | `teas` + `tea_tips` |
+| M3 | 茶品详情页 | `/api/v1/teas` | `GET /{tea_id}`（详情 + 小贴士 + 冲泡教程） | `/teas/:id` · TeaDetailView | `teas` + `tea_tips` + `tea_brewing_guides` |
 | M4 | 注册登录 + 个人中心 | `/api/v1/auth` + `/api/v1/me` | `GET /auth/username-availability`、`POST /auth/register`、`POST /auth/login`、`POST /auth/logout`、`GET /auth/me`、`PUT /auth/password`；`GET /me/stats`、`POST /me/avatar`、`PUT /me/avatar` | 登录模态框（HomeView/MyListView/TeaDetailView 触发）、`/admin/login` · AdminLogin、`/profile` · ProfileView | `users` + `operation_logs` |
 | M5 | 收藏清单 + 品鉴笔记 + 分享链接 | `/api/v1/favorites` + `/api/v1/lists` + `/api/v1/shares` | 见 §4 完整端点表 | `/my` · MyListView、`/c/:shareId` · ShareView | `collection_lists` + `favorite_items` + `share_tokens` + `users`（外键）+ `teas`（外键） |
-| M6 | 管理员后台（数据维护） | `/api/v1/admin` | 见 §4 完整端点表 | `/admin` · AdminLayout + 子路由（Dashboard / Teas / TeaEdit） | `teas` + `tea_tips` + `users`（角色） |
+| M6 | 管理员后台（数据维护） | `/api/v1/admin` | 见 §4 完整端点表 | `/admin` · AdminLayout + 子路由（Dashboard / Teas / TeaEdit） | `teas` + `tea_tips` + `tea_brewing_guides` + `users`（角色） |
 
 ### 1.2 模块依赖图（graph LR）
 
@@ -119,7 +119,7 @@ graph LR
 | 详情页小贴士空字段 → 前端隐藏 | Service 返回完整 Pydantic，前端通过 `v-if="tea.tips_history"` 决定展示 |
 | 随机发现 `ORDER BY RAND()` | MVP 数据量 < 1000 行可用，Repository 层实现 |
 
-**涉及数据表**：`teas` + `tea_tips`（JOIN 取小贴士）
+**涉及数据表**：`teas` + `tea_tips`（JOIN 取小贴士）+ `tea_brewing_guides`（JOIN 取分步教程）
 
 ---
 
@@ -207,6 +207,8 @@ graph LR
 | 茶品详情（管理视角） | GET | `/api/v1/admin/teas/{tea_id}` | path `tea_id` | `TeaDetail`（`is_active` 可能为 false） | 管理员 |
 | 编辑茶品 | PUT | `/api/v1/admin/teas/{tea_id}` | 茶品主体字段（同新增，**不接受 `tips_*`**） | `{ id: number, ...TeaResponse }`（`tips_*` 保持原值） | 管理员 |
 | 编辑官方小贴士 | PUT | `/api/v1/admin/teas/{tea_id}/tips` | `{ tips_history?, tips_suitable?, tips_misconception?, tips_official_note? }`（省略=保持，`null`=清空） | `{ tea_id, tips_history, tips_suitable, tips_misconception, tips_official_note }` | 管理员 |
+| 保存冲泡教程 | PUT | `/api/v1/admin/teas/{tea_id}/brewing-guide` | `{ intro?, steps[3–8], caution? }`（整篇覆盖，ADR-0005） | `{ tea_id, intro, steps, caution }` | 管理员 |
+| 删除冲泡教程 | DELETE | `/api/v1/admin/teas/{tea_id}/brewing-guide` | 无（幂等） | `{ tea_id, deleted }` | 管理员 |
 | 上下架 | PATCH | `/api/v1/admin/teas/{tea_id}/toggle` | 无 | `{ id, is_active: boolean, updated_at }` | 管理员 |
 | 茶品列表（管理视角） | GET | `/api/v1/admin/teas` | `category` / `keyword` / `sort` / 分页 + `is_active`（省略=全部，`true`=仅上架，`false`=仅下架） | `{ items: AdminTeaListItem[], total, page, page_size }`（含下架茶品） | 管理员 |
 | 仪表盘统计 | GET | `/api/v1/admin/stats` | 无 | `{ total_count, active_count, inactive_count, category_distribution }` | 管理员 |
@@ -242,7 +244,7 @@ graph LR
 
 ## 4. 完整 REST 端点表汇总
 
-> 下表保留 MVP 首批端点映射（原 29 个）与本批新增的 `/api/v1/me`；**完整端点清单与字段以 API_CONTRACT v1.6 为准（当前 55 个）**，不包含第二阶段预留；`GET /api/v1/health` 为部署探针，不在此表。
+> 下表保留 MVP 首批端点映射（原 29 个）与本批新增的 `/api/v1/me`；**完整端点清单与字段以 API_CONTRACT v1.11 为准（当前 60 个）**，不包含第二阶段预留；`GET /api/v1/health` 为部署探针，不在此表。
 
 ### `/api/v1/teas`（6 个）
 

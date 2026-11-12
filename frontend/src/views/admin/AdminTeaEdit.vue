@@ -5,17 +5,21 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import {
   addAdminTeaImage,
   createAdminTea,
+  deleteAdminBrewingGuide,
   deleteAdminTeaImage,
   getAdminTea,
   toggleAdminTea,
+  updateAdminBrewingGuide,
   updateAdminTea,
   updateAdminTips,
   uploadAdminImage,
   uploadAdminVideo,
 } from '@/api/admin'
 import { getTeaImages } from '@/api/teas'
+import { buildBrewingDraft } from '@/utils/brewing'
 import { CATEGORY_LABELS, TEA_CATEGORIES, TEA_SEASONS } from '@/utils/teaQuery'
 import type {
+  AdminBrewingGuidePayload,
   AdminTeaPayload,
   AdminTeaCreatePayload,
   Tea,
@@ -64,6 +68,14 @@ const teaForm = reactive({
   tips_official_note: '',
 })
 
+/** 冲泡教程（ADR-0005）：与茶品信息一起保存，留空且已有教程时删除 */
+const guide = reactive({
+  exists: false,
+  intro: '',
+  caution: '',
+  steps: [] as Array<{ title: string; detail: string; tip: string }>,
+})
+
 const rules: FormRules = {
   name: [{ required: true, message: '请输入茶名（1-100 字）', trigger: 'blur' }],
   category: [{ required: true, message: '请选择茶类', trigger: 'change' }],
@@ -106,6 +118,16 @@ function fillForm(tea: Tea) {
   teaForm.tips_suitable = tea.tips_suitable ?? ''
   teaForm.tips_misconception = tea.tips_misconception ?? ''
   teaForm.tips_official_note = tea.tips_official_note ?? ''
+
+  const brewing = tea.brewing_guide
+  guide.exists = Boolean(brewing)
+  guide.intro = brewing?.intro ?? ''
+  guide.caution = brewing?.caution ?? ''
+  guide.steps = (brewing?.steps ?? []).map((step) => ({
+    title: step.title,
+    detail: step.detail,
+    tip: step.tip ?? '',
+  }))
 }
 
 async function loadDetail() {
@@ -158,20 +180,131 @@ function buildTips() {
   }
 }
 
+/** 教程保存前的本地校验：0 步表示删除，1–2 步不合法，3–8 步且标题/说明必填 */
+function validateGuide(): string | null {
+  const filled = guide.steps.filter(
+    (step) => step.title.trim() || step.detail.trim() || step.tip.trim(),
+  )
+  if (filled.length === 0) return null
+  if (filled.length < 3) return '冲泡教程至少需要 3 步，或点击「删除教程」清空'
+  if (filled.length > 8) return '冲泡教程最多 8 步'
+  if (filled.some((step) => !step.title.trim() || !step.detail.trim())) {
+    return '每一步都需要填写步骤标题和动作说明'
+  }
+  return null
+}
+
+function buildGuidePayload(): AdminBrewingGuidePayload {
+  return {
+    intro: nullableText(guide.intro),
+    caution: nullableText(guide.caution),
+    steps: guide.steps
+      .filter((step) => step.title.trim() && step.detail.trim())
+      .map((step) => ({
+        title: step.title.trim(),
+        detail: step.detail.trim(),
+        tip: nullableText(step.tip),
+      })),
+  }
+}
+
+/** 保存教程：空教程时删除已有记录，保证前台退回三格速查卡 */
+async function saveGuide(id: number) {
+  const payload = buildGuidePayload()
+  if (payload.steps.length === 0) {
+    if (guide.exists) {
+      await deleteAdminBrewingGuide(id)
+      guide.exists = false
+    }
+    return
+  }
+  await updateAdminBrewingGuide(id, payload)
+  guide.exists = true
+}
+
+function addGuideStep() {
+  if (guide.steps.length >= 8) return
+  guide.steps.push({ title: '', detail: '', tip: '' })
+}
+
+function removeGuideStep(index: number) {
+  if (guide.steps.length <= 3) return
+  guide.steps.splice(index, 1)
+}
+
+function moveGuideStep(index: number, offset: number) {
+  const target = index + offset
+  if (target < 0 || target >= guide.steps.length) return
+  const [step] = guide.steps.splice(index, 1)
+  guide.steps.splice(target, 0, step)
+}
+
+/** 按茶类 + 本茶参数生成 6 步草稿，管理员再逐条润色 */
+function applyDraftTemplate() {
+  const draft = buildBrewingDraft({
+    category: teaForm.category,
+    water_temp: teaForm.water_temp,
+    tea_amount: teaForm.tea_amount,
+    brew_time: teaForm.brew_time,
+  })
+  guide.intro = draft.intro ?? ''
+  guide.caution = draft.caution ?? ''
+  guide.steps = draft.steps.map((step) => ({
+    title: step.title,
+    detail: step.detail,
+    tip: step.tip ?? '',
+  }))
+  ElMessage.info('已套用茶类模板，请检查后保存')
+}
+
+async function clearGuide() {
+  if (!isEdit.value) {
+    guide.intro = ''
+    guide.caution = ''
+    guide.steps = []
+    return
+  }
+  try {
+    await ElMessageBox.confirm('删除后前台将只显示三格冲泡参数，确定删除教程吗？', '删除教程', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  await deleteAdminBrewingGuide(teaId.value)
+  guide.exists = false
+  guide.intro = ''
+  guide.caution = ''
+  guide.steps = []
+  ElMessage.success('教程已删除')
+}
+
 async function submit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
+
+  const guideError = validateGuide()
+  if (guideError) {
+    ElMessage.error(guideError)
+    return
+  }
 
   saving.value = true
   try {
     if (isEdit.value) {
       await updateAdminTea(teaId.value, buildPayload())
       await updateAdminTips(teaId.value, buildTips())
-      ElMessage.success('茶品信息与小贴士已保存')
+      await saveGuide(teaId.value)
+      ElMessage.success('茶品信息、小贴士与冲泡教程已保存')
       await loadDetail()
     } else {
       const payload: AdminTeaCreatePayload = { ...buildPayload(), ...buildTips() }
-      await createAdminTea(payload)
+      const created = await createAdminTea(payload)
+      if (buildGuidePayload().steps.length > 0) {
+        await saveGuide(created.data.id)
+      }
       ElMessage.success('新增茶品成功')
       router.push({ name: 'admin-teas' })
     }
@@ -543,6 +676,91 @@ onMounted(loadDetail)
         </div>
       </section>
 
+      <section class="form-section">
+        <h3 class="text-h3 section-title">冲泡教程</h3>
+        <p class="text-small text-secondary section-hint">
+          逐茶维护，3–8 步；前台默认展示前 3 步并可展开。全部留空并删除后，只显示三格冲泡参数。
+        </p>
+        <el-form-item label="教程总览">
+          <el-input
+            v-model="guide.intro"
+            maxlength="200"
+            show-word-limit
+            placeholder="一句话说明这款茶怎么泡，如：水温 85℃，快出汤不闷盖"
+          />
+        </el-form-item>
+
+        <div class="guide-steps">
+          <div v-for="(step, index) in guide.steps" :key="index" class="guide-step">
+            <div class="guide-step__head">
+              <span class="guide-step__label">第 {{ index + 1 }} 步</span>
+              <div class="guide-step__ops">
+                <el-button link :disabled="index === 0" @click="moveGuideStep(index, -1)"
+                  >上移</el-button
+                >
+                <el-button
+                  link
+                  :disabled="index === guide.steps.length - 1"
+                  @click="moveGuideStep(index, 1)"
+                  >下移</el-button
+                >
+                <el-button
+                  link
+                  type="danger"
+                  :disabled="guide.steps.length <= 3"
+                  @click="removeGuideStep(index)"
+                  >删除</el-button
+                >
+              </div>
+            </div>
+            <el-input
+              v-model="step.title"
+              maxlength="30"
+              show-word-limit
+              placeholder="步骤标题，如：温杯洁具"
+            />
+            <el-input
+              v-model="step.detail"
+              type="textarea"
+              :rows="2"
+              maxlength="200"
+              show-word-limit
+              placeholder="这一小步具体怎么做"
+            />
+            <el-input
+              v-model="step.tip"
+              maxlength="100"
+              show-word-limit
+              placeholder="小提示（可选）"
+            />
+          </div>
+        </div>
+
+        <div class="guide-actions">
+          <el-button :disabled="guide.steps.length >= 8" @click="addGuideStep"
+            >+ 添加步骤</el-button
+          >
+          <el-button @click="applyDraftTemplate">按茶类生成草稿</el-button>
+          <el-button v-if="guide.exists" type="danger" plain @click="clearGuide"
+            >删除教程</el-button
+          >
+          <span class="text-small text-secondary">
+            当前 {{ guide.steps.length }} / 8 步（最少 3 步）
+          </span>
+        </div>
+
+        <el-form-item label="注意事项">
+          <el-input
+            v-model="guide.caution"
+            type="textarea"
+            :rows="2"
+            maxlength="500"
+            show-word-limit
+            placeholder="新手最容易踩的坑，如水温过高、久闷"
+          />
+        </el-form-item>
+      </section>
+
       <div class="form-actions">
         <el-button @click="router.push({ name: 'admin-teas' })">取消</el-button>
         <el-button type="primary" :loading="saving" @click="submit">
@@ -597,6 +815,42 @@ onMounted(loadDetail)
 }
 .full-width {
   width: 100%;
+}
+.guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.guide-step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-page);
+}
+.guide-step__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.guide-step__label {
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.guide-step__ops {
+  display: flex;
+  gap: 4px;
+}
+.guide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 .image-field {
   display: flex;

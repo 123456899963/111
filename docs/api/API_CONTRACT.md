@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 文档版本 | **v1.10** |
+| 文档版本 | **v1.11** |
 | 创建日期 | 2026-11-06 |
 | 契约基线 | [PRD.md](../product/PRD.md) v1.1 · [DATA_MODEL.md](../architecture/DATA_MODEL.md) v1.4 · [database/init.sql](../../database/init.sql) · [MODULE_DESIGN.md](../architecture/MODULE_DESIGN.md) |
 | 本契约地位 | 前后端联调与字段命名的唯一依据。脚手架中与本契约不一致的字段，以本契约（数据库列名）为准 |
@@ -337,11 +337,13 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | `tips_suitable` | string / null | 适合人群 | `tea_tips.suitable` |
 | `tips_misconception` | string / null | 冲泡误区 | `tea_tips.misconception` |
 | `tips_official_note` | string / null | 官方品鉴笔记 | `tea_tips.official_note` |
+| `brewing_guide` | object / null | 分步冲泡教程（ADR-0005）；`null` 表示未维护，前端退回三格速查卡 | `tea_brewing_guides` |
 | `contributed_articles` | `TeaArticle[]` | 已通过审核的用户科普投稿（S11/S12），按提交时间倒序；空数组隐藏 | `contributions`（type=article 且 status=approved） |
 
 说明：
 
 - 四个 `tips_*` 字段为**扁平化派生字段**；`tea_tips` 无对应行时全部为 `null`。
+- `brewing_guide` 为 1:1 扩展对象：`{ intro, steps[], caution }`，`steps` 为 3–8 条 `{ title, detail, tip }`；无教程时为 `null`。
 - 任一 `tips_*` 为 `null` 时，前端整块隐藏（PRD FR-3.2 / FR-6.4）。
 - 公开详情接口遇到 `is_active=0` 直接返回 `40401`，因此公开响应中 `is_active` 恒为 `true`；管理员详情可能为 `false`。
 
@@ -373,6 +375,27 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
   "tips_suitable": "适合脾胃强健、喜鲜爽口感的茶友；春季饮用尤佳。",
   "tips_misconception": "水温不宜过高，85℃即可，沸水会烫熟嫩芽导致苦涩。",
   "tips_official_note": "采摘标准为一芽一叶或一芽二叶初展，炒制工艺独特。",
+  "brewing_guide": {
+    "intro": "绿茶重在鲜爽，用玻璃杯，水温不宜过高，不闷盖、快出汤。",
+    "steps": [
+      {
+        "title": "温杯洁具",
+        "detail": "先用热水把玻璃杯烫洗一遍并倒掉，提升杯温便于闻香。",
+        "tip": "不要用洗洁精，清水烫洗即可。"
+      },
+      {
+        "title": "投茶",
+        "detail": "取 3g 茶叶放入杯中，约占杯底薄薄一层。",
+        "tip": "口味偏淡可从 2g 开始。"
+      },
+      {
+        "title": "注水",
+        "detail": "用 85℃ 热水沿杯壁缓慢注入至七分满，不要直冲茶叶。",
+        "tip": "水烧开后开盖晾 2–3 分钟约 85℃。"
+      }
+    ],
+    "caution": "不要用刚烧开的沸水直冲，也不要盖盖子闷泡。"
+  },
   "contributed_articles": [
     {
       "id": 8,
@@ -589,6 +612,8 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | 56 | 内容管理 | PUT | `/admin/contents/{item_id}` | 管理员 |
 | 57 | 内容管理 | DELETE | `/admin/contents/{item_id}` | 管理员 |
 | 58 | 管理员 | GET | `/admin/operation-logs` | 管理员 |
+| 59 | 管理员 | PUT | `/admin/teas/{tea_id}/brewing-guide` | 管理员 |
+| 60 | 管理员 | DELETE | `/admin/teas/{tea_id}/brewing-guide` | 管理员 |
 
 > 清单条目移除不单独提供 `DELETE /lists/{tea_id}`，统一复用 `DELETE /favorites/{tea_id}`（可带 `?list_id`），避免同一语义两个入口。
 
@@ -2056,6 +2081,94 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
   - 日期边界按 UTC 自然日计算（与 `created_at` 存储口径一致）。
   - 只读查询，不写入 `operation_logs`。
 
+#### 4.6.13 保存冲泡教程（ADR-0005）
+
+- **方法与路径**：`PUT /admin/teas/{tea_id}/brewing-guide`
+- **权限**：管理员
+- **路径参数**：`tea_id` integer，必填
+- **请求体**（整篇覆盖；`tea_brewing_guides` 无行时创建）：
+
+| 字段 | 类型 | 必填 | 约束 |
+|---|---|---|---|
+| `intro` | string / null | 否 | trim 后 ≤200 字；空串归一化为 `null` |
+| `steps` | object[] | 是 | **3–8 条**，顺序即展示顺序 |
+| `steps[].title` | string | 是 | trim 后 1–30 字 |
+| `steps[].detail` | string | 是 | trim 后 1–200 字 |
+| `steps[].tip` | string / null | 否 | trim 后 ≤100 字；空串归一化为 `null` |
+| `caution` | string / null | 否 | trim 后 ≤500 字；空串归一化为 `null` |
+
+- **请求示例**：
+
+```json
+{
+  "intro": "绿茶重在鲜爽，水温不宜过高，不闷盖、快出汤。",
+  "steps": [
+    { "title": "温杯洁具", "detail": "用热水烫洗玻璃杯并倒掉。", "tip": "清水即可" },
+    { "title": "投茶", "detail": "取 3g 茶叶放入杯中。" },
+    { "title": "注水", "detail": "85℃ 热水沿杯壁注入至七分满。" }
+  ],
+  "caution": "不要用沸水直冲，也不要闷盖。"
+}
+```
+
+- **成功响应**：HTTP 200，`code=0`
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "tea_id": 1,
+    "intro": "绿茶重在鲜爽，水温不宜过高，不闷盖、快出汤。",
+    "steps": [
+      { "title": "温杯洁具", "detail": "用热水烫洗玻璃杯并倒掉。", "tip": "清水即可" },
+      { "title": "投茶", "detail": "取 3g 茶叶放入杯中。", "tip": null },
+      { "title": "注水", "detail": "85℃ 热水沿杯壁注入至七分满。", "tip": null }
+    ],
+    "caution": "不要用沸水直冲，也不要闷盖。"
+  }
+}
+```
+
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 400 | 40000 | 步数不在 3–8；标题/说明/提示超长；出现未知字段 |
+| 401 | 40100 | 未登录/会话过期 |
+| 403 | 40300 | 非管理员 |
+| 404 | 40400 | 茶品不存在 |
+
+- **规则**：
+  - 整篇覆盖：未提交的可选字段按 `null` 处理，不做局部合并。
+  - 保存后立即影响公开详情 `GET /teas/{tea_id}` 的 `brewing_guide`。
+  - 写入 `operation_logs`：`action='update_brewing_guide'`、`target_type='tea'`、`target_id=tea_id`、`detail` 含茶名。
+
+#### 4.6.14 删除冲泡教程（ADR-0005）
+
+- **方法与路径**：`DELETE /admin/teas/{tea_id}/brewing-guide`
+- **权限**：管理员
+- **路径参数**：`tea_id` integer，必填
+- **请求体**：无
+- **成功响应**：HTTP 200，`code=0`
+
+```json
+{ "code": 0, "message": "ok", "data": { "tea_id": 1, "deleted": true } }
+```
+
+- **错误**：
+
+| HTTP | code | 触发 |
+|---|---|---|
+| 401 | 40100 | 未登录/会话过期 |
+| 403 | 40300 | 非管理员 |
+| 404 | 40400 | 茶品不存在 |
+
+- **规则**：
+  - 幂等：教程不存在时返回 `deleted=false`，不抛错。
+  - 删除后公开详情 `brewing_guide` 变为 `null`，前端退回三格速查卡。
+  - 仅在确实删除时写入 `operation_logs`：`action='delete_brewing_guide'`。
+
 ---
 
 ### 4.7 我的模块
@@ -2785,3 +2898,4 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 | **v1.8** | 2026-11-11 | 新增 §4.1.6 用户自助修改密码 `PUT /auth/password`：Cookie 载荷增加 `sv`（`users.session_version`），改密后旧会话立即失效；接口总览 56 → 57 个业务端点 |
 | **v1.9** | 2026-11-11 | 新增 §4.6.12 管理员操作日志查询 `GET /admin/operation-logs`（分页 + 动作/目标类型/管理员/日期筛选，`created_at DESC, id DESC`，LEFT JOIN 取 `admin_username`）；§5.7/§6.3 同步日志可读；`ip_address` 为预留字段恒 `null`；接口总览 57 → 58 个业务端点 |
 | **v1.10** | 2026-11-11 | §4.1.4 登出语义更新：携带有效 Cookie 时递增 `users.session_version`，旧 Cookie 立即失效；未登录/无效 Cookie 仅清 Cookie；接口总数不变 |
+| **v1.11** | 2026-11-12 | 新增 ADR-0005 分步冲泡教程：`TeaDetail`/管理员详情新增 `brewing_guide`（3–8 步，含 `intro`/`caution`）；新增 §4.6.13 `PUT /admin/teas/{tea_id}/brewing-guide` 与 §4.6.14 `DELETE .../brewing-guide`；新增表 `tea_brewing_guides`；接口总览 58 → 60 个业务端点 |
