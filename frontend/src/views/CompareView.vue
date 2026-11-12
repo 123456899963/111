@@ -71,6 +71,7 @@ onMounted(() => void load())
       </nav>
 
       <header class="compare-header">
+        <p class="page-kicker page-kicker--center">Side by Side</p>
         <h1 class="compare-header__title">六大茶类摘要对比</h1>
         <p class="compare-header__desc">
           每类甄选一款代表茶，横向对比外形、汤色、香气、滋味与冲泡要点。
@@ -120,7 +121,7 @@ onMounted(() => void load())
 
 <style scoped>
 .compare-page {
-  padding-top: 64px;
+  padding-top: 88px;
   padding-bottom: 48px;
 }
 
@@ -138,7 +139,7 @@ onMounted(() => void load())
 
 @media (max-width: 767px) {
   .compare-page {
-    padding-top: 56px;
+    padding-top: 76px;
   }
   .container {
     padding: 0 16px;

@@ -112,15 +112,16 @@ watch(
       <!-- 面包屑 -->
       <nav class="content-list-page__breadcrumb">
         <RouterLink to="/">首页</RouterLink>
-        <span class="separator">/</span>
+        <span class="separator">›</span>
         <span>茶文化</span>
-        <span class="separator">/</span>
+        <span class="separator">›</span>
         <span class="current">{{ headerItem?.name ?? typeCode }}</span>
       </nav>
 
       <!-- 板块头部：标题与搜索同排 -->
       <section v-if="headerItem" class="content-list-page__hero">
         <div class="content-list-page__hero-main">
+          <p class="page-kicker">Tea Culture</p>
           <div class="content-list-page__hero-title">
             <span class="content-list-page__icon">{{ headerItem.icon ?? '📖' }}</span>
             <h1 class="content-list-page__title">{{ headerItem.name }}</h1>

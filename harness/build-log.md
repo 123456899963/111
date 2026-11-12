@@ -1658,3 +1658,375 @@ gba(250,248,245,0.12)，无方向、无渐变，肉眼不可辨认为独立图�
   - 步骤 JSON 的字段约束依赖 Pydantic 与前端校验，数据库层无 CHECK（MySQL 5.7 限制）
   - 收起动画依赖 `grid-template-rows` 过渡，需现代浏览器（Chrome 107+ / Safari 16+）；不支持时退化为瞬时折叠，不影响功能
 - 回滚方式：停用前端教程卡与后台区块后，回退代码；数据库执行 `alembic downgrade 0011_user_session_version` 删除 `tea_brewing_guides`（不影响 `teas` 与 `tea_tips`）。
+
+## 2026-11-12 前台视觉动效优化（ReactBits 灵感四件套）
+
+- 任务编号：TASK-20261112-02
+- 分级：B
+- 判定理由：仅改前台展示层（组件样式与动效），不改 API 契约、数据库、业务规则与路由；零新增第三方依赖
+- 用户确认记录：2026-11-12 对话确认 —— 采用「推荐四件套」（纸纹噪点 / 标题模糊入场 / 茶卡柔光 / 数字滚动），动效尺度「适中有层次」；明确要求不提交、不推送，等待后续指令
+- 变更：
+  - 新增 `frontend/src/components/effects/PaperTexture.vue`：静态 SVG fractalNoise 纸纹层，`opacity` 取 `--paper-noise-opacity`（0.035），`pointer-events: none`，无 rAF 重绘
+  - 新增 `frontend/src/components/effects/RevealText.vue`：中文逐字 / 英文逐词 `blur → clear` 入场，IntersectionObserver 只播一次，`prefers-reduced-motion` 下直接呈现
+  - 新增 `frontend/src/components/effects/SpotlightCard.vue`：pointermove 写入 CSS 变量并经 rAF 合并，暖白柔光以 soft-light 叠加；可选 ≤4° 3D 倾斜；触摸设备与减少动效自动降级
+  - 新增 `frontend/src/components/effects/CountUp.vue`：进入视口后 rAF 缓动计数，值变化时重播，减少动效直显终值
+  - `frontend/src/style.css`：新增 §6 动效与质感 token（`--motion-ease`、`--motion-duration-*`、`--paper-noise-opacity`、`--spotlight-color`）
+  - `frontend/src/App.vue`：按当前路由挂载纸纹层，`/admin` 下不挂载
+  - `frontend/src/views/HomeView.vue`：hero 主副标题与三大区块标题接入 RevealText；六类卡、小贴士、随机发现卡接入 SpotlightCard（随机卡开启 4° 倾斜）；六类计数接入 CountUp；补充 host wrapper 布局样式
+  - `frontend/src/components/TeaCard.vue`：外层改用 SpotlightCard，收藏按钮绝对定位与原有 hover 行为保持不变
+  - `frontend/src/views/TeaDetailView.vue`：茶名接入 RevealText，收藏数接入 CountUp，移除冗余的 `favoriteText` 计算
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run typecheck | 通过 | vue-tsc 无错误 |
+  | npm run lint | 通过 | 无告警 |
+  | npm run format:check | 通过 | Prettier 全部通过（HomeView 已格式化） |
+  | npm run test:run | 通过 | 11 文件 / 82 用例，无回归 |
+  | npm run build | 通过 | 生产构建成功 |
+  | python scripts/check_frontend.py | 通过 | 前台 UI 终检：历史遗留 0 项，无 Element Plus、无硬编码 HEX |
+  | 浏览器冒烟（首页） | 通过 | 约 600px 视口：hero 标题 blur 动画结束可读（`filter: none`）、六类卡 6 张对齐、纸纹层 `opacity 0.035` 生效、`spotlight-card__glow` 节点存在、无白屏；后端在线时六类计数正常显示 |
+
+- 未验证 / 遗留：
+  - 桌面 ≥1024px 六列布局未做实机截图复验（网格列数未改动，仅新增 wrapper 层）
+  - 详情页与后台页未做浏览器复验（后台已按路由排除纸纹层）
+  - 本次未提交、未推送，等待用户指令
+- 回滚方式：回退上述前端文件即可，无数据与契约影响
+
+## 2026-11-12 布局优化：内容瀑布流 + 详情瓦片聚焦图集（已于同日回退，代码未保留）
+
+- 任务编号：TASK-20261112-03
+- 分级：B
+- 判定理由：仅改前台展示层布局（两个视图的模板结构与 CSS），不改 API 契约、数据库、业务规则；沿用 `tea.image_set` 既有字段，无新增依赖
+- 用户确认记录：2026-11-12 对话确认 —— 在四个布局方案中先看预览图，最终选定「方案 B 瓦片聚焦」，并确认「两个页面都用」（茶详情图集 + 内容列表）
+- 变更：
+  - `frontend/src/views/ContentListView.vue`：内容列表由固定比例网格改为 CSS 多列瀑布流（`columns: 3` + `column-gap: 24px`，卡片 `break-inside: avoid` + `margin-bottom: 24px`）；卡片封面改自适应高度（`height: auto; max-height: 320px; object-fit: cover`），无封面时保留 180px 占位块；断点 1024px 起 3 列、768–1023px 2 列、<768px 1 列
+  - `frontend/src/views/TeaDetailView.vue`：≥2 张图片时头部改为「瓦片聚焦图集」——3 列 Grid（`grid-auto-rows: 96px`、`gap: 8px`、`grid-auto-flow: dense`），当前瓦片 `grid-column/row: span 2` 放大到 2×2；由 `featuredIndex` 状态驱动，点击或键盘聚焦切换，避免 hover 改 span 造成的元素跳位与页面高度抖动；单图/无图回退原 4:3 主图与占位块；移除 `activeImage` / `displayImage` 与横向缩略图条，`hasImage` 改为基于 `tea.main_image_url`；移动端 2 列，`prefers-reduced-motion` 下关闭缩放与过渡
+  - 文档：`docs/design/PAGE_SPECS.md` §5.1 头部区块行同步为瓦片聚焦图集规格
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run typecheck | 通过 | vue-tsc 无错误 |
+  | npm run lint | 通过 | 无告警 |
+  | npm run format:check / prettier --check | 通过 | 两个视图文件格式合规 |
+  | npm run test:run | 通过 | 11 文件 / 82 用例，无回归 |
+  | npm run build | 通过 | 生产构建成功（仅有既存的 element-plus chunk >500kB 提示） |
+  | python scripts/check_frontend.py | 通过 | 历史遗留 0 项，无 Element Plus、无硬编码 HEX |
+  | 浏览器冒烟（`/teas/1`） | 通过 | 599px 视口：4 张瓦片渲染，初始第 1 张为 2×2 放大块（552×176），点击第 2 张后放大块随之切换；无白屏、无布局断裂 |
+  | 浏览器冒烟（`/contents/teaware`） | 通过 | 599px 视口为 1 列，12 张卡片正常渲染、无重叠/截断；模拟 3 列时卡片高度 246–385px 呈瀑布流 |
+
+- 未验证 / 遗留：
+  - 环境浏览器视口固定约 599px，桌面 3 列瀑布流与 3 列瓦片网格仅通过 CSS 与模拟宽度验证，未做 ≥1024px 实机截图
+  - 种子数据中仅茶品 1（3 张图集）触发多图分支，其余茶品为单图，单图回退分支已随机抽查
+  - 本次未提交、未推送，等待用户指令
+
+**回退记录（2026-11-12，用户要求「回退吧，不要这个改动」）**
+
+- 已回退：`frontend/src/views/ContentListView.vue`、`docs/design/PAGE_SPECS.md` 用 `git checkout` 还原至提交版本（内容零差异，仅按 Prettier 规范保留 LF）；`frontend/src/views/TeaDetailView.vue` 手工还原图集部分（恢复 `activeImage` / `displayImage` 与横向缩略图条、删除 `featuredIndex` 与 `.detail-tiles` 样式），同文件内 ReactBits 四件套改动保留
+- 回退后复测：typecheck / lint / format:check / test:run（82 用例）/ build / `python scripts/check_frontend.py` 全部通过
+- 影响：前台布局回到改造前；无数据、契约、依赖变化
+
+## 2026-11-12 前端视觉优化 P0：统计带 + 卡片去框化 + 筛选工具条
+
+- 任务编号：TASK-20261112-04
+- 分级：B
+- 判定理由：仅改前台展示层（组件结构、CSS、列表页筛选面板的展开/收起交互），不改 API 契约、数据库、业务规则与权限；筛选逻辑与 URL 同步完全沿用原实现，无新增依赖
+- 需求来源：用户对照 Meoo 创意社区模板（寻味湖州茶事、茶饮口味测评）与同类站（茶库·茶品图鉴、Tea Community、Teaco 复盘）提出优化，确认执行 P0 三项 A+B+C
+- 变更：
+  - `frontend/src/components/TeaCard.vue`：卡片去框化 —— 图片独立 `radius-lg` 圆角容器，信息区去掉白底与边框，改为两行（茶名 + `茶类色圆点 · 产地 · ♡ 收藏数`）；hover 改为图片 `scale(1.04)` + 茶名转 `--color-primary`，移除背景/边框/阴影变化；紧凑模式使用 `--text-body` / `--text-caption`；`prefers-reduced-motion` 下关闭过渡
+  - `frontend/src/views/HomeView.vue`：Hero 下方新增统计带（已收录茶品数 / 六大茶类 / 覆盖产地数），数字使用既有 `CountUp`；数据取自 `teaStore.categories` 汇总与 `fetchOrigins()`，未新增接口；移动端隐藏分隔线
+  - `frontend/src/views/TeaListView.vue`：筛选区由「面包屑 → 5 组筛选 → 已选条 → 排序栏」改为单行工具条（茶类 chips 常显 + 「筛选」按钮带高级条件数量角标 + 排序下拉），产地 / 季节 / 发酵 / 价格 / 组合方式折叠进 `filter-panel`，默认收起、命中高级条件时自动展开；原排序栏收敛为一行结果数；骨架屏同步去框化
+  - 文档：`docs/design/DESIGN_SYSTEM.md` §4.3 列表页卡片、§4.6 筛选面板；`docs/design/PAGE_SPECS.md` P1 统计带、P2 筛选工具条 / 结果数 / 卡片网格
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run typecheck | 通过 | vue-tsc 无错误 |
+  | npm run lint | 通过 | 无告警 |
+  | npm run format:check | 通过 | Prettier 全部合规 |
+  | npm run test:run | 通过 | 11 文件 / 82 用例，无回归 |
+  | npm run build | 通过 | 生产构建成功（仅既存 element-plus chunk >500kB 提示） |
+  | python scripts/check_frontend.py | 通过 | 历史遗留 0 项，无硬编码 HEX |
+  | 浏览器冒烟（`/`） | 通过 | 统计带渲染 `211 款茶品已收录 / 6 大茶类体系 / 42 个产地覆盖`；599px 视口无溢出 |
+  | 浏览器冒烟（`/teas`） | 通过 | 工具条显示「筛选 / 最新上架」；面板默认 `display:none`、`aria-expanded=false`，点击后 `display:flex`、`aria-expanded=true`、含 5 个筛选分组；卡片元信息为 `黄茶 · 浙江 丽水 缙云 · ♡ 1,444` |
+
+- 未验证 / 遗留：
+  - 环境浏览器视口固定约 599px，桌面 ≥1024px 的三列网格与工具条单行布局仅通过 CSS 推断，未做实机截图复验
+  - 收藏按钮点击与 Toast 未逐项复测（逻辑未改动，仅容器层级随去框化调整）
+  - 本次未提交、未推送，等待用户指令
+- 回滚方式：回退 `TeaCard.vue` / `HomeView.vue` / `TeaListView.vue` 与两份文档即可，无数据与契约影响
+
+## 2026-11-12 前端视觉优化 P1：首页引导入口 + 茶类卡升级
+
+- 任务编号：TASK-20261112-05
+- 分级：B
+- 判定理由：首页信息架构增加一块引导区（不改路由、不改接口、不改筛选逻辑，仅复用既有查询参数），茶类卡为纯视觉替换
+- 变更：
+  - `frontend/src/views/HomeView.vue`
+    - 新增「引导入口」区块：3 张 guide-card（序号 + 意图标题 + 一行说明 + hover 箭头），位于统计带与六大茶类之间
+      - 新手入门 → `?fermentation=不发酵,微发酵`
+      - `{当季}正当时` → `?season={当季}`，当季由当前月份推导（3-5 春茶 / 6-8 夏茶 / 9-11 秋茶 / 12-2 冬茶）
+      - 六大茶类对比 → `/compare`
+    - 六大茶类卡升级：emoji 图标替换为 40px 茶类色圆形色块（`--cat-color` + 内描边避免白茶色过浅），新增英文小标（GREEN TEA / WHITE TEA / YELLOW TEA / BLACK TEA / OOLONG TEA / DARK TEA），数量保留 CountUp
+  - 文档：`docs/design/PAGE_SPECS.md` P1 区块列表新增「引导入口」行，更新「六大茶类入口」行
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run typecheck | 通过 | 无错误 |
+  | npm run lint | 通过 | 无告警 |
+  | npm run format:check | 通过 | 合规 |
+  | npm run test:run | 通过 | 82 用例无回归 |
+  | npm run build | 通过 | 构建成功 |
+  | python scripts/check_frontend.py | 通过 | 无硬编码 HEX（色块走 `--cat-color`） |
+  | 浏览器冒烟（`/`） | 通过 | 三张 guide-card 渲染正常，href 分别为 `?fermentation=不发酵,微发酵`、`?season=秋茶`、`/compare`；茶类卡显示 `绿茶 GREEN TEA 66 款已收录` 等（CountUp 需滚入视口后触发，属既有行为） |
+  | 浏览器冒烟（`/teas?fermentation=不发酵,微发酵`） | 通过 | 面板自动展开，角标 `2`，两个 chip 命中，结果 100 款 |
+  | 浏览器冒烟（`/teas?season=秋茶`） | 通过 | 面板自动展开，角标 `1`，结果 3 款 |
+
+- 观察 / 遗留：
+  - 种子数据中秋茶仅 3 款，`秋茶正当时` 入口的落地面偏空；如需更好的第一印象，可在补充数据后维持，或将该入口改为春茶 / 产地维度（需用户确认）
+  - 桌面 ≥1024px 仅做 CSS 推断，未实机截图复验
+  - 本次未提交、未推送
+- 回滚方式：回退 `HomeView.vue` 与 `PAGE_SPECS.md` 对应两行即可
+
+## 2026-11-12 首页搜索入口去重
+
+- 任务编号：TASK-20261112-06
+- 分级：A
+- 判定理由：纯展示层调整，无契约、数据、路由、业务规则变化
+- 问题：首页在 ≥768px 下同时出现页头搜索框与 Hero 搜索框，重复且有歧义
+- 变更：
+  - `frontend/src/views/HomeView.vue`：`@media (min-width: 768px)` 下隐藏 `.hero__search`
+  - 保留策略：≥768px 只用页头搜索框；<768px 页头搜索本身被隐藏（`AppHeader` `max-width:767px` 规则），因此 Hero 搜索保留，保证移动端始终有搜索入口
+  - 文档：`docs/design/PAGE_SPECS.md` P1 Hero 行补充显示条件
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run lint | 通过 | 无告警 |
+  | npm run format:check | 通过 | 合规 |
+  | npm run build | 通过 | 构建成功 |
+  | 浏览器冒烟（599px） | 通过 | 实测 `window.innerWidth=599`：`.app-header__search` 计算样式 `display:none` 且不可见，`.hero__search` `display:block` 且可见 —— 可见搜索入口仅 1 个 |
+
+- 未验证：≥768px 下的隐藏效果未做桌面视口实机截图（当前浏览器视图宽度固定 599px，无视口调整能力）；该分支仅由 `@media (min-width: 768px)` 规则推断，与 `<768px` 分支互斥、无断点缝隙
+- 回滚方式：删除 `@media (min-width: 768px) { .hero__search { display: none } }` 即可
+
+## 2026-11-12 首页 Hero 副标题可读性提升
+
+- 任务编号：TASK-20261112-07
+- 分级：A
+- 判定理由：纯展示层调整（单文件 CSS），无契约、数据、路由、业务规则与组件结构变化
+- 需求来源：用户确认「Hero 文字对比度」为下一项优化；同轮确认「秋茶正当时」入口**保持现状**
+- 方案取舍：
+  - 原提议为「Hero 底部加渐变蒙层」，**放弃**：`build-log 2026-11-10「首页 Hero 遮罩割裂修正」` 已记录渐变 veil 与径向光斑都会形成肉眼可辨的图层边界（斜向明暗分界 / 矩形提亮边），属已否决方案，不得重试
+  - 改为纯文字层增强，不新增任何覆盖图层，从而不产生新的分界风险
+- 变更：`frontend/src/views/HomeView.vue` `.hero__subtitle`
+  - `opacity: 0.95 → 1`：半透明会让深色字透出背景照片、整行"灰化"
+  - `font-weight: 400 → 500`：移动端副标题降为 `--text-body` 后笔画偏细
+  - 新增近距实心光晕 `0 0 4px rgba(250,248,245,0.95)`，原有 `9px / 18px` 远距光晕保留用于深色背景兜底
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run lint | 通过 | 无告警 |
+  | npm run format:check | 通过 | 合规（`prettier --write` 后复跑） |
+  | npm run typecheck | 通过 | 无类型错误 |
+  | 浏览器冒烟（599px） | 通过 | 截图目检：副标题笔画由发灰变为实心，压在茶园/天空交界处仍可读 |
+  | 6 张背景亮度采样 | 已测 | 文字带平均亮度 green 123 / white 133 / yellow 126 / oolong 128 / red 112 / dark 108（0–255），最暗为 `banner-dark` |
+
+- 未验证：未在 ≥768px 桌面视口实机查看（当前浏览器视图宽度固定 599px）；6 张背景仅做了亮度采样，未逐张截图目检最深色背景下的实际观感
+- 回滚方式：还原 `.hero__subtitle` 的 `opacity` / `font-weight` / `text-shadow` 三条声明
+
+## 2026-11-12 借鉴三个参考站点优化首页排版
+
+- 任务编号：TASK-20261112-08
+- 分级：A
+- 判定理由：纯展示层（模板结构 + 局部 CSS），无契约、数据、路由、业务规则变化
+- 参考来源（用户指定）：
+  - `meoo.com/explore/61613`（兴国红色文旅）：深色压边 Hero + 双行大标题、第二行落强调色
+  - `meoo.com/explore/452020`（雨未停—苍苔遗闻）：大衬线标题 + 宽字距英文 + `标签/值` 规格行 + 发丝分割线
+  - `meoo.com/explore/223214`（地质品牌 Hero 页）：居中对称排版，kicker 两侧发丝线 + 衬线主标题 + 细分隔
+- 落地取舍：只借鉴**排版语言**，不搬深色/沉浸式场景（与本项目「清新水墨 × 暖米白」冲突），也不重试 `2026-11-10` 已被否决的渐变遮罩
+- 变更（均在 `frontend/src/views/HomeView.vue`）：
+  1. Hero 主标题拆为双行：`一杯茶的` / `千种风味`，第二行 `.hero__title-accent` 落 `--color-primary-dark`；整体仍为单个 `h1`
+  2. 新增 `.section-kicker`：宽字距英文小标（0.24em、uppercase、`--text-caption`），居中区块两侧 32px 发丝线
+  3. 区块标题去 emoji：「🔥 热门推荐」→ `POPULAR TEAS` + 热门推荐；「📖 茶知识 · 小贴士」→ `TEA NOTES` + 茶知识 · 小贴士
+  4. `.section-header` 由 `align-items: baseline` 改为 `flex-end`，新增 `.section-header__main` 纵向堆叠 kicker 与标题
+- 文档同步：`PAGE_SPECS.md` P1 Hero 行改为双行标题 + 新增区块标题规范说明；`DESIGN_SYSTEM.md` 新增 §4.7 区块标题、§4.8 双行主标题
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run lint | 通过 | 无告警 |
+  | npm run format:check | 通过 | 合规 |
+  | npm run typecheck | 通过 | 无类型错误 |
+  | npm run build | 通过 | 成功，仅既存 element-plus chunk >500kB 提示 |
+  | 浏览器冒烟（599px） | 通过 | 实测 `.hero__title` 子元素 2 个、第二行计算色 `rgb(107,87,64)`；`SIX CATEGORIES` kicker 伪元素宽 32px；`POPULAR TEAS` 与「热门推荐」同时渲染、动作链接右对齐 |
+
+- 未验证：≥768px 桌面视口未实机查看（浏览器视图宽度固定 599px）；未做轮播切换后其他 5 张背景下的双行标题对比度目检
+- 可回滚：还原 `HomeView.vue` 的三处模板与 `.section-kicker` / `.hero__title-accent` / `.section-header__main` 样式块
+
+## 2026-11-12 首页沉浸式首屏（Hero Scene）
+
+- 任务编号：TASK-20261112-09
+- 分级：B（用户明确要求，方案当场说明后实施）
+- 判定理由：涉及首页首屏结构与页头透明/实底切换，视觉行为变化较大；不改契约、数据、路由与业务规则
+- 参考来源：`meoo.com/explore/61613`（深色压边 + 大标题）、`meoo.com/explore/223214`（居中对称 + kicker）、`meoo.com/explore/452020`（大衬线 + 宽字距英文）
+- 与历史否决项的区分（重要）：
+  - `2026-11-10` 否决的是"低透明度斜向渐变 veil + 矩形径向光斑"，问题是**边界肉眼可见**
+  - 本次为**竖向、按高度分段的暗色压边**（顶部 0.62 / 中段 0.18 / 72% 0.52 / 底部 0.86），承担明确的"页头可读 + 标题托底"职责，中段主动留亮保持照片清晰；599px 截图目检无可见分界带
+- 变更：
+  - `frontend/src/views/HomeView.vue`
+    - `.hero` 改为满屏（`min-height: max(560px, calc(100vh - 64px))`）、flex 居中、背景色 `--color-bg-hero`
+    - 新增 `.hero__bg-layer`（包住 `HeroBackground`，上探 20% 供视差）与 `.hero__scrim`（暗色压边层）
+    - `.hero__badge`（白色胶囊 + 🍵）替换为 `.hero__kicker`（两侧 28px 发丝线的宽字距小标）
+    - 标题改白字 + 暗色投影，第二行 `--color-tea-yellow`；副标题改 `rgba(255,255,255,0.9)` + 暗色投影
+    - 新增 `.hero__cue`「向下探索」+ 呼吸竖线
+    - 新增滚动视差：`requestAnimationFrame` 直改 style（不触发响应式重渲染），背景 `scroll × 0.28`、内容 `scroll × -0.06` 且按 `scroll/360` 淡出、提示按 `scroll/160` 淡出；`prefers-reduced-motion` 下整体不启动
+    - `.home-page` 去掉 `padding-top`（Hero 顶到视口顶部），移动端同步移除 56px 顶距
+  - `frontend/src/components/AppHeader.vue`
+    - 新增 `overHero` 态：`route.name === 'home'` 且 `scrollY < hero 高度 - 80` 时加 `.app-header--over-hero`（透明背景、无分隔线、文字与搜索框转白），滚过 Hero 自动转纯白；`nextTick` 处理路由切换后的 DOM 时序
+- 文档同步：`PAGE_SPECS.md` P1 导航栏与 Hero 两行重写；`DESIGN_SYSTEM.md` 新增 §4.9 沉浸式首屏
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run lint | 通过 | 无告警 |
+  | npm run format:check | 通过 | 合规 |
+  | npm run typecheck | 通过 | 无类型错误 |
+  | npm run build | 通过 | 成功，仅既存 element-plus chunk >500kB 提示 |
+  | npm run test:run | 通过 | 11 个文件 / 82 条用例全部通过 |
+  | 浏览器冒烟（599px，scroll=0） | 通过 | `hero.height=576`、`hero.top=0`；页头 `backgroundColor=rgba(0,0,0,0)` 且带 `app-header--over-hero`；kicker 文本正常；页面无横向溢出（`scrollWidth 584 < innerWidth 599`） |
+  | 浏览器冒烟（599px，scroll=300） | 通过 | 背景 `translate3d(0,84px,0)`、内容 `opacity 0.2857` / `translate3d(0,-18px,0)`，视差与淡出生效 |
+  | 浏览器冒烟（599px，scroll=620） | 通过 | 页头类名回落为 `app-header`，背景 `rgb(255,255,255)`，说明滚过 Hero 后转实底 |
+  | 列表页回归 | 通过 | `/teas` 页头无 `over-hero` 类、背景纯白，透明态未泄漏到其他页面 |
+
+- 未验证：≥768px 桌面视口未实机查看（浏览器视图宽度固定 599px）；未逐张轮播切换检查 6 张背景在暗色压边下的观感；未做 Lighthouse 对比度量化
+- 可回滚：还原 `HomeView.vue` Hero 结构（`.hero__bg-layer` / `.hero__scrim` / `.hero__cue` 及视差脚本）与 `AppHeader.vue` 的 `overHero` 逻辑，并把 `.home-page` 的 `padding-top` 改回 64px / 56px
+
+## 2026-11-12 首页统计带与 Hero 衔接（消除硬切边）
+
+- 任务编号：TASK-20261112-10
+- 分级：A
+- 判定理由：纯展示层（单文件模板结构 + 局部 CSS），无契约、数据、路由、业务规则变化
+- 问题来源：用户上传截图指出「这个放在这里很突兀」，经确认指**统计带**——Hero 深色底直接切到浅色横条，小灰字孤立悬在页面底色上，与沉浸式首屏前后割裂
+- 方案：统计带由「文档流横条」改为**悬浮玻璃面板**，负上边距 -34px 上探压住 Hero 底边，横跨深浅交界，视觉上把两段缝在一起
+  - 数值由 `--text-h2` 提升到 `--text-h1`（衬线、`--color-primary-dark`），单位说明由 `--color-text-muted` 提到 `--color-text-secondary`，解决"小灰字孤立"
+  - `backdrop-filter: blur(10px)` + `rgba(255,255,255,0.94)`：压在照片上透出茶山，落在页面底色上与正文无缝
+  - 阴影只向下投射（`0 22px 44px -30px`），避免顶部灰边形成新的分界线（沿用 `2026-11-10` 否决项的教训：不做会形成可见边界的覆盖层）
+  - 滚动提示上移（`bottom: 32px → 46px`，竖线 `44px → 30px`），与面板顶边留 12px 空隙
+- 变更：
+  - `frontend/src/views/HomeView.vue`
+    - 模板：`.stats` 内改为 `.container > .stats__inner`（原 `.container` 与 `.stats__inner` 同元素，卡片内边距会与容器内边距互相覆盖）
+    - CSS：`.stats` 新增 `position: relative; z-index: 2; margin-top: -34px`；`.stats__inner` 新增 `max-width: 760px`、`padding: 22px 40px`、`border-radius: var(--radius-lg)`、玻璃底色、向下投影、`backdrop-filter`；`.stats__value` 字号与行高调整；`.stats__label` 提色
+    - 移动端（<640px）：`gap: 12px 26px`、`padding: 18px 20px`，保留隐藏分隔线与 `--text-h3` 降级
+    - `.hero__cue` / `.hero__cue-line`：改为 `bottom: 46px` / `height: 30px`
+- 文档同步：`PAGE_SPECS.md` P1 统计带行补充玻璃面板上探描述；`DESIGN_SYSTEM.md` 新增 §4.10 统计带（Stat Strip），§4.9 滚动提示竖线由 44px 更正为 30px
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run lint | 通过 | 无告警 |
+  | npx prettier --check src/views/HomeView.vue | 通过 | 合规 |
+  | npm run typecheck | 通过 | 无类型错误 |
+  | npm run build | 通过 | 成功，仅既存 element-plus chunk >500kB 提示 |
+  | npm run test:run | 通过 | 11 个文件 / 82 条用例全部通过 |
+  | 浏览器冒烟（599px，scroll=0） | 通过 | `innerWidth=599`、`heroBottom=576`、`cardTop=542` → 上探 34px；`cardW=552`、`cardH=59.7`、`borderRadius=12px`、`backgroundColor=rgba(255,255,255,0.94)`、`backdropFilter=blur(10px)`；面板在下缘露出一截，形成"下探"暗示 |
+  | 浏览器冒烟（599px，scroll=430） | 通过 | 截图目检：深色首屏与浅色正文之间不再有硬切边，面板骑在交界处；提示竖线底边到面板顶边实测间距 12px，无重叠 |
+
+- 未验证：≥768px 桌面视口未实机查看（浏览器视图宽度固定 599px，无视口调整能力）；面板在 6 张轮播背景下的毛玻璃观感未逐张目检；`backdrop-filter` 在低版本浏览器降级为纯白 0.94 底色，未做 Safari 实机验证
+- 可回滚：还原 `.stats` / `.stats__inner` / `.stats__value` / `.stats__label` 样式块与 `.hero__cue` 的 `bottom` / `height`，并把模板 `.container > .stats__inner` 改回 `.container.stats__inner`
+- **后续（同日）**：用户反馈统计带进入首屏后显得拥挤，本任务按用户要求整体回退，见 TASK-20261112-11
+
+## 2026-11-12 统计带移出首屏 + Hero 文字排版优化
+
+- 任务编号：TASK-20261112-11
+- 分级：A
+- 判定理由：纯展示层（模板顺序 + 局部 CSS），无契约、数据、路由、业务规则变化
+- 需求来源：用户「把这个移到下一页吧，就要修改之前的那样，首页就把中间的文字排版优化一下」
+  - 「这个」= 统计带；「移到下一页」= 移出首屏、在第二屏出现；「修改之前的那样」= 恢复 TASK-20261112-10 之前的朴素横条
+- 变更（`frontend/src/views/HomeView.vue`）：
+  1. **回退 TASK-10**：`.stats` 恢复 `padding: 28px 0 4px`（去负边距 / `z-index`）；`.stats__inner` 恢复普通 flex 横排（去 `max-width` / 卡片内边距 / 圆角 / 玻璃底色 / 投影 / `backdrop-filter`）；数值回 `--text-h2`、标签回 `--color-text-muted`；`.hero__cue` 恢复 `bottom: 32px`、竖线 `44px`
+  2. **位置下移**：统计带由 `Hero → 统计带 → 引导入口` 改为 `Hero → 引导入口 → 统计带 → 六大茶类`，首屏只留 Hero，统计带在第二屏出现
+  3. **Hero 文字排版优化**：
+     - `.hero__title`：`line-height 1.2 → 1.18`、新增 `letter-spacing: 0.04em`、下间距 `18px → 20px`
+     - `.hero__title-accent`：新增 `margin-top: 6px`（两行之间留一口气）与 `letter-spacing: 0.12em`（暖金行更舒展）
+     - `.hero__subtitle`：新增 `line-height: 1.8`、`letter-spacing: 0.04em`；`max-width 600px → 520px` 收窄成一行舒适行长；下间距 `40px → 42px`
+- 文档同步：`PAGE_SPECS.md` P1 区块表把「统计带」行移到「引导入口」之后并注明不进入首屏；`DESIGN_SYSTEM.md` §4.8 补双行标题的行距/字距规则，删除 §4.10 统计带，§4.9 滚动提示竖线改回 44px
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run lint | 通过 | 无告警 |
+  | npx prettier --check src/views/HomeView.vue | 通过 | 合规 |
+  | npm run typecheck | 通过 | 无类型错误 |
+  | npm run build | 通过 | 成功，仅既存 element-plus chunk >500kB 提示 |
+  | npm run test:run | 通过 | 11 个文件 / 82 条用例全部通过 |
+  | 浏览器冒烟（599px，scroll=0） | 通过 | 截图目检：首屏仅 Hero（kicker / 双行标题 / 副标题 / 搜索框 / 向下探索），统计带不再出现在首屏；标题两行分色与字距生效 |
+  | 浏览器冒烟（599px，scroll=760） | 通过 | 截图目检：顺序为「引导入口 → 统计带 → 六大茶类」，统计带恢复朴素横排，分隔线在 <640px 隐藏 |
+
+- 未验证：≥768px 桌面视口未实机查看（浏览器视图宽度固定 599px）；未逐张轮播背景检查新字距下标题的实际观感
+- 可回滚：把统计带 `<section class="stats">` 移回 Hero 之后，并还原 `.hero__title` / `.hero__title-accent` / `.hero__subtitle` 三条新增声明
+- **后续（同日）**：用户要求回退到沉浸式场景第一版，本任务对新版文字排版的调整被撤销，见 TASK-20261112-12
+
+## 2026-11-12 回退到沉浸式首屏第一版
+
+- 任务编号：TASK-20261112-12
+- 分级：A
+- 判定理由：纯展示层回退，无契约、数据、路由、业务规则变化
+- 需求来源：用户「回退到让你改沉浸式场景的第一版」
+- 回退目标：`TASK-20261112-09` 交付时的首页状态（沉浸式首屏 + Hero 正下方朴素统计带 + 引导入口 → 六大茶类 …），即撤销 TASK-10 与 TASK-11 的全部改动
+- 变更（`frontend/src/views/HomeView.vue`）：
+  1. 统计带移回 Hero 正下方（`Hero → 统计带 → 引导入口`），恢复 `<div class="container stats__inner">` 单层结构
+  2. `.stats` 保持 TASK-09 时的朴素横排（`padding: 28px 0 4px`、`gap: 32px`、数值 `--text-h2`、标签 `--color-text-muted`）
+  3. `.hero__title` 还原：`line-height 1.2`、去掉 `letter-spacing`、下间距回 `18px`
+  4. `.hero__title-accent` 还原：仅保留 `color: var(--color-tea-yellow)`，去掉 `margin-top` 与 `letter-spacing`
+  5. `.hero__subtitle` 还原：`max-width: 600px`、`margin: 0 auto 40px`，去掉 `line-height` / `letter-spacing`
+  6. `.hero__cue` 保持 `bottom: 32px`、竖线 `44px`（TASK-10 曾改，TASK-11 已恢复）
+- 文档同步：`PAGE_SPECS.md` 统计带行移回 Hero 之后并去掉"不进入首屏"描述；`DESIGN_SYSTEM.md` §4.8 双行主标题还原为 TASK-08 版本文案
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run lint | 通过 | 无告警 |
+  | npx prettier --check src/views/HomeView.vue | 通过 | 合规 |
+  | npm run typecheck | 通过 | 无类型错误 |
+  | npm run build | 通过 | 成功，仅既存 element-plus chunk >500kB 提示 |
+  | npm run test:run | 通过 | 11 个文件 / 82 条用例全部通过 |
+  | 浏览器冒烟（599px，scroll=0） | 通过 | 截图目检：满屏 Hero（kicker / 双行标题 / 副标题 / 搜索框 / 向下探索），统计带紧接 Hero 在页面底缘露出，与 TASK-09 交付时一致 |
+
+- 未验证：≥768px 桌面视口未实机查看（浏览器视图宽度固定 599px）；未逐张轮播背景检查标题观感
+- 可回滚：按 TASK-11 记录重新应用「统计带移出首屏 + 文字排版优化」即可
+
+## 2026-11-12 其余前台页面适配沉浸式视觉体系
+
+- 任务编号：TASK-20261112-13
+- 分级：A
+- 判定理由：纯展示层（模板小标 + 局部 CSS + 全局工具类），无契约、数据、路由、业务规则变化
+- 需求来源：用户「把其他的页面也适配优化一下」
+- 问题（改前调查结论）：
+  - 投稿页 / 我的提交页 `padding-top: 32px`，**内容被 64px 固定页头压住**；两页均未定义 `.container`，内容贴着视口左边；两页 h1 未使用 `--font-display`
+  - 其余一级页面 `padding-top: 64px`（等于页头高度，无呼吸空间），移动端 56px；篇幅类页面（茶文化列表/详情）已是 88/76，口径不一致
+  - 全站仅首页有 kicker，其余页面标题层级单一；面包屑 `/` 与 `›` 混用
+- 变更：
+  1. `frontend/src/style.css` 新增全局 `.page-kicker`（text-caption / letter-spacing 0.24em / uppercase / text-muted）与 `.page-kicker--center`（两侧 32px × 1px 发丝线）
+  2. 顶部留白统一 88px（≤767px 76px）：`TeaListView` / `CompareView` / `TeaDetailView` / `MyListView` / `ProfileView` / `ShareView` / `ContributeView` / `MyContributionsView`
+  3. `ContributeView` / `MyContributionsView` 补齐 `.container`（1200 / 32px，≤1023px 24px，≤767px 16px）；h1 补 `font-family: var(--font-display)`；投稿页标题/说明包进 `.contribute-hero__main` 以免 kicker 挤进 flex 行
+  4. 新增 kicker：对比页「Side by Side」（居中带线）、茶文化列表「Tea Culture」、茶文化详情「Article」、茶品详情「Tea Detail」、个人中心「Profile」、投稿「Contribute」、我的提交「My Contributions」；我的清单保留原页内眉标、分享页保留徽章行，不叠加 kicker
+  5. 面包屑分隔符 `ContentListView` / `ContentDetailView` 的 `/` 统一为 `›`
+  6. 茶品列表页保持原型结构（面包屑 + 工具条），未新增 h1，仅调整顶部留白
+- 文档同步：`DESIGN_SYSTEM.md` 新增 §4.10 一级页面标题区；`PAGE_SPECS.md` 新增「十三、前台一级页面统一标题区」表
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | npm run lint | 通过 | 无告警 |
+  | npx prettier --check "src/**/*.{vue,css,ts}" | 通过 | 全部符合格式 |
+  | npm run typecheck | 通过 | 无类型错误 |
+  | npm run build | 通过 | 成功，仅既存 element-plus chunk >500kB 提示 |
+  | npm run test:run | 通过 | 11 个文件 / 82 条用例全部通过 |
+
+- 未验证：**未做浏览器目检** —— 本轮会话无可用浏览器工具（`browser_*` 未注册），仅通过静态检查与构建验证；投稿页解遮挡、各页 kicker 观感、599px 下换行均需人工过目
+- 可回滚：删除 `.page-kicker` 两条全局样式；各页 `padding-top` 还原为 64/56（投稿与我的提交还原为 `32px 0 64px` 并删除新增 `.container`）；移除各页新增 `<p class="page-kicker">` 与 `font-family` 声明；面包屑 `›` 还原为 `/`
+

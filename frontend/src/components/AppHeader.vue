@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useToastStore } from '@/stores/toast'
@@ -35,19 +35,34 @@ function onDocumentKeydown(event: KeyboardEvent) {
   }
 }
 
+/** 首页首屏：页头以透明态浮在 Hero 背景上，滚过 Hero 后转实底 */
+const overHero = ref(false)
+let heroEl: HTMLElement | null = null
+
+function updateHeaderTone() {
+  heroEl = router.currentRoute.value.name === 'home' ? document.querySelector('.hero') : null
+  overHero.value = !!heroEl && window.scrollY < heroEl.offsetHeight - 80
+}
+
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
   document.addEventListener('keydown', onDocumentKeydown)
+  window.addEventListener('scroll', updateHeaderTone, { passive: true })
+  void nextTick(updateHeaderTone)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
   document.removeEventListener('keydown', onDocumentKeydown)
+  window.removeEventListener('scroll', updateHeaderTone)
 })
 
 watch(
   () => router.currentRoute.value.fullPath,
-  () => closeDropdown(),
+  () => {
+    closeDropdown()
+    void nextTick(updateHeaderTone)
+  },
 )
 
 /** 无头像时的首字母占位（取用户名首字符） */
@@ -68,7 +83,7 @@ async function onLogout() {
 </script>
 
 <template>
-  <header class="app-header">
+  <header class="app-header" :class="{ 'app-header--over-hero': overHero }">
     <div class="app-header__inner">
       <RouterLink to="/" class="app-header__brand" aria-label="返回首页">
         <svg class="app-header__logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -176,6 +191,56 @@ async function onLogout() {
   height: 64px;
   background: var(--color-bg-surface);
   border-bottom: 1px solid var(--color-border);
+  transition:
+    background-color var(--motion-duration-base) var(--motion-ease),
+    border-color var(--motion-duration-base) var(--motion-ease);
+}
+
+/* 首页首屏透明态：页头浮在 Hero 背景上，文字与控件转白 */
+.app-header--over-hero {
+  background: transparent;
+  border-bottom-color: transparent;
+}
+
+.app-header--over-hero .app-header__logo,
+.app-header--over-hero .app-header__brand-text,
+.app-header--over-hero .app-header__login {
+  color: var(--color-text-inverse);
+}
+
+.app-header--over-hero .app-header__link,
+.app-header--over-hero .app-header__user,
+.app-header--over-hero .app-header__logout {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.app-header--over-hero .app-header__link:hover,
+.app-header--over-hero .app-header__link.router-link-active {
+  color: var(--color-text-inverse);
+}
+
+.app-header--over-hero .app-header__link.router-link-active::after {
+  background: var(--color-text-inverse);
+}
+
+.app-header--over-hero .app-header__search {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.app-header--over-hero .app-header__search-input,
+.app-header--over-hero .app-header__search-btn {
+  color: var(--color-text-inverse);
+}
+
+.app-header--over-hero .app-header__search-input::placeholder {
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.app-header--over-hero .app-header__avatar--placeholder {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--color-text-inverse);
+  border-color: rgba(255, 255, 255, 0.35);
 }
 
 .app-header__inner {

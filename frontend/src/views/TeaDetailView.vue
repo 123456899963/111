@@ -6,6 +6,8 @@ import AppFooter from '@/components/AppFooter.vue'
 import CategoryTag from '@/components/CategoryTag.vue'
 import TeaCard from '@/components/TeaCard.vue'
 import FavoriteButton from '@/components/FavoriteButton.vue'
+import CountUp from '@/components/effects/CountUp.vue'
+import RevealText from '@/components/effects/RevealText.vue'
 import { useUserStore } from '@/stores/user'
 import { useToastStore } from '@/stores/toast'
 import { getHotTeas, getRelatedTeas, getTeaDetail } from '@/api/teas'
@@ -149,8 +151,6 @@ function toggleGuide() {
 
   guideRafId = requestAnimationFrame(step)
 }
-
-const favoriteText = computed(() => favoriteCount.value.toLocaleString('zh-CN'))
 
 /** 购买入口：仅按茶名跳转淘宝搜索，不接入交易（茶名为空时不渲染） */
 const purchaseUrl = computed(() => (tea.value ? buildTaobaoSearchUrl(tea.value.name) : null))
@@ -361,12 +361,13 @@ function retry() {
           </div>
 
           <div class="detail-header__info">
+            <p class="page-kicker">Tea Detail</p>
             <div class="detail-header__meta-top">
               <span v-if="tea.season">{{ tea.season }}</span>
-              <span>♡ {{ favoriteText }} 人收藏</span>
+              <span>♡ <CountUp :value="favoriteCount" /> 人收藏</span>
             </div>
             <div class="detail-header__title-row">
-              <h1 class="detail-header__name">{{ tea.name }}</h1>
+              <RevealText as="h1" class="detail-header__name" :text="tea.name" />
 
               <!-- 购买入口：茶名右侧 -->
               <div v-if="purchaseUrl" class="purchase-entry">
@@ -599,7 +600,7 @@ function retry() {
 
 <style scoped>
 .detail-page {
-  padding-top: 64px;
+  padding-top: 88px;
   padding-bottom: 48px;
 }
 
@@ -617,7 +618,7 @@ function retry() {
 
 @media (max-width: 767px) {
   .detail-page {
-    padding-top: 56px;
+    padding-top: 76px;
   }
   .container {
     padding: 0 16px;

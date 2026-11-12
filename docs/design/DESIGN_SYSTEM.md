@@ -230,21 +230,21 @@ focus: 阴影加深为 0 4px 20px rgba(0,0,0,0.12)
 
 ```
 尺寸: 响应式网格 — 桌面 3 列 / 平板 2 列 / 移动 1 列
-内边距: p-0（图片无内边距），信息区 p-4
-圆角: rounded-xl (16px)
-背景: bg-bg-surface
-边框: 1px solid border (#EDEBE8)
-图片区: 顶部 16:10 比例，object-cover，上圆角与卡片一致
-信息区: 图片下方，含以下内容：
-  - 茶品名称: text-h3 (18px)，font-semibold，text-text-primary
-  - 产地 + 茶类 tag: text-small (14px)，text-text-secondary；茶类 tag 为小徽章（圆角 sm，半透明背景）
-  - 收藏数: text-small，text-text-muted，左侧 ❤️ 图标
-  - 总高度不超过 340px（桌面）/ 自适应（移动）
+内边距: p-0（图片无内边距），信息区 padding 12px 2px 0（无白底）
+圆角: rounded-lg (12px) —— 仅图片区圆角，信息区不建容器
+背景: transparent（直接落在 bg-bg-page 上）
+边框: 无（去框化，靠图片圆角与留白分隔）
+图片区: 顶部 16:10 比例，object-cover，四角圆角
+信息区: 图片下方两行，含以下内容：
+  - 第一行 茶品名称: text-h3 (18px)，font-semibold，text-text-primary，单行溢出省略
+  - 第二行 元信息（一行收口）: text-small (14px)，text-text-muted
+    `● 茶类色圆点 · 产地 · ♡ 收藏数`，产地可省略号截断，收藏数右对齐
+  - 不再单独展示茶类徽章与季节，避免信息分散
 
 hover 状态:
-  - 卡片整体 translateY(-2px)
-  - 阴影出现: box-shadow 0 8px 24px rgba(0,0,0,0.06)
-  - 边框色加深至 border-dark (#D5D0CA)
+  - 图片 scale(1.04)，过渡使用 --motion-duration-slow / --motion-ease
+  - 茶名变为 text-primary (#8B7355)
+  - 无阴影、无 translateY
 ```
 
 #### 首页热门推荐卡（横向滚动）
@@ -364,13 +364,63 @@ hover: bg-bg-muted
 ### 4.6 筛选面板
 
 ```
-位置: 列表页顶部，紧贴面包屑下方
-布局: 横向排列筛选维度（桌面）/ 可折叠抽屉（移动）
+位置: 列表页顶部，紧贴面包屑下方的工具条
+布局: 单行工具条 —— 左侧六大茶类 chips，右侧「筛选」按钮 + 排序下拉；产地 / 季节 / 发酵 / 价格折叠进展开面板（默认收起，有高级筛选时自动展开）
+筛选按钮: 高 36px，rounded-md，1px border-dark；带高级筛选数量角标（pill，bg-primary）与展开箭头
+展开面板: bg-bg-surface + 1px border + rounded-lg，内边距 20px，内部维度横向排列
 每个维度标签: text-caption + 对应维度枚举 chips
 已选条件区:
   - 位置: 筛选面板下方或右侧
   - 样式: 小尺寸 pill（rounded-full, h-28px），带 × 移除按钮
   - "清除全部"按钮: 最右侧，text-small text-text-link
+```
+
+### 4.7 区块标题（Section Kicker）
+
+```
+结构: 英文小标（kicker） + 中文标题（衬线） + 可选一行说明
+kicker: text-caption，letter-spacing 0.24em，text-transform uppercase，text-text-muted
+居中区块: kicker 两侧各 32px × 1px 发丝线（border-dark），与文字间距 12px
+左对齐区块: kicker 左对齐、不带发丝线，标题右侧保留动作链接（查看全部 / 探索更多）
+间距: kicker 与中文标题 6–12px，标题与说明 8px
+禁止: 在中文标题中使用 emoji 前缀（表情符号不参与新中式视觉体系）
+```
+
+### 4.8 双行主标题
+
+```
+用途: 首页 Hero 等强视觉区块
+规则: 第一行 text-primary，第二行落 color-primary-dark，两行各自成块（display:block）
+行高: 1.2；字号沿用 text-display（移动端 28px）
+说明: 第二行为语义延伸而非新信息，不得拆成两个语义层级（整体仍是一个 h1）
+```
+
+### 4.9 沉浸式首屏（Hero Scene）
+
+```
+结构: 背景图层 / 暗色压边层 / 内容层 三层，内容层 z-index 最高
+背景: 铺满视口（min-height: max(560px, 100vh - 64px)），超出层高 20% 供视差下移
+压边: 竖向渐变，顶部 0.62 → 中段 0.18 → 72% 处 0.52 → 底部 0.86（茶褐黑 #201a14）
+      —— 中段必须留亮，避免整片压暗让照片发灰；不做斜向渐变，防止出现可见分界
+文字: 标题 text-inverse、第二行 tea-yellow；副标题 rgba(255,255,255,0.9)
+      —— 深色压边上不再使用白色描边光晕，改用暗色投影
+页头: 首屏透明态（背景透明、文字与控件转白），滚过 Hero 后转纯白态
+视差: 背景 translateY(scroll × 0.28)，内容 translateY(scroll × -0.06) 并按 scroll/360 淡出
+滚动提示: 底部居中小字 + 44px 竖线呼吸动画，滚动 160px 内淡出
+降级: prefers-reduced-motion 下关闭视差与呼吸动画，仅保留静态排版
+```
+
+### 4.10 一级页面标题区（Page Header）
+
+```
+适用范围: 首页之外的前台一级页面（列表 / 对比 / 详情 / 我的 / 分享 / 投稿）
+顶部留白: 固定页头 64px 之下再留 24px，即 padding-top 88px；≤767px 为 76px（页头 56px + 20px）
+         —— 全站一级页面统一，禁止再回落到 64px（紧贴页头）或 32px（被页头遮挡）
+结构: 英文小标（kicker） + 中文标题（衬线 font-display）+ 可选一行说明
+kicker: 全局类 .page-kicker（text-caption / letter-spacing 0.24em / uppercase / text-muted）
+居中区块: 追加 .page-kicker--center，两侧各 32px × 1px 发丝线，与文字间距 12px
+已有自带眉标或徽章的页面（我的清单 eyebrow、分享页 badges）不再叠加 kicker，避免双层小标
+面包屑: 统一使用「›」分隔，位于标题区之上
 ```
 
 ---

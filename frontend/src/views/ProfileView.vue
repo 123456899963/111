@@ -239,6 +239,7 @@ async function onChangePassword() {
         </div>
 
         <div class="profile-hero__info">
+          <p class="page-kicker">Profile</p>
           <div class="profile-hero__title-row">
             <h1 class="profile-hero__name">{{ userStore.user?.username }}</h1>
             <span class="role-tag" :class="{ 'role-tag--admin': userStore.isAdmin }">
@@ -495,7 +496,7 @@ async function onChangePassword() {
 
 <style scoped>
 .profile-page {
-  padding-top: 64px;
+  padding-top: 88px;
   padding-bottom: 48px;
   min-height: 100svh;
 }
@@ -1151,6 +1152,10 @@ async function onChangePassword() {
 }
 
 @media (max-width: 767px) {
+  .profile-page {
+    padding-top: 76px;
+  }
+
   .container {
     padding: 0 16px;
   }

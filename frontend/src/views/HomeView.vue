@@ -6,6 +6,9 @@ import AppFooter from '@/components/AppFooter.vue'
 import HeroBackground from '@/components/HeroBackground.vue'
 import TeaCard from '@/components/TeaCard.vue'
 import CategoryTag from '@/components/CategoryTag.vue'
+import CountUp from '@/components/effects/CountUp.vue'
+import RevealText from '@/components/effects/RevealText.vue'
+import SpotlightCard from '@/components/effects/SpotlightCard.vue'
 import { useTeaStore } from '@/stores/tea'
 import { useUserStore } from '@/stores/user'
 import {
@@ -23,13 +26,13 @@ const router = useRouter()
 const teaStore = useTeaStore()
 const userStore = useUserStore()
 
-const CATEGORY_EMOJI: Record<TeaCategory, string> = {
-  green: '🍃',
-  white: '🫖',
-  yellow: '🌼',
-  red: '☕',
-  oolong: '🍵',
-  dark: '🫗',
+const CATEGORY_EN: Record<TeaCategory, string> = {
+  green: 'GREEN TEA',
+  white: 'WHITE TEA',
+  yellow: 'YELLOW TEA',
+  red: 'BLACK TEA',
+  oolong: 'OOLONG TEA',
+  dark: 'DARK TEA',
 }
 
 const hotList = ref<TeaListItem[]>([])
@@ -38,6 +41,39 @@ const hotTrack = ref<HTMLElement | null>(null)
 const randomTea = ref<Tea | null>(null)
 const randomLoading = ref(true)
 const spinning = ref(false)
+
+/* 沉浸式 Hero：背景与内容以不同速率位移形成纵深，减少动态效果下完全静止 */
+const heroBgRef = ref<HTMLElement | null>(null)
+const heroContentRef = ref<HTMLElement | null>(null)
+const heroCueRef = ref<HTMLElement | null>(null)
+let heroFrame = 0
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+}
+
+function updateHeroDepth() {
+  heroFrame = 0
+  if (prefersReducedMotion()) return
+  const hero = heroBgRef.value?.parentElement
+  const offset = window.scrollY
+  if (!hero || offset > hero.offsetHeight) return
+  if (heroBgRef.value) {
+    heroBgRef.value.style.transform = `translate3d(0, ${offset * 0.28}px, 0)`
+  }
+  if (heroContentRef.value) {
+    heroContentRef.value.style.transform = `translate3d(0, ${offset * -0.06}px, 0)`
+    heroContentRef.value.style.opacity = String(Math.max(0, 1 - offset / 360))
+  }
+  if (heroCueRef.value) {
+    heroCueRef.value.style.opacity = String(Math.max(0, 1 - offset / 160))
+  }
+}
+
+function onHeroScroll() {
+  if (heroFrame) return
+  heroFrame = requestAnimationFrame(updateHeroDepth)
+}
 
 /** 登录用户展示个性化推荐（S16），游客保持随机发现 */
 const randomTitle = computed(() => (userStore.isLoggedIn ? '为你推荐' : '🎲 随机发现'))
@@ -62,10 +98,45 @@ const categoryCards = computed(() => {
   return TEA_CATEGORIES.map((category) => ({
     category,
     label: CATEGORY_LABELS[category],
-    emoji: CATEGORY_EMOJI[category],
+    en: CATEGORY_EN[category],
     count: countMap.get(category) ?? 0,
   }))
 })
+
+/** 首页统计带：全部取自已有分类 / 产地数据，不新增接口 */
+const totalTeas = computed(() => teaStore.categories.reduce((sum, c) => sum + c.count, 0))
+const originCount = computed(() => teaStore.origins.length)
+
+/** 按当前月份给出当季茶，用于引导入口文案与筛选参数 */
+const currentSeason = computed(() => {
+  const month = new Date().getMonth() + 1
+  if (month >= 3 && month <= 5) return '春茶'
+  if (month >= 6 && month <= 8) return '夏茶'
+  if (month >= 9 && month <= 11) return '秋茶'
+  return '冬茶'
+})
+
+/** 引导入口：按意图而非品类分流 */
+const guideEntries = computed(() => [
+  {
+    index: '01',
+    title: '新手入门',
+    desc: '从轻发酵的绿茶、白茶喝起，先建立味觉坐标',
+    to: { name: 'tea-list', query: { fermentation: '不发酵,微发酵' } },
+  },
+  {
+    index: '02',
+    title: `${currentSeason.value}正当时`,
+    desc: '按采摘季节筛选，挑一款当季的茶',
+    to: { name: 'tea-list', query: { season: currentSeason.value } },
+  },
+  {
+    index: '03',
+    title: '六大茶类对比',
+    desc: '把两到三款茶并排看，差异一眼看清',
+    to: { name: 'compare' },
+  },
+])
 
 async function loadHot() {
   hotLoading.value = true
@@ -127,14 +198,19 @@ function shuffle() {
 
 onMounted(() => {
   teaStore.fetchCategories().catch(() => {})
+  teaStore.fetchOrigins().catch(() => {})
   void loadHot()
   void loadRandom()
   void loadTips()
   document.addEventListener('click', onDocumentClick)
+  window.addEventListener('scroll', onHeroScroll, { passive: true })
+  updateHeroDepth()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
+  window.removeEventListener('scroll', onHeroScroll)
+  if (heroFrame) cancelAnimationFrame(heroFrame)
   if (suggestTimer) clearTimeout(suggestTimer)
 })
 
@@ -204,11 +280,22 @@ function categoryStyle(category: TeaCategory) {
     <!-- Hero -->
     <section class="hero">
       <!-- 纯装饰滚动背景（ADR-0003 R7）：不承载点击与跳转 -->
-      <HeroBackground />
-      <div class="container hero__content">
-        <span class="hero__badge">🍵 六大茶类 · 结构化知识库</span>
-        <h1 class="hero__title">一杯茶的千种风味</h1>
-        <p class="hero__subtitle">完整图鉴，清晰对比，让每一款茶都有迹可循</p>
+      <div ref="heroBgRef" class="hero__bg-layer">
+        <HeroBackground />
+      </div>
+      <div class="hero__scrim" aria-hidden="true"></div>
+      <div ref="heroContentRef" class="container hero__content">
+        <span class="hero__kicker">六大茶类 · 结构化知识库</span>
+        <h1 class="hero__title">
+          <RevealText as="span" text="一杯茶的" />
+          <RevealText as="span" class="hero__title-accent" text="千种风味" :delay="60" />
+        </h1>
+        <RevealText
+          as="p"
+          class="hero__subtitle"
+          text="完整图鉴，清晰对比，让每一款茶都有迹可循"
+          :delay="55"
+        />
 
         <div class="hero__search">
           <svg
@@ -262,24 +349,75 @@ function categoryStyle(category: TeaCategory) {
           </div>
         </div>
       </div>
+
+      <div ref="heroCueRef" class="hero__cue" aria-hidden="true">
+        <span class="hero__cue-text">向下探索</span>
+        <span class="hero__cue-line"></span>
+      </div>
+    </section>
+
+    <!-- 统计带：图鉴的规模感 -->
+    <section class="stats">
+      <div class="container stats__inner">
+        <div class="stats__item">
+          <span class="stats__value"><CountUp :value="totalTeas" /></span>
+          <span class="stats__label">款茶品已收录</span>
+        </div>
+        <span class="stats__divider" aria-hidden="true"></span>
+        <div class="stats__item">
+          <span class="stats__value">6</span>
+          <span class="stats__label">大茶类体系</span>
+        </div>
+        <span class="stats__divider" aria-hidden="true"></span>
+        <div class="stats__item">
+          <span class="stats__value"><CountUp :value="originCount" /></span>
+          <span class="stats__label">个产地覆盖</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 引导入口：按意图而非品类分流 -->
+    <section class="guides container">
+      <div class="guides__grid">
+        <RouterLink
+          v-for="entry in guideEntries"
+          :key="entry.index"
+          class="guide-card"
+          :to="entry.to"
+        >
+          <span class="guide-card__index">{{ entry.index }}</span>
+          <span class="guide-card__title">{{ entry.title }}</span>
+          <span class="guide-card__desc">{{ entry.desc }}</span>
+          <span class="guide-card__arrow" aria-hidden="true">→</span>
+        </RouterLink>
+      </div>
     </section>
 
     <!-- 六大茶类入口 -->
     <section class="categories container">
-      <h2 class="section-title">六大茶类</h2>
-      <p class="section-subtitle">不同工艺，不同风味，点进去探索</p>
+      <div class="section-heading">
+        <span class="section-kicker">SIX CATEGORIES</span>
+        <RevealText as="h2" class="section-title" text="六大茶类" />
+        <p class="section-subtitle">不同工艺，不同风味，点进去探索</p>
+      </div>
       <div class="categories__grid">
-        <RouterLink
+        <SpotlightCard
           v-for="item in categoryCards"
           :key="item.category"
-          class="category-card"
-          :style="categoryStyle(item.category)"
-          :to="{ name: 'tea-list', query: { category: item.category } }"
+          class="category-card-host"
+          radius="var(--radius-lg)"
         >
-          <div class="category-card__icon">{{ item.emoji }}</div>
-          <div class="category-card__name">{{ item.label }}</div>
-          <div class="category-card__count">{{ item.count }} 款已收录</div>
-        </RouterLink>
+          <RouterLink
+            class="category-card"
+            :style="categoryStyle(item.category)"
+            :to="{ name: 'tea-list', query: { category: item.category } }"
+          >
+            <span class="category-card__swatch" aria-hidden="true"></span>
+            <div class="category-card__name">{{ item.label }}</div>
+            <div class="category-card__en">{{ item.en }}</div>
+            <div class="category-card__count"><CountUp :value="item.count" /> 款已收录</div>
+          </RouterLink>
+        </SpotlightCard>
       </div>
     </section>
 
@@ -287,7 +425,10 @@ function categoryStyle(category: TeaCategory) {
     <section class="section">
       <div class="container">
         <div class="section-header">
-          <h2 class="section-header__title">🔥 热门推荐</h2>
+          <div class="section-header__main">
+            <span class="section-kicker section-kicker--start">POPULAR TEAS</span>
+            <RevealText as="h2" class="section-header__title" text="热门推荐" />
+          </div>
           <RouterLink class="section-header__action" to="/teas">查看全部 →</RouterLink>
         </div>
 
@@ -344,39 +485,50 @@ function categoryStyle(category: TeaCategory) {
       <div class="container">
         <div class="random">
           <div class="random__body">
-            <RouterLink
+            <SpotlightCard
               v-if="randomTea"
-              class="card-random"
-              :to="{ name: 'tea-detail', params: { id: randomTea.id } }"
+              class="random-card-host"
+              radius="var(--radius-xl)"
+              tilt
+              :max-tilt="4"
             >
-              <img
-                v-if="randomTea.main_image_url"
-                class="card-random__img"
-                :src="randomTea.main_image_url"
-                :alt="randomTea.name"
-              />
-              <div v-else class="card-random__img card-random__img--placeholder" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path
-                    d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19.2 2.5c1 1.66.6 6-2 9-2 2.4-6.2 3-6.2 3zM2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"
-                  />
-                </svg>
-              </div>
-              <div class="card-random__body">
-                <h3 class="card-random__name">{{ randomTea.name }}</h3>
-                <div class="card-random__tags">
-                  <CategoryTag :category="randomTea.category" />
-                  <span class="card-random__fav"
-                    >♡ {{ randomTea.favorite_count.toLocaleString('zh-CN') }}</span
-                  >
+              <RouterLink
+                class="card-random"
+                :to="{ name: 'tea-detail', params: { id: randomTea.id } }"
+              >
+                <img
+                  v-if="randomTea.main_image_url"
+                  class="card-random__img"
+                  :src="randomTea.main_image_url"
+                  :alt="randomTea.name"
+                />
+                <div
+                  v-else
+                  class="card-random__img card-random__img--placeholder"
+                  aria-hidden="true"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                      d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19.2 2.5c1 1.66.6 6-2 9-2 2.4-6.2 3-6.2 3zM2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"
+                    />
+                  </svg>
                 </div>
-                <div class="card-random__brew">
-                  <span v-if="randomTea.water_temp">🌡️ {{ randomTea.water_temp }}℃</span>
-                  <span v-if="randomTea.tea_amount">🫖 {{ randomTea.tea_amount }}g</span>
-                  <span v-if="randomTea.brew_time">⏱ {{ randomTea.brew_time }}秒</span>
+                <div class="card-random__body">
+                  <h3 class="card-random__name">{{ randomTea.name }}</h3>
+                  <div class="card-random__tags">
+                    <CategoryTag :category="randomTea.category" />
+                    <span class="card-random__fav"
+                      >♡ {{ randomTea.favorite_count.toLocaleString('zh-CN') }}</span
+                    >
+                  </div>
+                  <div class="card-random__brew">
+                    <span v-if="randomTea.water_temp">🌡️ {{ randomTea.water_temp }}℃</span>
+                    <span v-if="randomTea.tea_amount">🫖 {{ randomTea.tea_amount }}g</span>
+                    <span v-if="randomTea.brew_time">⏱ {{ randomTea.brew_time }}秒</span>
+                  </div>
                 </div>
-              </div>
-            </RouterLink>
+              </RouterLink>
+            </SpotlightCard>
             <div v-else class="card-random card-random--empty">
               {{ randomLoading ? '随机茶品加载中…' : '暂时没有可推荐的茶品' }}
             </div>
@@ -416,25 +568,33 @@ function categoryStyle(category: TeaCategory) {
     <section v-if="tipsLoading || latestTips.length" class="section">
       <div class="container">
         <div class="section-header">
-          <h2 class="section-header__title">📖 茶知识 · 小贴士</h2>
+          <div class="section-header__main">
+            <span class="section-kicker section-kicker--start">TEA NOTES</span>
+            <RevealText as="h2" class="section-header__title" text="茶知识 · 小贴士" />
+          </div>
           <RouterLink class="section-header__action" to="/teas">探索更多 →</RouterLink>
         </div>
 
         <div v-if="tipsLoading" class="hot-loading">小贴士加载中…</div>
         <div v-else class="tips-grid">
-          <RouterLink
+          <SpotlightCard
             v-for="tip in latestTips"
             :key="tip.tea_id"
-            class="tip-preview"
-            :to="{ name: 'tea-detail', params: { id: tip.tea_id } }"
+            class="tip-host"
+            radius="var(--radius-lg)"
           >
-            <div class="tip-preview__head">
-              <span class="tip-preview__tea">{{ tip.tea_name }}</span>
-              <CategoryTag :category="tip.category" />
-            </div>
-            <p class="tip-preview__summary">{{ tip.summary }}</p>
-            <span class="tip-preview__more">了解详情 ›</span>
-          </RouterLink>
+            <RouterLink
+              class="tip-preview"
+              :to="{ name: 'tea-detail', params: { id: tip.tea_id } }"
+            >
+              <div class="tip-preview__head">
+                <span class="tip-preview__tea">{{ tip.tea_name }}</span>
+                <CategoryTag :category="tip.category" />
+              </div>
+              <p class="tip-preview__summary">{{ tip.summary }}</p>
+              <span class="tip-preview__more">了解详情 ›</span>
+            </RouterLink>
+          </SpotlightCard>
         </div>
       </div>
     </section>
@@ -445,7 +605,8 @@ function categoryStyle(category: TeaCategory) {
 
 <style scoped>
 .home-page {
-  padding-top: 64px;
+  /* 首页 Hero 顶到视口顶部，页头以透明态浮在背景之上（AppHeader 负责滚动后转实底） */
+  padding-top: 0;
 }
 
 .container {
@@ -461,26 +622,57 @@ function categoryStyle(category: TeaCategory) {
 }
 
 @media (max-width: 767px) {
-  .home-page {
-    padding-top: 56px;
-  }
   .container {
     padding: 0 16px;
   }
 }
 
-/* Hero */
+/* Hero：沉浸式首屏，背景下沉 + 内容上浮形成纵深 */
 .hero {
   position: relative;
-  padding: 80px 0;
+  min-height: calc(100vh - 64px);
+  min-height: max(560px, calc(100vh - 64px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 0 96px;
   text-align: center;
   overflow: hidden;
-  background: linear-gradient(160deg, var(--color-bg-muted) 0%, var(--color-border-light) 100%);
+  background: var(--color-bg-hero);
+  isolation: isolate;
+}
+
+.hero__bg-layer {
+  position: absolute;
+  top: -20%;
+  left: 0;
+  right: 0;
+  height: 140%;
+  z-index: -1;
+  will-change: transform;
+}
+
+/* 暗色压边：顶部压暗保证页头可读，中段留亮保持照片清晰，底部压暗托住标题 */
+.hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(32, 26, 20, 0.62) 0%,
+    rgba(32, 26, 20, 0.18) 34%,
+    rgba(32, 26, 20, 0.52) 72%,
+    rgba(32, 26, 20, 0.86) 100%
+  );
+  pointer-events: none;
 }
 
 .hero__content {
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .hero::before {
@@ -507,17 +699,22 @@ function categoryStyle(category: TeaCategory) {
   display: none;
 }
 
-.hero__badge {
-  display: inline-block;
-  padding: 6px 16px;
-  border-radius: var(--radius-full);
-  background: rgba(250, 248, 245, 0.9);
-  border: 1px solid rgba(139, 115, 85, 0.25);
-  color: var(--color-primary);
-  font-size: var(--text-small);
-  font-weight: 500;
-  margin-bottom: 24px;
-  backdrop-filter: blur(4px);
+.hero__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  font-size: var(--text-caption);
+  letter-spacing: 0.24em;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.hero__kicker::before,
+.hero__kicker::after {
+  content: '';
+  width: 28px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .hero__title {
@@ -525,31 +722,86 @@ function categoryStyle(category: TeaCategory) {
   font-size: var(--text-display);
   font-weight: 700;
   line-height: 1.2;
-  color: var(--color-text-primary);
-  margin: 0 0 20px;
-  text-shadow:
-    0 1px 2px rgba(250, 248, 245, 1),
-    0 0 10px rgba(250, 248, 245, 0.95),
-    0 0 22px rgba(250, 248, 245, 0.8);
+  color: var(--color-text-inverse);
+  margin: 0 0 18px;
+  text-shadow: 0 2px 24px rgba(24, 18, 12, 0.45);
+}
+
+/* 两行式标题：第二行落暖金，形成"一白一金"的双色层次 */
+.hero__title .reveal-text {
+  display: block;
+}
+
+.hero__title-accent {
+  color: var(--color-tea-yellow);
 }
 
 .hero__subtitle {
   font-size: var(--text-h3);
-  font-weight: 400;
-  color: var(--color-text-primary);
-  opacity: 0.95;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  opacity: 1;
   margin: 0 auto 40px;
   max-width: 600px;
-  text-shadow:
-    0 1px 2px rgba(250, 248, 245, 1),
-    0 0 9px rgba(250, 248, 245, 0.95),
-    0 0 18px rgba(250, 248, 245, 0.75);
+  text-shadow: 0 1px 12px rgba(24, 18, 12, 0.55);
+}
+
+/* 滚动提示：细线呼吸，减少动态效果时静止 */
+.hero__cue {
+  position: absolute;
+  left: 50%;
+  bottom: 32px;
+  z-index: 1;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-caption);
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.78);
+  text-shadow: 0 1px 8px rgba(24, 18, 12, 0.6);
+}
+
+.hero__cue-line {
+  width: 1px;
+  height: 44px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), transparent);
+  transform-origin: top;
+  animation: hero-cue 2.4s var(--motion-ease) infinite;
+}
+
+@keyframes hero-cue {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scaleY(0.7);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero__cue-line {
+    animation: none;
+  }
 }
 
 .hero__search {
   position: relative;
+  width: 100%;
   max-width: 560px;
   margin: 0 auto;
+}
+
+/* ≥768px 由页头搜索框承担搜索入口，避免同屏出现两个搜索框；
+   <768px 页头搜索被隐藏，Hero 搜索保留 */
+@media (min-width: 768px) {
+  .hero__search {
+    display: none;
+  }
 }
 
 .hero__search-input {
@@ -655,6 +907,131 @@ function categoryStyle(category: TeaCategory) {
   color: var(--color-text-muted);
 }
 
+/* 统计带 */
+.stats {
+  padding: 28px 0 4px;
+}
+
+.stats__inner {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 32px;
+}
+
+.stats__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.stats__value {
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--color-primary-dark);
+}
+
+.stats__label {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.stats__divider {
+  width: 1px;
+  height: 16px;
+  background: var(--color-border-dark);
+  align-self: center;
+}
+
+@media (max-width: 639px) {
+  .stats__inner {
+    gap: 20px;
+  }
+  .stats__divider {
+    display: none;
+  }
+  .stats__value {
+    font-size: var(--text-h3);
+  }
+}
+
+/* 引导入口 */
+.guides {
+  padding: 36px 0 0;
+}
+
+.guides__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.guide-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 20px 28px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
+}
+
+.guide-card:hover {
+  border-color: var(--color-primary);
+  background: var(--color-bg-surface);
+}
+
+.guide-card__index {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  letter-spacing: 0.08em;
+}
+
+.guide-card__title {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.guide-card__desc {
+  font-size: var(--text-small);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.guide-card__arrow {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  color: var(--color-primary);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
+}
+
+.guide-card:hover .guide-card__arrow {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@media (max-width: 767px) {
+  .guides {
+    padding-top: 24px;
+  }
+  .guides__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* 六大茶类 */
 .categories {
   padding: 48px 0;
@@ -667,6 +1044,37 @@ function categoryStyle(category: TeaCategory) {
   color: var(--color-text-primary);
   text-align: center;
   margin: 0 0 8px;
+}
+
+/* 区块小标：宽字距英文 + 两侧发丝线，替代原来的 emoji 前缀 */
+.section-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: var(--text-caption);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.section-kicker::before,
+.section-kicker::after {
+  content: '';
+  width: 32px;
+  height: 1px;
+  background: var(--color-border-dark);
+}
+
+.section-kicker--start {
+  justify-content: flex-start;
+  margin-bottom: 6px;
+}
+
+.section-kicker--start::before,
+.section-kicker--start::after {
+  display: none;
 }
 
 .section-subtitle {
@@ -682,8 +1090,13 @@ function categoryStyle(category: TeaCategory) {
   gap: 16px;
 }
 
+.category-card-host {
+  display: flex;
+}
+
 .category-card {
   position: relative;
+  flex: 1;
   padding: 28px 16px;
   border-radius: var(--radius-lg);
   background: var(--color-bg-surface);
@@ -718,10 +1131,28 @@ function categoryStyle(category: TeaCategory) {
   opacity: 1;
 }
 
-.category-card__icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-  line-height: 1;
+.category-card__swatch {
+  display: block;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 14px;
+  border-radius: var(--radius-full);
+  background: var(--cat-color, var(--color-primary));
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  transition:
+    transform 0.2s,
+    opacity 0.2s;
+}
+
+.category-card:hover .category-card__swatch {
+  transform: scale(1.12);
+}
+
+.category-card__en {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
 }
 
 .category-card__name {
@@ -743,9 +1174,15 @@ function categoryStyle(category: TeaCategory) {
 
 .section-header {
   display: flex;
-  align-items: baseline;
+  align-items: flex-end;
   justify-content: space-between;
   margin-bottom: 24px;
+}
+
+.section-header__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .section-header__title {
@@ -774,8 +1211,13 @@ function categoryStyle(category: TeaCategory) {
   gap: 16px;
 }
 
+.tip-host {
+  display: flex;
+}
+
 .tip-preview {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 12px;
   padding: 24px;
@@ -906,9 +1348,14 @@ function categoryStyle(category: TeaCategory) {
   gap: 40px;
 }
 
+.random-card-host {
+  flex: 0 0 320px;
+}
+
 .card-random {
   position: relative;
-  flex: 0 0 320px;
+  display: block;
+  width: 100%;
   background: var(--color-bg-surface);
   border-radius: var(--radius-xl);
   overflow: hidden;
@@ -1067,8 +1514,11 @@ function categoryStyle(category: TeaCategory) {
     flex-direction: column;
     gap: 24px;
   }
-  .card-random {
+  .random-card-host {
     flex: 1;
+    width: 100%;
+  }
+  .card-random {
     width: 100%;
   }
 }

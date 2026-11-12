@@ -170,10 +170,13 @@ onMounted(() => {
       </nav>
 
       <header class="contribute-hero">
-        <h1 class="contribute-hero__title">让图鉴更丰富</h1>
-        <p class="contribute-hero__desc">
-          补充一款尚未收录的茶，或为已有茶品撰写科普。提交后由管理员审核，通过即公开展示。
-        </p>
+        <div class="contribute-hero__main">
+          <p class="page-kicker">Contribute</p>
+          <h1 class="contribute-hero__title">让图鉴更丰富</h1>
+          <p class="contribute-hero__desc">
+            补充一款尚未收录的茶，或为已有茶品撰写科普。提交后由管理员审核，通过即公开展示。
+          </p>
+        </div>
         <RouterLink class="btn btn--ghost" :to="{ name: 'my-contributions' }">
           查看我的提交
         </RouterLink>
@@ -418,7 +421,25 @@ onMounted(() => {
 
 <style scoped>
 .contribute-page {
-  padding: 32px 0 64px;
+  padding: 88px 0 64px;
+}
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+@media (max-width: 1023px) {
+  .container {
+    padding: 0 24px;
+  }
+}
+@media (max-width: 767px) {
+  .contribute-page {
+    padding: 76px 0 48px;
+  }
+  .container {
+    padding: 0 16px;
+  }
 }
 .contribute-hero {
   display: flex;
@@ -428,9 +449,15 @@ onMounted(() => {
   gap: 16px;
   margin-bottom: 24px;
 }
+.contribute-hero__main {
+  min-width: 0;
+}
 .contribute-hero__title {
+  font-family: var(--font-display);
   font-size: var(--text-h1);
+  font-weight: 600;
   color: var(--color-primary-dark);
+  margin: 0;
 }
 .contribute-hero__desc {
   max-width: 640px;

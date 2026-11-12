@@ -103,6 +103,7 @@ onMounted(load)
 
       <header class="page-head">
         <div>
+          <p class="page-kicker">My Contributions</p>
           <h1 class="page-head__title">我的提交</h1>
           <p class="page-head__desc">共 {{ items.length }} 条记录</p>
         </div>
@@ -202,7 +203,25 @@ onMounted(load)
 
 <style scoped>
 .my-contrib-page {
-  padding: 32px 0 64px;
+  padding: 88px 0 64px;
+}
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+@media (max-width: 1023px) {
+  .container {
+    padding: 0 24px;
+  }
+}
+@media (max-width: 767px) {
+  .my-contrib-page {
+    padding: 76px 0 48px;
+  }
+  .container {
+    padding: 0 16px;
+  }
 }
 .page-head {
   display: flex;
@@ -213,8 +232,11 @@ onMounted(load)
   margin-bottom: 24px;
 }
 .page-head__title {
+  font-family: var(--font-display);
   font-size: var(--text-h1);
+  font-weight: 600;
   color: var(--color-primary-dark);
+  margin: 0;
 }
 .page-head__desc {
   margin-top: 6px;

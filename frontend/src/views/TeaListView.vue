@@ -30,6 +30,8 @@ const teaStore = useTeaStore()
 /** 筛选状态唯一来源：从 URL 解析，修改后写回 URL，再统一由 URL 变化触发请求 */
 const state = reactive<TeaFilterState>(defaultTeaFilterState())
 const suggestions = ref<TeaListItem[]>([])
+/** 高级筛选面板展开态：默认收起，首屏优先展示茶品 */
+const filtersOpen = ref(false)
 
 // —— URL → 状态 → 请求（浏览器的前进/后退也走这条链路）——
 watch(
@@ -160,6 +162,24 @@ const categoryOptions = computed(() => {
 
 const activeFilters = computed(() => listActiveFilters(state))
 const hasPrice = computed(() => state.priceMin != null || state.priceMax != null)
+
+/** 除茶类外的高级筛选数量，用于「筛选」按钮角标 */
+const advancedFilterCount = computed(
+  () =>
+    state.origins.length +
+    state.seasons.length +
+    state.fermentations.length +
+    (hasPrice.value ? 1 : 0),
+)
+
+/** 带高级筛选进入页面时自动展开面板，避免条件被折叠后看不见 */
+watch(
+  advancedFilterCount,
+  (count) => {
+    if (count > 0) filtersOpen.value = true
+  },
+  { immediate: true },
+)
 const hasAnyFilter = computed(
   () =>
     !!state.keyword ||
@@ -229,10 +249,9 @@ function goPage(page: number) {
         <RouterLink class="breadcrumb__compare" to="/compare">六大茶类对比 →</RouterLink>
       </nav>
 
-      <!-- 筛选面板 -->
-      <section class="filter-bar" aria-label="筛选条件">
-        <div class="filter-group">
-          <div class="filter-group__label">六大茶类</div>
+      <!-- 工具条：茶类 + 筛选 + 排序 -->
+      <section class="toolbar" aria-label="筛选与排序">
+        <div class="toolbar__cats">
           <div class="filter-chips">
             <button
               v-for="option in categoryOptions"
@@ -252,6 +271,57 @@ function goPage(page: number) {
           </div>
         </div>
 
+        <div class="toolbar__actions">
+          <button
+            type="button"
+            class="filter-toggle"
+            :class="{ 'filter-toggle--open': filtersOpen }"
+            :aria-expanded="filtersOpen"
+            @click="filtersOpen = !filtersOpen"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M3 6h18M7 12h10M11 18h2" />
+            </svg>
+            <span>筛选</span>
+            <span v-if="advancedFilterCount" class="filter-toggle__badge">
+              {{ advancedFilterCount }}
+            </span>
+            <svg
+              class="filter-toggle__chevron"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+
+          <select
+            class="sort-select"
+            :value="state.sort"
+            aria-label="排序方式"
+            @change="onSortChange"
+          >
+            <option value="newest">最新上架</option>
+            <option value="favorite">收藏最多</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- 高级筛选面板（默认收起） -->
+      <section v-show="filtersOpen" class="filter-panel" aria-label="更多筛选条件">
         <div class="filter-group">
           <div class="filter-group__label">产地</div>
           <div class="filter-chips">
@@ -384,19 +454,8 @@ function goPage(page: number) {
         </button>
       </div>
 
-      <!-- 排序栏 -->
-      <div class="sort-bar">
-        <div class="sort-bar__result">{{ resultText }}</div>
-        <select
-          class="sort-bar__select"
-          :value="state.sort"
-          aria-label="排序方式"
-          @change="onSortChange"
-        >
-          <option value="newest">最新上架</option>
-          <option value="favorite">收藏最多</option>
-        </select>
-      </div>
+      <!-- 结果数 -->
+      <div class="list-meta">{{ resultText }}</div>
 
       <!-- 骨架屏 -->
       <div v-if="teaStore.loading" class="tea-grid" aria-hidden="true">
@@ -478,7 +537,7 @@ function goPage(page: number) {
 
 <style scoped>
 .tea-list-page {
-  padding-top: 64px;
+  padding-top: 88px;
   padding-bottom: 48px;
 }
 
@@ -496,7 +555,7 @@ function goPage(page: number) {
 
 @media (max-width: 767px) {
   .tea-list-page {
-    padding-top: 56px;
+    padding-top: 76px;
   }
   .container {
     padding: 0 16px;
@@ -530,11 +589,81 @@ function goPage(page: number) {
   text-decoration: underline;
 }
 
-.filter-bar {
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.toolbar__cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-dark);
+  background: var(--color-bg-surface);
+  font-size: var(--text-small);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.filter-toggle:hover,
+.filter-toggle--open {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.filter-toggle__badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.filter-toggle__chevron {
+  transition: transform 0.2s;
+}
+
+.filter-toggle--open .filter-toggle__chevron {
+  transform: rotate(180deg);
+}
+
+.filter-panel {
   display: flex;
   flex-wrap: wrap;
   gap: 20px;
+  padding: 20px;
   margin-bottom: 16px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
 }
 
 .filter-group {
@@ -779,23 +908,17 @@ function goPage(page: number) {
   color: var(--color-primary-hover);
 }
 
-.sort-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.sort-bar__result {
+.list-meta {
   font-size: var(--text-small);
   color: var(--color-text-muted);
+  margin-bottom: 12px;
 }
 
-.sort-bar__select {
+.sort-select {
   height: 36px;
   padding: 0 32px 0 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-dark);
   background: var(--color-bg-surface);
   font-size: var(--text-small);
   color: var(--color-text-primary);
@@ -804,7 +927,7 @@ function goPage(page: number) {
   appearance: none;
 }
 
-.sort-bar__select:focus {
+.sort-select:focus {
   border-color: var(--color-primary);
 }
 
@@ -829,10 +952,7 @@ function goPage(page: number) {
 }
 
 .skeleton-card {
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
 }
 
 .skeleton {
@@ -867,10 +987,11 @@ function goPage(page: number) {
 .skeleton-card__img {
   width: 100%;
   aspect-ratio: 16 / 10;
+  border-radius: var(--radius-lg);
 }
 
 .skeleton-card__body {
-  padding: 16px;
+  padding: 12px 2px 0;
 }
 
 .skeleton-card__line {

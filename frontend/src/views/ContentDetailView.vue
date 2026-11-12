@@ -76,11 +76,11 @@ watch(
       <!-- 面包屑 -->
       <nav class="breadcrumb">
         <RouterLink to="/">首页</RouterLink>
-        <span class="sep">/</span>
+        <span class="sep">›</span>
         <RouterLink :to="`/contents/${typeCode}`"
           >茶文化 · {{ currentType?.name ?? typeCode }}</RouterLink
         >
-        <span class="sep">/</span>
+        <span class="sep">›</span>
         <span class="current">{{ item?.title ?? '详情' }}</span>
       </nav>
 
@@ -101,6 +101,7 @@ watch(
         </div>
 
         <header class="detail__header">
+          <p class="page-kicker">Article</p>
           <h1 class="detail__title">{{ item.title }}</h1>
           <p v-if="item.summary" class="detail__summary">{{ item.summary }}</p>
         </header>

@@ -71,6 +71,19 @@
   --shadow-hero: 0 2px 12px rgba(0, 0, 0, 0.08);
   --shadow-dropdown: 0 4px 20px rgba(0, 0, 0, 0.12);
   --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.2);
+
+  /* === 6. 动效与质感 === */
+  --motion-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --motion-duration-fast: 180ms;
+  --motion-duration-base: 320ms;
+  --motion-duration-slow: 600ms;
+  --motion-stagger: 40ms;
+
+  /* 纸纹层：透明度封顶 0.04，避免压暗实拍图 */
+  --paper-noise-opacity: 0.035;
+
+  /* 卡片柔光：暖白柔光 + soft-light 叠加，不改变文字对比度 */
+  --spotlight-color: rgba(255, 247, 234, 0.85);
 }
 
 /* === 全局重置 === */
@@ -178,4 +191,29 @@ img {
 }
 .bg-primary {
   background: var(--color-primary);
+}
+
+/* === 页面小标题（前台一级页统一使用） === */
+.page-kicker {
+  margin: 0 0 10px;
+  font-size: var(--text-caption);
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.page-kicker--center {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.page-kicker--center::before,
+.page-kicker--center::after {
+  content: '';
+  width: 32px;
+  height: 1px;
+  background: var(--color-border-dark);
 }

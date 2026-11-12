@@ -326,7 +326,7 @@ async function copyAll() {
 
 <style scoped>
 .share-page {
-  padding-top: 64px;
+  padding-top: 88px;
   padding-bottom: 48px;
   min-height: 100svh;
 }
@@ -338,6 +338,9 @@ async function copyAll() {
 }
 
 @media (max-width: 767px) {
+  .share-page {
+    padding-top: 76px;
+  }
   .container {
     padding: 0 16px;
   }
