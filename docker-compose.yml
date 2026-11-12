@@ -37,6 +37,8 @@ services:
       MYSQL_DATABASE: tea_guide
       SECRET_KEY: ${SECRET_KEY:?请在 .env 中设置 SECRET_KEY}
       SESSION_EXPIRE_DAYS: ${SESSION_EXPIRE_DAYS:-30}
+      # 当前 web 默认仅 HTTP；纯 HTTP 演示需在 .env 设 COOKIE_SECURE=false
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       UPLOAD_DIR: uploads

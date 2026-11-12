@@ -8,6 +8,7 @@ import time
 
 from fastapi.testclient import TestClient
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import verify_password
 from app.main import app
@@ -399,5 +400,46 @@ def test_change_password_new_password_can_login():
         )
         assert old_login.status_code == 401
         assert old_login.json()["code"] == 40110
+    finally:
+        _cleanup_user(username)
+
+
+# ===== S-07：COOKIE_SECURE 配置（HTTP 部署可显式关闭） =====
+
+
+def test_cookie_secure_derived_from_debug(monkeypatch):
+    monkeypatch.setattr(settings, "DEBUG", True)
+    monkeypatch.setattr(settings, "COOKIE_SECURE", None)
+    assert settings.cookie_secure is False
+
+    monkeypatch.setattr(settings, "DEBUG", False)
+    assert settings.cookie_secure is True
+
+    # 显式配置优先于 DEBUG 推导
+    monkeypatch.setattr(settings, "COOKIE_SECURE", False)
+    assert settings.cookie_secure is False
+
+
+def test_login_cookie_secure_attribute_follows_config(monkeypatch):
+    username = _unique_username("ck")
+    try:
+        TestClient(app).post(
+            "/api/v1/auth/register",
+            json={"username": username, "password": "tea2026"},
+        )
+
+        monkeypatch.setattr(settings, "COOKIE_SECURE", True)
+        secure_resp = TestClient(app).post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "tea2026"},
+        )
+        assert "secure" in secure_resp.headers["set-cookie"].lower()
+
+        monkeypatch.setattr(settings, "COOKIE_SECURE", False)
+        plain_resp = TestClient(app).post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "tea2026"},
+        )
+        assert "secure" not in plain_resp.headers["set-cookie"].lower()
     finally:
         _cleanup_user(username)

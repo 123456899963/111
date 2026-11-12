@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -67,6 +68,13 @@ def create_app() -> FastAPI:
 
     # 注册全局异常处理器（业务异常 → 统一响应体，HTTP status = code // 100）
     register_exception_handlers(app)
+
+    # 生产环境关闭 Secure 仅适用于纯 HTTP 演示；显式告警，避免登录后 Cookie 不落盘
+    if not settings.DEBUG and not settings.cookie_secure:
+        logging.getLogger(__name__).warning(
+            "COOKIE_SECURE=false 且 DEBUG=false：仅适用于纯 HTTP 演示；"
+            "生产 HTTPS 请设置 COOKIE_SECURE=true"
+        )
 
     # 注册路由
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])

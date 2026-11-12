@@ -246,9 +246,7 @@ def update_brewing_guide(
     )
 
 
-def delete_brewing_guide(
-    db: Session, *, admin_id: int, tea_id: int
-) -> BrewingGuideDeleteResponse:
+def delete_brewing_guide(db: Session, *, admin_id: int, tea_id: int) -> BrewingGuideDeleteResponse:
     """删除冲泡教程（ADR-0005）：幂等，不存在时返回 deleted=false。"""
     tea = tea_repo.get_by_id(db, tea_id)
     if tea is None:

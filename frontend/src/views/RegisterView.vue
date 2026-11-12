@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { resolveLoginRedirect } from '@/utils/redirect'
 import { checkUsernameAvailability } from '@/api/auth'
 
 const route = useRoute()
@@ -108,7 +109,7 @@ async function onSubmit() {
       password: form.password,
     })
     // 注册成功后端自动登录，跳回来源页或首页
-    const redirect = (route.query.redirect as string) || '/'
+    const redirect = resolveLoginRedirect(route.query.redirect)
     router.push(redirect)
   } catch {
     errors.form = '注册失败，请稍后重试'

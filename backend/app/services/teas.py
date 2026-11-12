@@ -174,11 +174,18 @@ def random_tea(db: Session, *, exclude_id: int | None) -> TeaDetail | None:
     return TeaDetail.model_validate(tea) if tea else None
 
 
-def recommended_teas(db: Session, *, user_id: int | None, limit: int) -> list[TeaListItem]:
+def recommended_teas(
+    db: Session,
+    *,
+    user_id: int | None,
+    limit: int,
+    exclude_id: int | None = None,
+) -> list[TeaListItem]:
     """个性化推荐（S16）。
 
     登录且已有收藏：按收藏茶类分布加权，从偏好茶类中随机取未收藏茶品；
     未登录 / 无收藏 / 偏好茶类已全部收藏：回退完全随机。
+    exclude_id 用于首页“换一款”，避免返回当前展示的茶品。
     """
     limit = min(max(1, limit), MAX_RECOMMEND_LIMIT)
 
@@ -186,11 +193,13 @@ def recommended_teas(db: Session, *, user_id: int | None, limit: int) -> list[Te
         prefs = favorite_repo.count_categories_by_user(db, user_id)
         if prefs:
             exclude_ids = favorite_repo.list_tea_ids(db, user_id)
+            if exclude_id is not None:
+                exclude_ids.add(exclude_id)
             picked = _pick_by_preference(db, prefs, exclude_ids, limit)
             if picked:
                 return [TeaListItem.model_validate(t) for t in picked]
 
-    tea = tea_repo.get_random(db)
+    tea = tea_repo.get_random(db, exclude_id=exclude_id)
     return [TeaListItem.model_validate(tea)] if tea else []
 
 

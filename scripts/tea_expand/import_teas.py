@@ -10,7 +10,6 @@
 """
 
 import os
-import random
 import sys
 from pathlib import Path
 
@@ -65,8 +64,8 @@ def import_teas():
             continue
 
         price_min, price_max = PRICE_RANGES.get(tea["category"], (200, 1500))
-        # 为演示增加随机浮动
-        fav_count = random.randint(100, 2000)
+        # 收藏数只能由 favorite_items 推导，导入脚本不得伪造热度（演示种子见 init.sql 注释）
+        fav_count = 0
 
         sql = """
             INSERT INTO teas

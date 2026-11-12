@@ -136,9 +136,7 @@ def test_upsert_overwrites_single_row():
 
         db = SessionLocal()
         try:
-            count = (
-                db.query(TeaBrewingGuide).filter(TeaBrewingGuide.tea_id == tea_id).count()
-            )
+            count = db.query(TeaBrewingGuide).filter(TeaBrewingGuide.tea_id == tea_id).count()
             assert count == 1
         finally:
             db.close()
@@ -159,9 +157,7 @@ def test_step_count_and_length_validation():
 
         too_many = admin.put(
             f"/api/v1/admin/teas/{tea_id}/brewing-guide",
-            json=_guide_payload(
-                steps=[{"title": f"第{i}步", "detail": "内容"} for i in range(9)]
-            ),
+            json=_guide_payload(steps=[{"title": f"第{i}步", "detail": "内容"} for i in range(9)]),
         )
         assert too_many.status_code == 400
 

@@ -27,8 +27,63 @@ def tracked_files() -> list[Path]:
     return [ROOT / line for line in result.stdout.splitlines() if line.strip()]
 
 
-def main() -> int:
+LOCAL_ENV = ROOT / "backend" / ".env"
+SENSITIVE_KEYS = ("MYSQL_PASSWORD", "ADMIN_PASSWORD", "SECRET_KEY")
+
+
+def local_env_report() -> tuple[list[str], list[str]]:
+    """检查本地 .env：不读取、不输出任何值，只确认存在性与忽略规则。
+
+    返回 (warnings, errors)。--share-check 模式下由调用方把存在性升级为错误。
+    """
+    warnings: list[str] = []
     errors: list[str] = []
+    if not LOCAL_ENV.is_file():
+        return warnings, errors
+
+    present: list[str] = []
+    for line in LOCAL_ENV.read_text(encoding="utf-8", errors="ignore").splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() in SENSITIVE_KEYS and value.strip():
+            present.append(key.strip())
+    warnings.append(
+        "WARN: backend/.env 存在"
+        + (f"（非空项：{', '.join(present)}）" if present else "")
+        + "；该文件含真实口令/密钥，压缩整个项目分享或打包前必须排除。"
+    )
+
+    ignored = subprocess.run(
+        ["git", "check-ignore", "-q", "backend/.env"], cwd=ROOT, capture_output=True
+    )
+    if ignored.returncode != 0:
+        errors.append("backend/.env 未被 .gitignore 忽略，存在误提交风险")
+
+    dockerignore = ROOT / ".dockerignore"
+    if dockerignore.is_file():
+        entries = {
+            line.strip()
+            for line in dockerignore.read_text(encoding="utf-8", errors="ignore").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+        if ".env" not in entries and ".env*" not in entries:
+            warnings.append("WARN: .dockerignore 未排除 .env，镜像可能带入本地密钥")
+    else:
+        warnings.append("WARN: 未找到 .dockerignore，无法确认镜像是否排除 .env")
+
+    return warnings, errors
+
+
+def main() -> int:
+    share_check = "--share-check" in sys.argv[1:]
+    warnings, local_errors = local_env_report()
+    for warning in warnings:
+        print(warning)
+
+    errors: list[str] = list(local_errors)
+    if share_check and LOCAL_ENV.is_file():
+        errors.append(
+            "分享检查失败：backend/.env 仍在项目目录中；请先移出压缩包/共享目录再分享"
+        )
     scanned = 0
     for path in tracked_files():
         rel = path.relative_to(ROOT).as_posix()

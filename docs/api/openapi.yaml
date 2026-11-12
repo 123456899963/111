@@ -527,6 +527,12 @@ paths:
             default: 1
             minimum: 1
             maximum: 8
+        - name: exclude_id
+          in: query
+          required: false
+          description: 排除指定茶品（首页“换一款”）；不存在或已下架时忽略
+          schema:
+            type: integer
       responses:
         '200':
           description: 推荐茶品列表

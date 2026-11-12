@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { resolveLoginRedirect } from '@/utils/redirect'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,7 +36,7 @@ async function onSubmit() {
   try {
     await userStore.login({ username: form.username.trim(), password: form.password })
     // 登录成功后跳回来源页或首页
-    const redirect = (route.query.redirect as string) || '/'
+    const redirect = resolveLoginRedirect(route.query.redirect)
     router.push(redirect)
   } catch {
     // 401 用户名或密码错误（后端统一提示，不区分）

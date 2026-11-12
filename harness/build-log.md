@@ -2089,3 +2089,45 @@ gba(250,248,245,0.12)，无方向、无渐变，肉眼不可辨认为独立图�
 - 未验证：未做浏览器目检 —— 统计带「7 大茶类体系」、7 列分类网格在 1199/767 断点的换行观感、对比页 7 列在 1024 视口的横向滚动需人工过目
 - 可回滚：还原上述 5 组文件改动即可（统计带数值亦可回退为常量 6）
 
+## 2026-11-12 代码审查 8 项缺陷修复（认证 / 部署 / 推荐 / 演示数据 / 文档 / 密钥）
+
+- 任务编号：TASK-20261112-15
+- 分级：**B / C 混合**。B：Cookie 配置化、Nginx 视频体积、导入脚本收藏数、README/SECURITY 同步、`scripts/check_secrets.py` 增强。C（已获授权）：`/teas/recommended` 新增 `exclude_id` 属 API 契约变更，用户「按上面的优先级逐项改并补测试」视为确认；未改任何已冻结业务规则。
+- 需求来源：用户提交第三方代码审查截图（列 7 条），要求核对是否真实存在并分析；随后明确「按上面的优先级逐项改并补测试」。核对结论：截图 7 条中 6 条属实、1 条（`.env` 泄露）部分属实，另**新发现第 8 条**（刷新守卫早于登录态）为截图未列的同类认证缺陷。
+- 逐项变更：
+
+  | # | 问题 | 修复 |
+  |---|---|---|
+  | 1 | 会话过期重登 404：`frontend/src/api/request.ts` 对 `redirect` 先 `encodeURIComponent`，`LoginView.vue` 再 `router.push`，产生 `%252F...` 二次编码 → 落入 404 兜底路由 | 新增 `frontend/src/utils/redirect.ts`：`buildLoginRedirect()` 只拼接不编码、`resolveLoginRedirect()` 仅接受以单 `/` 开头且非 `//` 的路径（防开放重定向）。`request.ts`、`LoginView.vue:38`、`RegisterView.vue:111` 统一走该模块；新增 `utils/redirect.spec.ts` 5 条用例 |
+  | 2 | HTTP 部署下 Cookie 恒为 `Secure`，浏览器不保存 → 登录 200 但后续全部 401 | `core/config.py` 新增 `COOKIE_SECURE: bool \| None = None` 与 `cookie_secure` 派生属性（显式值优先，否则 `not DEBUG`）；`routers/auth.py` 删除导入期 `_COOKIE_KWARGS`，改 `_cookie_kwargs()` 运行时读取；`main.py` 在 `not DEBUG and not cookie_secure` 时启动告警；`deploy/env.example`、`backend/.env.example`、`docker-compose.yml` 补配置项；`test_auth.py` 新增 2 条用例 |
+  | 3 | 后端允许 50MB 视频，Nginx 全局 `client_max_body_size 6m` → 6–50MB 在网关层 413 | `deploy/nginx.conf` 全局保持 6m，新增 `location = /api/v1/admin/media/video`（52m、`proxy_read_timeout 120s`）；新增 `tests/test_deploy_config.py` 2 条用例（网关块存在 + 50/52/6 三处常量自洽） |
+  | 4 | 首页「换一款」对登录用户可能不换：登录分支调 `getRecommendedTeas(1)` 未传排除项，推荐服务只排除已收藏 | `routers/teas.py` 增加 `exclude_id` 查询参数；`services/teas.py` 在偏好与随机两条路径都排除 `exclude_id`；`frontend/src/api/teas.ts`、`HomeView.vue` 传当前茶 id；`API_CONTRACT.md` §4.2.10 + `openapi.yaml` 同步；`test_batch2_features.py` 新增 2 条用例（游客随机排除、登录偏好排除） |
+  | 5 | 导入脚本用 `random.randint(100, 2000)` 伪造 `teas.favorite_count`，污染热门排序 | `scripts/tea_expand/import_teas.py` 改为 `fav_count = 0` 并注释来源约束；新增 `backend/app/scripts/recount_favorite_counts.py`（按 `COUNT(DISTINCT favorite_items.user_id)` 重算，支持 `--dry-run`）+ `tests/test_favorite_count_recount.py` 1 条用例 |
+  | 6 | README 与代码严重不一致（称第二阶段未开发、58 端点、13 表、184 测试、迁移 0011、94 条用例；SECURITY 称 Cookie 缺 `secure`） | `README.md` 全面校准：标题/§1 加第二阶段扩展、新增 §3.4「第二阶段扩展（已完成）」、端点数 60（admin 17）、表 14、迁移 0001–0013、§10 测试结果改为 2026-11-12 实测数据、§9 补 `COOKIE_SECURE` 与「分享前排除 `.env`」、§12/§13 补视频 52m 与 HTTPS 必须项；`SECURITY.md` S-07 改为 `COOKIE_SECURE` 生效机制并关闭 G-02，清理 S-11/S-12/S-13 的「待创建」过期标记 |
+  | 7 | `backend/.env` 含非空口令与密钥 | 核实：已被 `.gitignore` 忽略、未进 Git、`.dockerignore` 排除，**未泄露到仓库**；风险在整目录打包分享。`scripts/check_secrets.py` 新增 `local_env_report()`：只报告非空键名不打印值，普通模式 WARN，`--share-check` 时存在 `backend/.env` 即 FAIL 退出 1；README 补分享前检查说明。**轮换口令/密钥属用户操作，未代为修改** |
+  | 8 | （截图未列）硬刷新 `/my`、`/admin` 等受保护页被守卫提前踢到登录页：`main.ts` 先 `app.use(router)`（内部立即 `push` 当前地址）再异步 `hydrate()` | 新增 `frontend/src/bootstrap.ts`：`await hydrate()` 完成后才 `app.use(router)` 并 mount（hydrate 失败仍继续，避免白屏）；`main.ts` 改用 bootstrap；新增 `bootstrap.spec.ts` 2 条用例验证时序 |
+
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | `python -m ruff check --no-cache app tests` | 通过 | All checks passed |
+  | `python -m ruff format --no-cache --check app tests` | 通过 | 102 files already formatted（顺带修正 `services/admin.py`、`tests/test_brewing_guides.py` 既存格式差异，纯换行/折行） |
+  | `cd backend; python -m pytest -q -p no:cacheprovider --log-cli-level=WARNING` | 通过 | **197 passed, 1 warning**（Starlette httpx 弃用告警），28.45s，连真实 MySQL |
+  | `npm run lint` | 通过 | 无告警 |
+  | `npm run format:check` | 通过 | All matched files use Prettier code style |
+  | `npx vue-tsc --noEmit -p tsconfig.app.json` | 通过 | 无类型错误 |
+  | 前端 Vitest 全量 | 通过 | **13 个 spec / 89 条用例**（新增 redirect 5 + bootstrap 2 + 既有用例） |
+  | 生产构建 | 通过 | `vite build` 1825 modules，主入口 104.09 kB（gzip 37.18 kB），`vendor-element-plus` 998.39 kB（gzip 320.75 kB，>500 kB 提示非失败） |
+  | `python scripts/check_all.py` | 通过 | 300 条文档链接；常量 `60/100/35/14`；五层 0 违规；268 个文本文件无敏感信息；`backend/.env` 输出 WARN |
+  | `python scripts/check_secrets.py --share-check` | 通过（按设计失败） | 退出码 1 并提示 `backend/.env` 存在，符合分享前阻断预期 |
+
+- 运行环境限制（如实记录）：
+  1. 沙箱内 `npm run test:run` 必报 `Error: spawn EPERM`（Vite `windowsSafeRealPathSync` 执行 `net use`）；本次用临时 Node 预加载脚本拦截该调用 + 临时 Vitest 配置跑通，**临时文件已清理**，全量用例数可信，但直连命令未能原样复现。
+  2. `npm run typecheck` / `npm run build` 因写 `node_modules/.tmp/*.tsbuildinfo` 与 `frontend/dist` 被沙箱拒绝（TS5033 / EPERM）；类型检查改用 `vue-tsc --noEmit` 等价验证，构建改用 `--outDir $TEMP/...` 验证，**未写入仓库 `dist/`**。
+  3. `frontend/.tmp-vitest.config.mjs`（临时 Vitest 配置）已清空但**文件本身无法删除**（宿主对该路径 unlink 报 Permission denied），需人工删除；该文件未被 Git 跟踪，`npm run test:run` 不受影响。
+  4. **未做浏览器 E2E**：401 重定向、硬刷新受保护页、HTTP 下 Cookie 保存三项均以单元测试与代码时序验证，未在真实浏览器跑 Playwright。
+  5. **未实机复测 Nginx 413**：视频 6–50MB 上传仅做配置断言，未在真实 Nginx 环境验证（与 §12 已知问题 8 同一事项）。
+
+- 可回滚：还原上表 8 项涉及的源码/文档改动（`git` 中 27 个修改文件 + 以下新增文件）；删除新增源码 `frontend/src/utils/redirect.ts`、`frontend/src/bootstrap.ts`、`backend/app/scripts/recount_favorite_counts.py` 与新增测试 `frontend/src/utils/redirect.spec.ts`、`frontend/src/bootstrap.spec.ts`、`backend/tests/test_deploy_config.py`、`backend/tests/test_favorite_count_recount.py`；`exclude_id` 为向后兼容的可选参数，回退时可保留。
+

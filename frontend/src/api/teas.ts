@@ -63,9 +63,9 @@ export function getRelatedTeas(id: number, limit = 4) {
 }
 
 /** GET /teas/recommended 个性化推荐（S16 / API_CONTRACT §4.2.10）：limit 1-8，默认 1 */
-export function getRecommendedTeas(limit = 1) {
+export function getRecommendedTeas(limit = 1, excludeId?: number) {
   return request.get<unknown, ApiEnvelope<TeaListItem[]>>('/teas/recommended', {
-    params: { limit },
+    params: excludeId ? { limit, exclude_id: excludeId } : { limit },
   })
 }
 

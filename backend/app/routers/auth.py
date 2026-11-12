@@ -31,20 +31,24 @@ router = APIRouter()
 
 # Cookie 通用属性（API_CONTRACT §1.5 / SECURITY S-07）
 _COOKIE_MAX_AGE = settings.SESSION_EXPIRE_DAYS * 86400
-_COOKIE_KWARGS = dict(
-    key="tea_session",
-    max_age=_COOKIE_MAX_AGE,
-    httponly=True,
-    samesite="lax",
-    path="/",
-    # 生产 HTTPS 下启用 Secure；本地 HTTP 开发关闭
-    secure=not settings.DEBUG,
-)
+
+
+def _cookie_kwargs() -> dict:
+    """每次下发时读取配置，便于部署切换 COOKIE_SECURE 与测试覆盖。"""
+    return dict(
+        key="tea_session",
+        max_age=_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        path="/",
+        # HTTPS 部署启用 Secure；纯 HTTP 演示需显式设 COOKIE_SECURE=false
+        secure=settings.cookie_secure,
+    )
 
 
 def _set_session_cookie(response: Response, user) -> None:
     token = create_session_token(user.id, user.session_version)
-    response.set_cookie(value=token, **_COOKIE_KWARGS)
+    response.set_cookie(value=token, **_cookie_kwargs())
 
 
 def _clear_session_cookie(response: Response) -> None:
@@ -53,7 +57,7 @@ def _clear_session_cookie(response: Response) -> None:
         path="/",
         httponly=True,
         samesite="lax",
-        secure=not settings.DEBUG,
+        secure=settings.cookie_secure,
     )
 
 

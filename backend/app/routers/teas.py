@@ -77,12 +77,15 @@ def random_tea(exclude_id: int | None = Query(None), db: Session = Depends(get_d
 @router.get("/recommended")
 def recommended_teas(
     limit: int = Query(1, description="返回条数，夹取 1-8"),
+    exclude_id: int | None = Query(None, description="排除指定茶品（避免“换一款”重复）"),
     current_user=Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """个性化推荐（S16 / API_CONTRACT §4.2.10）：未登录或无收藏回退随机。"""
     user_id = current_user.id if current_user else None
-    return ok(teas_service.recommended_teas(db, user_id=user_id, limit=limit))
+    return ok(
+        teas_service.recommended_teas(db, user_id=user_id, limit=limit, exclude_id=exclude_id)
+    )
 
 
 @router.get("/{tea_id}")

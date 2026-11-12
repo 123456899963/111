@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # 不内置默认密钥；必须注入随机值，否则拒绝启动（SECURITY S-31）
     SECRET_KEY: str = ""
     SESSION_EXPIRE_DAYS: int = 30  # PRD FR-4.3：30 天 Cookie 会话
+    # 会话 Cookie 的 Secure 标记；未设置时由 DEBUG 推导（生产默认 True）。
+    # 纯 HTTP 演示部署必须显式设为 false，否则浏览器不会回传 Cookie。
+    COOKIE_SECURE: bool | None = None
 
     # === 登录失败锁定（S14 / SECURITY S-33）===
     # 统计窗口内，同一用户名或同一 IP 失败达到阈值即拒绝登录，窗口滚动过期后解锁
@@ -61,6 +64,11 @@ class Settings(BaseSettings):
         if not self.SECRET_KEY.strip():
             raise ValueError("SECRET_KEY 未配置：请在 .env 或环境变量中注入随机密钥")
         return self
+
+    @property
+    def cookie_secure(self) -> bool:
+        """Cookie Secure 的最终取值：显式配置优先，否则 DEBUG 关闭时启用。"""
+        return not self.DEBUG if self.COOKIE_SECURE is None else self.COOKIE_SECURE
 
     @property
     def DATABASE_URL(self) -> str:

@@ -254,3 +254,37 @@ def test_recommended_prefers_favorite_category_and_excludes_favorited():
         assert other_tea > 0
     finally:
         _cleanup([username], [favorite_tea, other_tea])
+
+
+def test_recommended_exclude_id_works_for_anonymous_fallback():
+    first = TestClient(app).get("/api/v1/teas/recommended").json()["data"][0]
+    for _ in range(5):
+        items = (
+            TestClient(app)
+            .get("/api/v1/teas/recommended", params={"exclude_id": first["id"]})
+            .json()["data"]
+        )
+        assert all(item["id"] != first["id"] for item in items)
+
+    # 非法 exclude_id 与其他端点一致：40000
+    resp = TestClient(app).get("/api/v1/teas/recommended", params={"exclude_id": "abc"})
+    assert resp.status_code == 400
+    assert resp.json()["code"] == 40000
+
+
+def test_recommended_exclude_id_works_in_preference_path():
+    username = _unique_username()
+    favorite_tea = _create_tea(category="green")
+    current_tea = _create_tea(category="green")
+    try:
+        client = _register(username)
+        client.post(f"/api/v1/favorites/{favorite_tea}")
+
+        for _ in range(5):
+            items = client.get(
+                "/api/v1/teas/recommended",
+                params={"limit": 1, "exclude_id": current_tea},
+            ).json()["data"]
+            assert all(item["id"] not in {favorite_tea, current_tea} for item in items)
+    finally:
+        _cleanup([username], [favorite_tea, current_tea])

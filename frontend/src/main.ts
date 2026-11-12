@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
 import App from './App.vue'
+import { bootstrap } from './bootstrap'
 import router from './router'
 import { useUserStore } from './stores/user'
 import './style.css'
@@ -10,7 +11,6 @@ const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
-app.use(router)
 
 // 后台按需加载 Element Plus：前台保持自研组件 + 设计 Token（AGENTS.md §4）
 let adminUiInstalled = false
@@ -27,8 +27,11 @@ router.beforeEach(async (to) => {
   return true
 })
 
-// 启动时恢复登录态（校验 HttpOnly Cookie 是否仍然有效）
+// 启动时先恢复登录态，再安装 router（首次导航的守卫才能读到正确状态）
 const userStore = useUserStore()
-userStore.hydrate().finally(() => {
-  app.mount('#app')
+void bootstrap({
+  app,
+  router,
+  hydrate: () => userStore.hydrate(),
+  mount: () => app.mount('#app'),
 })

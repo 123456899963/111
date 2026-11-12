@@ -1,6 +1,7 @@
 import axios from 'axios'
 import router from '@/router'
 import { useToastStore } from '@/stores/toast'
+import { buildLoginRedirect } from '@/utils/redirect'
 
 // 创建 axios 实例 —— 统一配置 + 拦截器
 const request = axios.create({
@@ -47,7 +48,8 @@ request.interceptors.response.use(
         toast.warn('管理员会话已过期，请重新登录')
         router.push({ name: 'admin-login' })
       } else if (!isPublic) {
-        const redirect = encodeURIComponent(window.location.pathname + window.location.search)
+        // 不在此处编码：Vue Router 会序列化 query，提前编码会导致登录后跳 /%2F... 404
+        const redirect = buildLoginRedirect(window.location.pathname, window.location.search)
         toast.warn('登录已过期，请重新登录')
         router.push({ path: '/login', query: { redirect } })
       }

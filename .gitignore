@@ -53,3 +53,7 @@ yarn-error.log*
 # === AI Agent Temp ===
 .git_backup_prd_only/
 .trae-html-share-packages/
+# 受限环境下的临时 Vitest/Vite 绕过文件（不参与构建，可随时删除）
+.tmp-vitest.config.mjs
+.tmp-vitest.mjs
+.tmp-vite-preload.cjs

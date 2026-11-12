@@ -156,7 +156,7 @@ async function loadRandom() {
   try {
     if (userStore.isLoggedIn) {
       // 个性化推荐返回列表卡片，首页卡片需要冲泡信息，再取一次详情
-      const res = await getRecommendedTeas(1)
+      const res = await getRecommendedTeas(1, randomTea.value?.id)
       const item = res.data?.[0]
       randomTea.value = item ? (await getTeaDetail(item.id)).data : null
     } else {
