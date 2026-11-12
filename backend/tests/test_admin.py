@@ -643,6 +643,7 @@ def test_admin_stats_counts_and_fixed_distribution():
             "red",
             "oolong",
             "dark",
+            "reprocessed",
         ]
         assert (
             sum(c["count"] for c in after_toggle["category_distribution"])

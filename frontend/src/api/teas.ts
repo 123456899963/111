@@ -21,7 +21,7 @@ export function getTeaList(params: TeaListParams) {
   return request.get<unknown, ApiEnvelope<TeaListData>>('/teas', { params })
 }
 
-/** GET /teas/categories 六大茶类计数（固定六项顺序） */
+/** GET /teas/categories 七大茶类计数（固定七项顺序） */
 export function getCategories() {
   return request.get<unknown, ApiEnvelope<CategoryCount[]>>('/teas/categories')
 }

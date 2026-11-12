@@ -58,7 +58,7 @@ def count_stats(db: Session) -> tuple[int, int, int]:
 
 
 def count_by_category_all(db: Session) -> dict[str, int]:
-    """六大茶类分布（含下架），缺失由 Service 补 0。"""
+    """七大茶类分布（含下架），缺失由 Service 补 0。"""
     rows = db.query(Tea.category, func.count(Tea.id)).group_by(Tea.category).all()
     return {category: count for category, count in rows}
 

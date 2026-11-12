@@ -63,7 +63,7 @@ export interface UserStats {
 }
 
 // ===== 茶品 =====
-export type TeaCategory = 'green' | 'white' | 'yellow' | 'red' | 'oolong' | 'dark'
+export type TeaCategory = 'green' | 'white' | 'yellow' | 'red' | 'oolong' | 'dark' | 'reprocessed'
 
 /** 冲泡教程单步（ADR-0005）：标题 + 动作说明 + 可选提示 */
 export interface BrewingStep {
@@ -155,7 +155,7 @@ export interface TeaListData {
   page_size: number
 }
 
-/** 六大茶类计数（API_CONTRACT §2.3.1） */
+/** 七大茶类计数（API_CONTRACT §2.3.1） */
 export interface CategoryCount {
   category: TeaCategory
   count: number

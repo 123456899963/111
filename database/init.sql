@@ -47,8 +47,8 @@ CREATE TABLE users (
 CREATE TABLE teas (
   id                     INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   name                   VARCHAR(100)  NOT NULL               COMMENT '茶品名称',
-  category               ENUM('green','white','yellow','red','oolong','dark') NOT NULL
-                                                               COMMENT '六大茶类',
+  category               ENUM('green','white','yellow','red','oolong','dark','reprocessed') NOT NULL
+                                                               COMMENT '七大茶类',
   origin                 VARCHAR(200)  NOT NULL               COMMENT '产地：省级 + 产区，如 浙江 杭州 西湖狮峰',
   season                 ENUM('明前','雨前','春茶','夏茶','秋茶','冬茶') DEFAULT NULL
                                                                COMMENT '采摘季节（选填）',
@@ -247,7 +247,7 @@ CREATE TABLE login_attempts (
 CREATE TABLE tea_name_category_map (
   id        INT UNSIGNED NOT NULL AUTO_INCREMENT,
   name      VARCHAR(100) NOT NULL COMMENT '名品名称',
-  category  ENUM('green','white','yellow','red','oolong','dark') NOT NULL COMMENT '应有茶类',
+  category  ENUM('green','white','yellow','red','oolong','dark','reprocessed') NOT NULL COMMENT '应有茶类',
   PRIMARY KEY (id),
   UNIQUE KEY uk_name_category_name (name)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
@@ -387,7 +387,10 @@ INSERT INTO tea_name_category_map (name, category) VALUES
   ('君山银针', 'yellow'), ('蒙顶黄芽', 'yellow'),
   ('正山小种', 'red'), ('金骏眉', 'red'), ('祁门红茶', 'red'), ('滇红', 'red'),
   ('大红袍', 'oolong'), ('铁观音', 'oolong'), ('武夷岩茶', 'oolong'), ('凤凰单丛', 'oolong'),
-  ('普洱熟茶', 'dark'), ('普洱生茶', 'dark'), ('安化黑茶', 'dark'), ('六堡茶', 'dark');
+  ('普洱熟茶', 'dark'), ('普洱生茶', 'dark'), ('安化黑茶', 'dark'), ('六堡茶', 'dark'),
+  ('茉莉花茶', 'reprocessed'), ('茉莉毛尖', 'reprocessed'), ('茉莉银针', 'reprocessed'),
+  ('桂花乌龙', 'reprocessed'), ('白桃乌龙', 'reprocessed'), ('玫瑰花茶', 'reprocessed'),
+  ('杭白菊', 'reprocessed'), ('陈皮普洱', 'reprocessed');
 
 -- ------------------------------------------------------------
 -- 11. content_types —— 内容板块分类（批次五 R1–R5 / 迁移 0007）

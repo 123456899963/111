@@ -333,7 +333,7 @@ def _parse_log_date(value: str | None, field: str) -> datetime | None:
 
 
 def stats(db: Session) -> AdminStatsResponse:
-    """仪表盘统计：含下架茶品，六大茶类固定顺序、缺失补 0。"""
+    """仪表盘统计：含下架茶品，七大茶类固定顺序、缺失补 0。"""
     total, active, inactive = admin_repo.count_stats(db)
     category_map = admin_repo.count_by_category_all(db)
     distribution = [

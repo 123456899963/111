@@ -246,7 +246,7 @@ function goPage(page: number) {
         <RouterLink to="/">首页</RouterLink>
         <span class="breadcrumb__sep">›</span>
         <span class="breadcrumb__current">{{ breadcrumbLabel }}</span>
-        <RouterLink class="breadcrumb__compare" to="/compare">六大茶类对比 →</RouterLink>
+        <RouterLink class="breadcrumb__compare" to="/compare">七大茶类对比 →</RouterLink>
       </nav>
 
       <!-- 工具条：茶类 + 筛选 + 排序 -->
@@ -829,6 +829,16 @@ function goPage(page: number) {
 
 .chip--dark.chip--active {
   background: var(--color-tea-dark);
+  color: var(--color-text-inverse);
+}
+
+.chip--reprocessed {
+  border-color: var(--color-tea-reprocessed);
+  color: var(--color-tea-reprocessed);
+}
+
+.chip--reprocessed.chip--active {
+  background: var(--color-tea-reprocessed);
   color: var(--color-text-inverse);
 }
 

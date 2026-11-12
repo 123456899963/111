@@ -213,10 +213,10 @@ def test_off_shelf_tea_hidden_and_detail_40401():
         _cleanup_tea(tea_id)
 
 
-# ===== 4.2.2 六大茶类计数 =====
+# ===== 4.2.2 七大茶类计数 =====
 
 
-def test_categories_fixed_six_in_order():
+def test_categories_fixed_seven_in_order():
     resp = client.get("/api/v1/teas/categories")
     assert resp.status_code == 200
     data = resp.json()["data"]
@@ -227,6 +227,7 @@ def test_categories_fixed_six_in_order():
         "red",
         "oolong",
         "dark",
+        "reprocessed",
     ]
     count_map = {c["category"]: c["count"] for c in data}
     assert count_map["green"] >= 1

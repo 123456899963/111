@@ -180,7 +180,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 
 | 字典 | API 值（数据库值） | 展示名 |
 |---|---|---|
-| `category` | `green` / `white` / `yellow` / `red` / `oolong` / `dark` | 绿茶 / 白茶 / 黄茶 / 红茶 / 乌龙茶 / 黑茶 |
+| `category` | `green` / `white` / `yellow` / `red` / `oolong` / `dark` / `reprocessed` | 绿茶 / 白茶 / 黄茶 / 红茶 / 乌龙茶 / 黑茶 / 再加工茶 |
 | `season` | `明前` / `雨前` / `春茶` / `夏茶` / `秋茶` / `冬茶` | 同值 |
 | `fermentation` | `不发酵` / `微发酵` / `半发酵` / `全发酵` / `后发酵` | 同值 |
 | `role` | `user` / `admin` | 注册用户 / 管理员 |
@@ -289,7 +289,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 |---|---|---|---|
 | `id` | integer | 茶品主键 | `teas.id` |
 | `name` | string | 茶品名称 | `teas.name` |
-| `category` | string | 六大茶类枚举 | `teas.category` |
+| `category` | string | 七大茶类枚举 | `teas.category` |
 | `origin` | string | 完整产地“省 市 产区” | `teas.origin` |
 | `season` | string / null | 采摘季节 | `teas.season` |
 | `main_image_url` | string / null | 主图 URL 或 `/uploads/...` | `teas.main_image_url` |
@@ -422,7 +422,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 
 | 结构 | 字段 | 类型 | 说明 |
 |---|---|---|---|
-| `CategoryCount` | `category` | string | 六大茶类值，顺序固定 `green, white, yellow, red, oolong, dark` |
+| `CategoryCount` | `category` | string | 七大茶类值，顺序固定 `green, white, yellow, red, oolong, dark, reprocessed` |
 | | `count` | integer | 已上架数量；无收录返回 0 |
 | `OriginCount` | `origin` | string | **省级名称**（从 `teas.origin` 第一个空格前的片段派生），如“浙江” |
 | | `count` | integer | 该省已上架数量 |
@@ -537,7 +537,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | `total_count` | integer | 茶品总数（含下架） |
 | `active_count` | integer | 上架数 |
 | `inactive_count` | integer | 下架数 |
-| `category_distribution` | `CategoryCount[]` | 六大茶类分布（含下架），顺序固定，缺失补 0 |
+| `category_distribution` | `CategoryCount[]` | 七大茶类分布（含下架），顺序固定，缺失补 0 |
 
 ### 2.9 `UploadResult`
 
@@ -879,7 +879,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
   - 无结果时返回空数组，不报错（PRD 空状态由前端渲染）。
   - 产地筛选面向省级选项（PRD FR-1.1）；`teas.origin` 存储为“省 市 产区”，服务端取第一个空格前片段作为省份并做前缀匹配。
 
-#### 4.2.2 六大茶类计数
+#### 4.2.2 七大茶类计数
 
 - **方法与路径**：`GET /teas/categories`
 - **权限**：游客
@@ -1629,7 +1629,7 @@ Set-Cookie: tea_session=<signed-value>; Path=/; Max-Age=2592000; HttpOnly; SameS
 | 字段 | 类型 | 必填 | 约束 | DB 列 |
 |---|---|---|---|---|
 | `name` | string | 是 | trim 后 1–100 字符 | `teas.name` |
-| `category` | string | 是 | 六类枚举 | `teas.category` |
+| `category` | string | 是 | 七类枚举 | `teas.category` |
 | `origin` | string | 是 | 1–200 字符，“省 市 产区” | `teas.origin` |
 | `season` | string / null | 否 | 六值枚举或 `null` | `teas.season` |
 | `fermentation` | string / null | 否 | 五值枚举或 `null` | `teas.fermentation` |
@@ -2289,7 +2289,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 | 字段 | 类型 | 必填 |
 |---|---|---|
 | `name` | string | 是（≤100） |
-| `category` | string | 是（六大茶类枚举） |
+| `category` | string | 是（七大茶类枚举） |
 | `origin` | string | 是（≤200） |
 | `season` / `fermentation` / `price_range` / `representative_variety` | string / null | 否 |
 | `shape_desc` / `soup_desc` / `aroma_desc` / `taste_desc` | string | 是 |
@@ -2848,7 +2848,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/upload \
 | PRD | 接口 |
 |---|---|
 | FR-1.1–FR-1.6 筛选/排序/分页 | `GET /teas`（默认 `page_size=12`） |
-| FR-2.1 六大茶类入口 | `GET /teas/categories` |
+| FR-2.1 七大茶类入口 | `GET /teas/categories` |
 | FR-2.2 热门推荐 | `GET /teas/hot`（前 8） |
 | FR-2.3 随机发现 | `GET /teas/random` |
 | FR-2.4 搜索 | `GET /teas?keyword=` |

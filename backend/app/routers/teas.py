@@ -52,7 +52,7 @@ def list_teas(
 
 @router.get("/categories")
 def categories(db: Session = Depends(get_db)):
-    """六大茶类计数（API_CONTRACT §4.2.2）"""
+    """七大茶类计数（API_CONTRACT §4.2.2）"""
     return ok(teas_service.categories(db))
 
 

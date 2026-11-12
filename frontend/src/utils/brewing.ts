@@ -16,6 +16,7 @@ const CATEGORY_DEFAULTS: Record<TeaCategory, [number, number, number]> = {
   red: [95, 5, 30],
   oolong: [100, 7, 20],
   dark: [100, 7, 20],
+  reprocessed: [90, 5, 30],
 }
 
 const CATEGORY_INTRO: Record<TeaCategory, string> = {
@@ -25,6 +26,7 @@ const CATEGORY_INTRO: Record<TeaCategory, string> = {
   red: '红茶全发酵，甜香明显，水温 90–95℃、出汤要快，避免酸涩。',
   oolong: '乌龙半发酵，香气高扬，必须沸水、快出汤，盖碗最合适。',
   dark: '黑茶后发酵，醇厚耐泡，需沸水并先洗茶，泡淡后还可煮饮。',
+  reprocessed: '再加工茶以基础茶坯窨制或调配而成，香气突出，水温适中、出汤要快，避免香气散失。',
 }
 
 const CATEGORY_CAUTION: Record<TeaCategory, string> = {
@@ -34,6 +36,7 @@ const CATEGORY_CAUTION: Record<TeaCategory, string> = {
   red: '不要用持续沸腾的水猛冲茶叶，出汤后不留汤底，避免下一泡发酸。',
   oolong: '水温不足香气出不来；每一泡都要出尽茶汤，不留汤底。',
   dark: '务必用沸水；洗茶动作要快，避免滋味流失，泡淡后可加水煮饮。',
+  reprocessed: '水温过高或久闷都会让花香变闷、茶汤发苦，出汤要快，尽量不倒净后久置。',
 }
 
 const POUR_HINT: Record<TeaCategory, string> = {
@@ -43,6 +46,7 @@ const POUR_HINT: Record<TeaCategory, string> = {
   red: '水沸后稍等片刻再冲，持续沸腾的水容易让茶发酸。',
   oolong: '必须用沸水高冲，水温不足香气出不来。',
   dark: '必须用沸水，洗茶 1–2 次后再正式冲泡。',
+  reprocessed: '花茶用 85–90℃ 热水更护花香，调味茶可用 90℃ 左右。',
 }
 
 const BREW_HINT: Record<TeaCategory, string> = {
@@ -52,6 +56,7 @@ const BREW_HINT: Record<TeaCategory, string> = {
   red: '红茶出汤要快，久泡会苦涩。',
   oolong: '每泡都出尽，留汤底会闷苦，影响下一泡。',
   dark: '洗茶要快，久留会流失滋味。',
+  reprocessed: '出汤要比基础茶更快，久泡容易苦涩、花香发闷。',
 }
 
 function formatNumber(value: number | null | undefined, fallback: number): string {

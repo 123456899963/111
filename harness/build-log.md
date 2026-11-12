@@ -2030,3 +2030,62 @@ gba(250,248,245,0.12)，无方向、无渐变，肉眼不可辨认为独立图�
 - 未验证：**未做浏览器目检** —— 本轮会话无可用浏览器工具（`browser_*` 未注册），仅通过静态检查与构建验证；投稿页解遮挡、各页 kicker 观感、599px 下换行均需人工过目
 - 可回滚：删除 `.page-kicker` 两条全局样式；各页 `padding-top` 还原为 64/56（投稿与我的提交还原为 `32px 0 64px` 并删除新增 `.container`）；移除各页新增 `<p class="page-kicker">` 与 `font-family` 声明；面包屑 `›` 还原为 `/`
 
+## 2026-11-12 新增第七茶类「再加工茶」并录入 8 款边界茶
+
+- 任务编号：TASK-20261112-14
+- 分级：**C**（数据库 ENUM、API 契约、PRD 业务规则变更）
+- 判定理由：扩展茶类枚举属于数据契约与业务规则变更；已由用户明确确认「新增第七茶类再加工茶」，确认记录见本节需求来源
+- 需求来源：用户「先同步，再把边界茶也加入」；随后确认选择**新增「再加工茶」类**而非归入现有六类，并指定茉莉花茶、茉莉毛尖、茉莉银针、桂花乌龙、白桃乌龙，另由 AI 补充最具代表性的 3 款
+- 命名与样式：`category = reprocessed`；中文「再加工茶」；标签色 `--color-tea-reprocessed: #B98A9B`（柔和玫瑰色，仅 `style.css` 定义 HEX）
+- 入库 8 款（`scripts/tea_expand/data_reprocessed.py`）：茉莉花茶 / 茉莉毛尖 / 茉莉银针 / 桂花乌龙 / 白桃乌龙 / 玫瑰花茶 / 杭白菊 / 陈皮普洱
+- 变更：
+  1. 迁移 `backend/app/alembic/versions/0013_reprocessed_category.py`：`teas.category` 与 `tea_name_category_map.category` ENUM 追加 `reprocessed`（顺序固定在 `dark` 之后）
+  2. 后端枚举：`models/tea.py`、`models/contribution.py`、`schemas/tea.py`（`CATEGORY_VALUES` / `CategoryValue` / `CategoryCount`）、`services/contributions.py` 中文映射、`scripts/seed_brewing_guides.py`（默认水温/投茶/时长、导语、注意事项、`reprocessed` 专用 6 步模板）
+  3. 前端：`types/index.ts`、`utils/teaQuery.ts`（`TEA_CATEGORIES` + `CATEGORY_LABELS`）、`utils/brewing.ts`、`CategoryTag.vue`、`TeaListView.vue`（chip 选中态）、`HomeView.vue`（字标 / 标题 / 7 列网格 / 1023px 断点 4 列）、`CompareView.vue`（7 列，min-width 1000）、`style.css` 新增色 token；页脚 / 路由标题 / 投稿页 / 后台看板等用户可见文案由「六大」改为「七大」
+  4. 数据：新增 `scripts/tea_expand/data_reprocessed.py`；`__init__.py` 合并为 `ALL_TEAS`；`import_teas.py` 补 `reprocessed: (150, 1000)` 价格区间
+  5. 文档：PRD v1.4（七大茶类、枚举表、FR-2.1、S3 命名）、DATA_MODEL（ENUM / 索引说明 / 选型理由）、API_CONTRACT + openapi.yaml（枚举与固定顺序）、DESIGN_SYSTEM（标签色）、PAGE_SPECS（首页 7 张卡片、chips、对比页、后台分布图）、MODULE_DESIGN / ARCHITECTURE / AGENTS 的枚举表述、`database/init.sql`（两处 ENUM + 8 条名品映射）
+- 数据执行结果：`python -m alembic upgrade head` 成功；`python scripts/tea_expand/import_teas.py` 新增 8 款，当前库 **219** 款（green 66 / white 20 / yellow 14 / red 36 / oolong 41 / dark 34 / reprocessed 8）；`python -m app.scripts.seed_brewing_guides` 为新茶生成教程；`tea_name_category_map` 补 8 条（共 30 条）
+- 主图补充：8 款新茶各生成 1 张 4:3 实拍风格主图（玻璃杯冲泡特写，与既有茶品图风格一致），存放于 `backend/uploads/2026/11/`，`teas.main_image_url` 全部写入；`data_reprocessed.py` 同步补 `main_image_url`，重复导入不会丢图。校验：`main_image_url IS NULL` 数量为 0，`/uploads/...` 经后端与 Vite 代理均返回 200
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | `python -m ruff check app tests` | 通过 | All checks passed |
+  | `python -m ruff format --check app tests` | 未通过（既存） | 本轮修改的 `schemas/tea.py` 已格式化；仍有 `services/admin.py`、`tests/test_brewing_guides.py` 两处**本轮未改动**的既存格式差异，未顺手改动 |
+  | `python -m pytest -q` | 通过 | 190 passed（含更新后的七大茶类顺序断言） |
+  | `npm run lint` | 通过 | 无告警 |
+  | `npx prettier --check "src/**/*.{vue,css,ts}"` | 通过 | 全部符合格式 |
+  | `npm run typecheck` | 通过 | 无类型错误 |
+  | `npm run build` | 通过 | 成功，仅既存 element-plus chunk >500kB 提示 |
+  | `npm run test:run` | 通过 | 11 个文件 / 82 条用例全部通过 |
+  | `python scripts/check_all.py` | 通过 | 链接 / 常量 / 五层 / UI / 记录 / 密钥全部通过 |
+
+- 未验证：**未做浏览器目检** —— 首页 7 列卡片与对比页 7 列在 599px / 桌面视口的实际观感需人工过目；库中 8 款新茶详情页 UI 未逐款点击核对
+- 可回滚：`python -m alembic downgrade 0012_brewing_guides`（需先移除或改类 `reprocessed` 茶品，严格模式下否则失败）；还原本轮 ENUM / 类型 / 文档改动，删除 `data_reprocessed.py` 与对应 8 款数据
+
+### 追加（同日）：残留「六大茶类」排查与修正
+
+- 需求来源：用户截图首页统计带仍显示「6 大茶类体系」，要求修正并排查其他不适配处
+- 变更：
+  1. `HomeView.vue` 统计带数值由硬编码 `6` 改为 `TEA_CATEGORIES.length`（实际渲染 7），避免今后枚举再变时再次失配
+  2. `HomeView.vue` `.categories__grid` 响应式断点：`≤1199px` 4 列、`≤767px` 2 列，桌面 `repeat(7, 1fr)`
+  3. `CompareView.vue` 文件头注释「六列对比表」→「七列对比表」
+  4. 注释 / 文案同步：`backend/app/main.py`（OpenAPI 描述）、`routers/teas.py`、`repositories/admin_repo.py`、`services/admin.py`、`services/teas.py`（「固定六项」→「固定七项」）、`schemas/tea.py`
+  5. 文档同步：`openapi.yaml`（`/teas/categories` 摘要与「固定返回七项」）、`API_CONTRACT.md`（茶类枚举 / FR-2.1 入口）、`DESIGN_SYSTEM.md`（筛选 Chip、工具条、验收清单）、`TECH_STACK.md`（设计 token）、`DATA_MODEL.md`（名品映射 22 → 30）、`README.md`（项目定位、功能说明、截图标题）
+- 不改动项（判定为准确的历史/领域表述）：`原型/`（禁止修改）、`specs/`（历史草稿）、`build-log` 历史条目、`init.sql` 中「六大茶类分类原理」「古六大茶山」等内容数据、`素材清单.md` 中 6 张首页背景图的记录
+- 测试证据：
+
+  | 项目 | 结果 | 说明 |
+  |---|---|---|
+  | `python -m ruff check app tests` | 通过 | All checks passed |
+  | `python -m pytest -q` | 通过 | 190 passed |
+  | `npm run lint` | 通过 | 无告警 |
+  | `npx prettier --check src` | 通过 | 全部符合格式 |
+  | `npm run typecheck` | 通过 | 无类型错误 |
+  | `npm run build` | 通过 | 成功，仅既存 element-plus chunk >500kB 提示 |
+  | `npm run test:run` | 通过 | 11 个文件 / 82 条用例全部通过 |
+  | `python scripts/check_all.py` | 通过 | 链接 / 常量 / 五层 / UI / 记录 / 密钥全部通过 |
+
+- 未验证：未做浏览器目检 —— 统计带「7 大茶类体系」、7 列分类网格在 1199/767 断点的换行观感、对比页 7 列在 1024 视口的横向滚动需人工过目
+- 可回滚：还原上述 5 组文件改动即可（统计带数值亦可回退为常量 6）
+

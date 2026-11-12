@@ -93,7 +93,7 @@ erDiagram
     teas {
         int id PK
         varchar name
-        enum category "六大茶类"
+        enum category "七大茶类（含再加工茶）"
         varchar origin
         enum season "选填"
         enum fermentation "选填"
@@ -199,7 +199,7 @@ erDiagram
 |---|---|---|---|---|
 | `id` | INT UNSIGNED | 否 | AUTO_INCREMENT | 主键 |
 | `name` | VARCHAR(100) | 否 | — | 不建唯一约束（允许同名不同产区） |
-| `category` | ENUM('green','white','yellow','red','oolong','dark') | 否 | — | 六大茶类 |
+| `category` | ENUM('green','white','yellow','red','oolong','dark','reprocessed') | 否 | — | 七大茶类（v1.4 新增再加工茶，迁移 0013） |
 | `origin` | VARCHAR(200) | 否 | — | "省 市 产区"；省级筛选用前缀匹配 |
 | `season` | ENUM(6 值) | 是 | NULL | 明前/雨前/春茶/夏茶/秋茶/冬茶 |
 | `fermentation` | ENUM(5 值) | 是 | NULL | 不发酵/微发酵/半发酵/全发酵/后发酵 |
@@ -396,7 +396,7 @@ erDiagram
 |---|---|---|---|---|
 | `id` | INT UNSIGNED | 否 | AUTO_INCREMENT | 主键 |
 | `name` | VARCHAR(100) | 否 | — | 名品名称，唯一 |
-| `category` | ENUM(六大茶类) | 否 | — | 该名品应有茶类 |
+| `category` | ENUM(七大茶类) | 否 | — | 该名品应有茶类 |
 
 - **索引**：`uk_name_category_name`(name) → 提交时按名称精确命中。
 - **校验规则**：命中且与用户所选茶类不一致 → `40000`；未命中则进入管理员人工审核。名称相似度查重（>90%）在应用层完成，不依赖本表。
@@ -408,7 +408,7 @@ erDiagram
 | 索引名 | 表 | 字段 | 类型 | 服务的具体查询 |
 |---|---|---|---|---|
 | `uk_users_username` | users | username | 唯一 | 注册唯一性校验、登录按用户名 |
-| `idx_teas_active_category` | teas | (is_active, category) | 普通 | 列表 `is_active=1 AND category IN(...)`；首页六大类计数 |
+| `idx_teas_active_category` | teas | (is_active, category) | 普通 | 列表 `is_active=1 AND category IN(...)`；首页七大类计数 |
 | `idx_teas_active_created` | teas | (is_active, created_at) | 普通 | 列表默认"最新上架"+分页 |
 | `idx_teas_active_favorite` | teas | (is_active, favorite_count) | 普通 | 首页热门前 8、列表"收藏最多" |
 | `uk_tea_tips_tea_id` | tea_tips | tea_id | 唯一 | 详情页 1:1 查询；固化 1:1 |
@@ -498,7 +498,7 @@ erDiagram
 
 | 字段 | 选型 | 理由 |
 |---|---|---|
-| `teas.category` | ENUM(6) | PRD §2.4 把六大茶类定为产品契约，无后台增删诉求 |
+| `teas.category` | ENUM(7) | PRD §2.4 把七大茶类（六大基础茶类 + 再加工茶）定为产品契约，无后台增删诉求 |
 | `teas.season` | ENUM(6) | PRD §4.1 明确 6 值 |
 | `teas.fermentation` | ENUM(5) | PRD §4.1 明确 5 值 |
 | `teas.price_range` | VARCHAR(32) + Pydantic 校验 | PRD 只说"5 档"，档位文案/边界未定稿，ENUM 会把内容固化成 DDL |
@@ -506,7 +506,7 @@ erDiagram
 | `operation_logs.action` | VARCHAR(32) | 日志需可扩展动作，历史不受新枚举约束 |
 
 **不建"茶类字典表"的理由**：
-1. 六大茶类是**不变的产品契约**，字典表的核心价值（后台可维护选项）不存在；
+1. 六大基础茶类 + 再加工茶是**产品契约**（v1.4 经用户确认新增第七类），字典表的核心价值（后台可维护选项）不存在；
 2. 需要额外 join、CRUD 界面与缓存，而展示名/颜色本来就由前端 token 控制，字典表无法替代；
 3. 会突破当前 11 张表基线（v1.4 起，新增 PRD 没有且未经确认的业务表）；
 4. MySQL 5.7 无有效 CHECK，ENUM 是**唯一能落地的 DB 级枚举约束**；字典表仍需应用层校验，并不更强；
@@ -580,7 +580,7 @@ erDiagram
 | 示例茶品 | 6 | 六大茶类各一款，字段完整，主图使用外链 CDN |
 | 官方小贴士 | 6 组 | 按 FR-6.4，未写的区块留 NULL 供前端隐藏 |
 | 清单 / 收藏 / 令牌 / 日志 | 0 | 由运行时行为产生；默认清单在用户首次访问时自动创建 |
-| 名品-茶类映射 | 22 | 六大茶类常见名品，供 S10 第一层校验；由 0006 迁移与 `init.sql` 同步写入 |
+| 名品-茶类映射 | 30 | 七大茶类常见名品，供 S10 第一层校验；由 0006 迁移与 `init.sql` 同步写入 |
 
 > `teas.favorite_count` 种子值为**演示热度**（取自原型 mock），与 `favorite_items` 实际行数不相等。正式环境可由对账重算归零，或在后台维护时逐步校准。这是有意的演示数据取舍，不是约束缺陷。
 

@@ -25,7 +25,7 @@
 | 茶褐-悬浮 | `--color-primary-hover` | `hover:bg-primary-hover` | `#7A6548` | 122, 101, 72 | 主按钮 hover 背景 |
 | 茶褐-深 | `--color-primary-dark` | `text-primary-dark` | `#6B5740` | 107, 87, 64 | 强调文字、重要标题 |
 
-### 1.2 六大茶类标签色（核心识别体系）
+### 1.2 七大茶类标签色（核心识别体系）
 
 | 茶类 | CSS 变量 | Tailwind 类 | HEX | 使用场景 |
 |---|---|---|---|---|
@@ -35,6 +35,7 @@
 | 红茶 | `--color-tea-red` | `bg-tea-red` / `text-tea-red` | `#C0392B` | 同上 |
 | 乌龙茶 | `--color-tea-oolong` | `bg-tea-oolong` / `text-tea-oolong` | `#D35400` | 同上 |
 | 黑茶 | `--color-tea-dark` | `bg-tea-dark` / `text-tea-dark` | `#4A3728` | 同上 |
+| 再加工茶 | `--color-tea-reprocessed` | `bg-tea-reprocessed` / `text-tea-reprocessed` | `#B98A9B` | 同上（柔和玫瑰色，与六类基础茶色区分） |
 
 **标签使用规则**：
 - 未选中态：`border` 1px solid 对应茶类色，`text` 对应茶类色，`bg-transparent`
@@ -274,7 +275,7 @@ hover 状态:
 
 ### 4.4 标签 / Badge / Chip
 
-#### 六大茶类筛选 Chip（未选中）
+#### 七大茶类筛选 Chip（未选中）
 
 ```
 高度: 36px
@@ -286,7 +287,7 @@ hover 状态:
 hover: bg-对应茶类色/10（极淡）
 ```
 
-#### 六大茶类筛选 Chip（选中）
+#### 七大茶类筛选 Chip（选中）
 
 ```
 高度: 36px
@@ -365,7 +366,7 @@ hover: bg-bg-muted
 
 ```
 位置: 列表页顶部，紧贴面包屑下方的工具条
-布局: 单行工具条 —— 左侧六大茶类 chips，右侧「筛选」按钮 + 排序下拉；产地 / 季节 / 发酵 / 价格折叠进展开面板（默认收起，有高级筛选时自动展开）
+布局: 单行工具条 —— 左侧七大茶类 chips，右侧「筛选」按钮 + 排序下拉；产地 / 季节 / 发酵 / 价格折叠进展开面板（默认收起，有高级筛选时自动展开）
 筛选按钮: 高 36px，rounded-md，1px border-dark；带高级筛选数量角标（pill，bg-primary）与展开箭头
 展开面板: bg-bg-surface + 1px border + rounded-lg，内边距 20px，内部维度横向排列
 每个维度标签: text-caption + 对应维度枚举 chips
@@ -547,13 +548,14 @@ Spinner: 24px, border 2px, border-primary, 旋转动画 1s linear infinite
   --color-primary-hover: #7A6548;
   --color-primary-dark: #6B5740;
 
-  /* === 六大茶类标签色 === */
+  /* === 七大茶类标签色 === */
   --color-tea-green: #5CB85C;
   --color-tea-white: #D4D0C8;
   --color-tea-yellow: #E6C25B;
   --color-tea-red: #C0392B;
   --color-tea-oolong: #D35400;
   --color-tea-dark: #4A3728;
+  --color-tea-reprocessed: #B98A9B;
 
   /* === 背景色 === */
   --color-bg-page: #FAF8F5;
@@ -620,7 +622,7 @@ Spinner: 24px, border 2px, border-primary, 旋转动画 1s linear infinite
 - [ ] **字体使用**：字号从规范中选取，不使用 `text-[22px]` 这类任意值
 - [ ] **圆角**：从 6 个预设值中选择
 - [ ] **间距**：遵循 4px 基准网格（4/8/16/24/32/48/64）
-- [ ] **茶品卡片**：图片 16:10、圆角 16px、hover translateY(-2px) + 阴影、六大茶类标签色正确
+- [ ] **茶品卡片**：图片 16:10、圆角 16px、hover translateY(-2px) + 阴影、七大茶类标签色正确
 - [ ] **按钮**：圆角胶囊、主/次/幽灵/图标四种不混用
 - [ ] **输入框**：focus 态有 3px primary 环、error 态有 3px error 环
 - [ ] **茶类筛选 Chip**：未选中 outline + 选中实心，白茶例外处理

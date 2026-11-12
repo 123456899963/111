@@ -289,7 +289,7 @@ Nginx (80/443)
 | 项 | 现状 / 策略 |
 |---|---|
 | 随机发现 | `ORDER BY RAND()`，数据量 < 1000 行无问题（TECH_STACK 4.9） |
-| 筛选聚合 | 六大茶类数量统计：一次 `GROUP BY category` 即可 |
+| 筛选聚合 | 七大茶类数量统计：一次 `GROUP BY category` 即可 |
 | 分页 | OFFSET + LIMIT，每页 12 条 |
 | 前端路由懒加载 | 动态 `import()` 按需加载 `/admin` 全部后台组件 |
 | Axios 请求去重 | 同页面重复调同一接口：Pinia Store 内做 loading 防抖 |

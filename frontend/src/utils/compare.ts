@@ -1,5 +1,5 @@
 /**
- * 六大茶类摘要对比（S3）：纯函数组装对比矩阵，供 Vitest 覆盖。
+ * 七大茶类摘要对比（S3）：纯函数组装对比矩阵，供 Vitest 覆盖。
  *
  * 数据来源：每个茶类取一款代表茶（收藏最多），再取其详情。
  * 列顺序固定为 TEA_CATEGORIES；某茶类无代表茶时该列全部为 null。
@@ -26,7 +26,7 @@ function formatNumber(value: number | null | undefined, unit: string): string | 
   return value != null ? `${value}${unit}` : null
 }
 
-/** 组装六列对比矩阵（列顺序固定） */
+/** 组装七列对比矩阵（列顺序固定） */
 export function buildCompareMatrix(teas: CompareMap): CompareRow[] {
   const columns = TEA_CATEGORIES.map((category) => teas[category] ?? null)
   const row = (label: string, pick: (tea: Tea | null) => string | null): CompareRow => ({

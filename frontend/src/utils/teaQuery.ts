@@ -10,7 +10,15 @@
 
 import type { TeaCategory, TeaListParams, TeaSort } from '@/types'
 
-export const TEA_CATEGORIES = ['green', 'white', 'yellow', 'red', 'oolong', 'dark'] as const
+export const TEA_CATEGORIES = [
+  'green',
+  'white',
+  'yellow',
+  'red',
+  'oolong',
+  'dark',
+  'reprocessed',
+] as const
 
 export const TEA_SEASONS = ['明前', '雨前', '春茶', '夏茶', '秋茶', '冬茶'] as const
 
@@ -25,6 +33,7 @@ export const CATEGORY_LABELS: Record<TeaCategory, string> = {
   red: '红茶',
   oolong: '乌龙茶',
   dark: '黑茶',
+  reprocessed: '再加工茶',
 }
 
 export const DEFAULT_PAGE_SIZE = 12

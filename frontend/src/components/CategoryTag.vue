@@ -69,4 +69,9 @@ const modifier = computed(() => `category-tag--${props.category}`)
   background: var(--color-tea-dark);
   color: var(--color-text-inverse);
 }
+
+.category-tag--reprocessed {
+  background: var(--color-tea-reprocessed);
+  color: var(--color-text-inverse);
+}
 </style>

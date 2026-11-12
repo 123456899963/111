@@ -28,7 +28,7 @@ from app.routers import (
 def create_app() -> FastAPI:
     app = FastAPI(
         title="茶·图鉴 API",
-        description="六大茶类结构化知识库平台 — MVP 后端",
+        description="七大茶类结构化知识库平台 — MVP 后端",
         version="0.1.0",
     )
 

@@ -637,6 +637,7 @@ def test_tc_list_09_categories_origins_exclude_off_shelf_and_clamp():
             "red",
             "oolong",
             "dark",
+            "reprocessed",
         ]
 
         origins = TestClient(app).get("/api/v1/teas/origins").json()["data"]

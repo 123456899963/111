@@ -10,7 +10,9 @@ from app.core.database import Base
 
 CONTRIBUTION_TYPE = Enum("new_tea", "article", name="contribution_type")
 CONTRIBUTION_STATUS = Enum("pending", "approved", "rejected", name="contribution_status")
-TEA_CATEGORY = Enum("green", "white", "yellow", "red", "oolong", "dark", name="tea_category")
+TEA_CATEGORY = Enum(
+    "green", "white", "yellow", "red", "oolong", "dark", "reprocessed", name="tea_category"
+)
 
 
 class Contribution(Base):

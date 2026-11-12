@@ -33,6 +33,7 @@ const CATEGORY_EN: Record<TeaCategory, string> = {
   red: 'BLACK TEA',
   oolong: 'OOLONG TEA',
   dark: 'DARK TEA',
+  reprocessed: 'REPROCESSED TEA',
 }
 
 const hotList = ref<TeaListItem[]>([])
@@ -132,7 +133,7 @@ const guideEntries = computed(() => [
   },
   {
     index: '03',
-    title: '六大茶类对比',
+    title: '七大茶类对比',
     desc: '把两到三款茶并排看，差异一眼看清',
     to: { name: 'compare' },
   },
@@ -285,7 +286,7 @@ function categoryStyle(category: TeaCategory) {
       </div>
       <div class="hero__scrim" aria-hidden="true"></div>
       <div ref="heroContentRef" class="container hero__content">
-        <span class="hero__kicker">六大茶类 · 结构化知识库</span>
+        <span class="hero__kicker">七大茶类 · 结构化知识库</span>
         <h1 class="hero__title">
           <RevealText as="span" text="一杯茶的" />
           <RevealText as="span" class="hero__title-accent" text="千种风味" :delay="60" />
@@ -365,7 +366,7 @@ function categoryStyle(category: TeaCategory) {
         </div>
         <span class="stats__divider" aria-hidden="true"></span>
         <div class="stats__item">
-          <span class="stats__value">6</span>
+          <span class="stats__value">{{ TEA_CATEGORIES.length }}</span>
           <span class="stats__label">大茶类体系</span>
         </div>
         <span class="stats__divider" aria-hidden="true"></span>
@@ -393,11 +394,11 @@ function categoryStyle(category: TeaCategory) {
       </div>
     </section>
 
-    <!-- 六大茶类入口 -->
+    <!-- 七大茶类入口 -->
     <section class="categories container">
       <div class="section-heading">
-        <span class="section-kicker">SIX CATEGORIES</span>
-        <RevealText as="h2" class="section-title" text="六大茶类" />
+        <span class="section-kicker">SEVEN CATEGORIES</span>
+        <RevealText as="h2" class="section-title" text="七大茶类" />
         <p class="section-subtitle">不同工艺，不同风味，点进去探索</p>
       </div>
       <div class="categories__grid">
@@ -1032,7 +1033,7 @@ function categoryStyle(category: TeaCategory) {
   }
 }
 
-/* 六大茶类 */
+/* 七大茶类 */
 .categories {
   padding: 48px 0;
 }
@@ -1086,7 +1087,7 @@ function categoryStyle(category: TeaCategory) {
 
 .categories__grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 16px;
 }
 
@@ -1491,9 +1492,15 @@ function categoryStyle(category: TeaCategory) {
   transform: rotate(180deg);
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1199px) {
   .categories__grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .categories__grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 

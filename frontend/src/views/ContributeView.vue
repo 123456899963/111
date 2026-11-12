@@ -214,7 +214,7 @@ onMounted(() => {
             <input v-model="teaForm.name" class="field__input" maxlength="100" required />
           </label>
           <label class="field">
-            <span class="field__label">六大茶类 *</span>
+            <span class="field__label">七大茶类 *</span>
             <select v-model="teaForm.category" class="field__input">
               <option v-for="category in TEA_CATEGORIES" :key="category" :value="category">
                 {{ CATEGORY_LABELS[category] }}

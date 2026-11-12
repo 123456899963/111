@@ -23,7 +23,7 @@ const routes: RouteRecordRaw[] = [
     path: '/compare',
     name: 'compare',
     component: () => import('@/views/CompareView.vue'),
-    meta: { title: '六大茶类对比' },
+    meta: { title: '七大茶类对比' },
   },
   {
     path: '/my',

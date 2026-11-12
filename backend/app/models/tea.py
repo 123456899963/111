@@ -29,7 +29,16 @@ class Tea(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     category: Mapped[str] = mapped_column(
-        Enum("green", "white", "yellow", "red", "oolong", "dark", name="tea_category"),
+        Enum(
+            "green",
+            "white",
+            "yellow",
+            "red",
+            "oolong",
+            "dark",
+            "reprocessed",
+            name="tea_category",
+        ),
         nullable=False,
     )
     origin: Mapped[str] = mapped_column(String(200), nullable=False)

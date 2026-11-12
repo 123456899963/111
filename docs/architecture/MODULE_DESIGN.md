@@ -20,7 +20,7 @@
 | # | 业务模块（PRD） | 后端 router 前缀 | 主要 REST 端点 | 前端路由/页面 | 主要数据表 |
 |---|---|---|---|---|---|
 | M1 | 茶品列表页 + 筛选 | `/api/v1/teas` | `GET ""`（列表+筛选+排序+分页）、`GET /categories`、`GET /origins` | `/teas` · TeaListView | `teas` |
-| M2 | 首页 | `/api/v1/teas` | `GET /hot`（热门推荐）、`GET /random`（随机发现）、`GET /categories`（六大茶类计数） | `/` · HomeView | `teas` |
+| M2 | 首页 | `/api/v1/teas` | `GET /hot`（热门推荐）、`GET /random`（随机发现）、`GET /categories`（七大茶类计数） | `/` · HomeView | `teas` |
 | M3 | 茶品详情页 | `/api/v1/teas` | `GET /{tea_id}`（详情 + 小贴士 + 冲泡教程） | `/teas/:id` · TeaDetailView | `teas` + `tea_tips` + `tea_brewing_guides` |
 | M4 | 注册登录 + 个人中心 | `/api/v1/auth` + `/api/v1/me` | `GET /auth/username-availability`、`POST /auth/register`、`POST /auth/login`、`POST /auth/logout`、`GET /auth/me`、`PUT /auth/password`；`GET /me/stats`、`POST /me/avatar`、`PUT /me/avatar` | 登录模态框（HomeView/MyListView/TeaDetailView 触发）、`/admin/login` · AdminLogin、`/profile` · ProfileView | `users` + `operation_logs` |
 | M5 | 收藏清单 + 品鉴笔记 + 分享链接 | `/api/v1/favorites` + `/api/v1/lists` + `/api/v1/shares` | 见 §4 完整端点表 | `/my` · MyListView、`/c/:shareId` · ShareView | `collection_lists` + `favorite_items` + `share_tokens` + `users`（外键）+ `teas`（外键） |
@@ -104,7 +104,7 @@ graph LR
 | 端点 | 方法 | 路径 | 入参 | 出参 | 角色 |
 |---|---|---|---|---|---|
 | 列表+筛选+排序+分页 | GET | `/api/v1/teas` | `category=`（支持逗号多选，如 `green,oolong`）、`origin=`（逗号多选）、`season=`（逗号多选）、`sort=`（`newest` / `favorite`）、`keyword=`（name/origin LIKE）、`page=`（默认 1）、`page_size=`（默认 12，max 50） | `{ items: TeaListItem[], total: number, page: number, page_size: number }` | 游客 / 用户 / 管理员 |
-| 六大茶类计数 | GET | `/api/v1/teas/categories` | 无 | `[{ category: "green", count: 18 }, ...]`（六大茶类顺序固定，缺失返回 0） | 游客 / 用户 / 管理员 |
+| 七大茶类计数 | GET | `/api/v1/teas/categories` | 无 | `[{ category: "green", count: 18 }, ...]`（七大茶类顺序固定，缺失返回 0） | 游客 / 用户 / 管理员 |
 | 产地列表 | GET | `/api/v1/teas/origins` | 无 | `[{ origin: "浙江", count: 8 }, ...]`（**省级名称**，从 `teas.origin` 第一段派生） | 游客 / 用户 / 管理员 |
 | 热门推荐 | GET | `/api/v1/teas/hot` | `limit=`（默认 8） | `TeaListItem[]`（按 `favorite_count DESC, created_at DESC`） | 游客 / 用户 / 管理员 |
 | 随机发现 | GET | `/api/v1/teas/random` | `exclude_id=`（当前页茶品，避免重复） | `TeaResponse` 或 null | 游客 / 用户 / 管理员 |
@@ -251,7 +251,7 @@ graph LR
 | # | 方法 | 路径 | 业务模块 |
 |---|---|---|---|
 | 1 | GET | `/` | M1 列表筛选 |
-| 2 | GET | `/categories` | M2 首页六大茶类 |
+| 2 | GET | `/categories` | M2 首页七大茶类 |
 | 3 | GET | `/origins` | M1 筛选面板产地 |
 | 4 | GET | `/hot` | M2 首页热门推荐 |
 | 5 | GET | `/random` | M2 首页随机发现 |

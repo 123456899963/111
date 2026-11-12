@@ -20,12 +20,12 @@ from pydantic import (
 
 from app.schemas._common import iso_z
 
-CATEGORY_VALUES = ("green", "white", "yellow", "red", "oolong", "dark")
+CATEGORY_VALUES = ("green", "white", "yellow", "red", "oolong", "dark", "reprocessed")
 SEASON_VALUES = ("明前", "雨前", "春茶", "夏茶", "秋茶", "冬茶")
 FERMENTATION_VALUES = ("不发酵", "微发酵", "半发酵", "全发酵", "后发酵")
 SORT_VALUES = ("newest", "favorite")
 
-CategoryValue = Literal["green", "white", "yellow", "red", "oolong", "dark"]
+CategoryValue = Literal["green", "white", "yellow", "red", "oolong", "dark", "reprocessed"]
 SeasonValue = Literal["明前", "雨前", "春茶", "夏茶", "秋茶", "冬茶"]
 FermentationValue = Literal["不发酵", "微发酵", "半发酵", "全发酵", "后发酵"]
 
@@ -185,9 +185,9 @@ class TeaDetail(BaseModel):
 
 
 class CategoryCount(BaseModel):
-    """六大茶类计数（API_CONTRACT §2.3.1）"""
+    """七大茶类计数（API_CONTRACT §2.3.1）"""
 
-    category: Literal["green", "white", "yellow", "red", "oolong", "dark"]
+    category: Literal["green", "white", "yellow", "red", "oolong", "dark", "reprocessed"]
     count: int
 
 

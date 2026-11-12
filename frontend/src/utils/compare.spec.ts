@@ -25,7 +25,7 @@ function makeTea(partial: Partial<Tea>): Tea {
 }
 
 describe('buildCompareMatrix', () => {
-  it('列顺序固定为六大茶类，行结构完整', () => {
+  it('列顺序固定为七大茶类，行结构完整', () => {
     const rows = buildCompareMatrix({})
     expect(rows.map((r) => r.label)).toEqual([
       '代表茶',

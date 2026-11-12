@@ -224,7 +224,7 @@ def _pick_by_preference(
 
 
 def categories(db: Session) -> list[CategoryCount]:
-    """六大茶类计数（FR-2.1）：固定六项、固定顺序、无收录返回 0"""
+    """七大茶类计数（FR-2.1）：固定七项、固定顺序、无收录返回 0"""
     count_map = tea_repo.count_by_category(db)
     return [CategoryCount(category=cat, count=count_map.get(cat, 0)) for cat in CATEGORY_VALUES]
 

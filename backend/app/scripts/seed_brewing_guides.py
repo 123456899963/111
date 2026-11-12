@@ -23,6 +23,7 @@ CATEGORY_DEFAULTS: dict[str, tuple[float, float, float]] = {
     "red": (95.0, 5.0, 30.0),
     "oolong": (100.0, 7.0, 20.0),
     "dark": (100.0, 7.0, 20.0),
+    "reprocessed": (90.0, 5.0, 30.0),
 }
 
 CATEGORY_INTRO: dict[str, str] = {
@@ -32,6 +33,7 @@ CATEGORY_INTRO: dict[str, str] = {
     "red": "红茶全发酵，甜香明显，水温 90–95℃、出汤要快，避免酸涩。",
     "oolong": "乌龙半发酵，香气高扬，必须沸水、快出汤，盖碗最合适。",
     "dark": "黑茶后发酵，醇厚耐泡，需沸水并先洗茶，泡淡后还可煮饮。",
+    "reprocessed": "再加工茶以基础茶坯窨制或调配而成，香气突出，水温适中、出汤要快，避免香气散失。",
 }
 
 CATEGORY_CAUTION: dict[str, str] = {
@@ -41,6 +43,7 @@ CATEGORY_CAUTION: dict[str, str] = {
     "red": "不要用持续沸腾的水猛冲茶叶，出汤后不留汤底，避免下一泡发酸。",
     "oolong": "水温不足香气出不来；每一泡都要出尽茶汤，不留汤底。",
     "dark": "务必用沸水；洗茶动作要快，避免滋味流失，泡淡后可加水煮饮。",
+    "reprocessed": "水温过高或久闷都会让花香变闷、茶汤发苦，出汤要快，尽量不倒净后久置。",
 }
 
 
@@ -204,6 +207,35 @@ def _steps(category: str, temp: float, amount: float, seconds: float) -> list[di
                 "title": "闻香品饮",
                 "detail": "出汤后先闻盖香，再小口品尝，感受花香与喉韵。",
                 "tip": "趁热闻盖香，凉了香气会散。",
+            },
+        ]
+    elif category == "reprocessed":
+        body = [
+            common_head,
+            {
+                "title": "投茶",
+                "detail": f"取 {a}g 再加工茶放入盖碗或玻璃杯，花茶可略少，调味茶按口味调整。",
+                "tip": "花茶投茶量过多容易发苦，建议从少量开始。",
+            },
+            {
+                "title": "注水",
+                "detail": f"用 {t}℃ 热水沿杯壁注入至七分满，让香气缓慢释放。",
+                "tip": "花茶不宜用持续沸腾的水猛冲，避免花香被烫散。",
+            },
+            {
+                "title": "出汤",
+                "detail": f"静置约 {s} 秒即可出汤，尽量一次倒净，不留汤底。",
+                "tip": "再加工茶久泡易苦涩，出汤要比基础茶更快。",
+            },
+            {
+                "title": "续泡",
+                "detail": "之后每泡增加 10 秒左右，通常可续 2–3 次。",
+                "tip": "花香明显变淡后即可换茶，不必强求多泡。",
+            },
+            {
+                "title": "闻香品饮",
+                "detail": "先闻杯中或盖上的香气，再小口品尝，感受花香与茶底的融合。",
+                "tip": "茶汤温度降到 60℃ 左右时花香更清晰。",
             },
         ]
     else:  # dark

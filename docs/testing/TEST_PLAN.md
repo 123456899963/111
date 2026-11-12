@@ -156,7 +156,7 @@
 | **TC-BREW-03** | 管理员/教程 | 中 | `PUT /admin/teas/{id}/brewing-guide`；S-19/S-24 | `admin` 已登录 | ① `steps` 2 条；② 9 条；③ `title` 31 字；④ `detail` 201 字；⑤ `tip` 101 字；⑥ `intro` 201 字；⑦ `caution` 501 字；⑧ 提交未知字段；⑨ 标题或说明为纯空白 | ①–⑨ 均 400/`40000`；响应不含 Pydantic 原始结构、SQL、表名；DB 不写入非法数据 |
 | **TC-BREW-04** | 教程/越权 | 高 | `PUT`、`DELETE /admin/teas/{id}/brewing-guide`；S-27/S-28 | 游客未登录；普通用户 B 已登录 | ① 游客 PUT；② 游客 DELETE；③ B 用户 PUT；④ B 用户 DELETE | ①–② 401/`40100`；③–④ 403/`40300`；教程内容不变，`operation_logs` 无新增 |
 | **TC-BREW-05** | 管理员/教程 | 中 | `DELETE /admin/teas/{id}/brewing-guide`、`GET /teas/{id}` | 教程存在 | ① 首次 DELETE；② 再次 DELETE；③ GET 公开详情；④ 查 `operation_logs` | ① 200、`deleted=true`；② 200、`deleted=false`（幂等）；③ `brewing_guide=null`；④ 仅首次删除写 `delete_brewing_guide` |
-| **TC-BREW-06** | 草稿脚本 | 中 | `python -m app.scripts.seed_brewing_guides` | 存在无教程的茶品；已有教程的茶品 | ① `--dry-run` 统计；② 实跑；③ 再跑一次；④ 抽查六大茶类草稿 | ① 仅统计不写库；② 为缺失茶品各插入 1 条 6 步教程；③ 待生成数为 0，已有教程未被覆盖；④ 六大茶类均 6 步，`title/detail` 非空，能通过 `BrewingGuide` 校验 |
+| **TC-BREW-06** | 草稿脚本 | 中 | `python -m app.scripts.seed_brewing_guides` | 存在无教程的茶品；已有教程的茶品 | ① `--dry-run` 统计；② 实跑；③ 再跑一次；④ 抽查七大茶类草稿 | ① 仅统计不写库；② 为缺失茶品各插入 1 条 6 步教程；③ 待生成数为 0，已有教程未被覆盖；④ 七大茶类均 6 步，`title/detail` 非空，能通过 `BrewingGuide` 校验 |
 
 ### 5.3 筛选、搜索与分页（9 条）
 

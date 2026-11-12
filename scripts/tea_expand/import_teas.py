@@ -38,6 +38,7 @@ PRICE_RANGES = {
     "dark": (200, 2500),
     "white": (300, 2000),
     "yellow": (200, 1200),
+    "reprocessed": (150, 1000),
 }
 
 

@@ -6,7 +6,7 @@
   <footer class="app-footer">
     <div class="app-footer__inner">
       <h4 class="app-footer__brand">茶·图鉴</h4>
-      <p class="app-footer__desc">六大茶类 · 结构化知识库 · 让每一款茶都有据可循</p>
+      <p class="app-footer__desc">七大茶类 · 结构化知识库 · 让每一款茶都有据可循</p>
       <p class="app-footer__copy">© 2026 茶·图鉴 · 数据仅供参考</p>
     </div>
   </footer>

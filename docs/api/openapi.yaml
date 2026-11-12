@@ -4,7 +4,7 @@ info:
   title: 茶·图鉴 API
   version: 1.6.0
   description: |
-    六大茶类结构化知识库平台 MVP 后端接口契约。
+    七大茶类结构化知识库平台 MVP 后端接口契约。
 
     统一约定：
     - 所有业务接口位于 `/api/v1` 下。
@@ -421,13 +421,13 @@ paths:
   /teas/categories:
     get:
       tags: [茶品]
-      summary: 六大茶类计数
-      description: 固定返回六项，顺序固定，缺失茶类返回 0。
+      summary: 七大茶类计数
+      description: 固定返回七项，顺序固定，缺失茶类返回 0。
       operationId: listTeaCategories
       security: []
       responses:
         '200':
-          description: 六大茶类计数
+          description: 七大茶类计数
           content:
             application/json:
               schema:
@@ -1299,7 +1299,7 @@ paths:
     get:
       tags: [管理员]
       summary: 仪表盘统计
-      description: 总数/上架数/下架数与六大茶类分布；分布统计包含下架茶品。
+      description: 总数/上架数/下架数与七大茶类分布；分布统计包含下架茶品。
       operationId: adminGetStats
       security:
         - teaSession: []
@@ -2443,7 +2443,7 @@ components:
 
     TeaCategory:
       type: string
-      enum: [green, white, yellow, red, oolong, dark]
+      enum: [green, white, yellow, red, oolong, dark, reprocessed]
 
     TeaSeason:
       type: string
@@ -3859,7 +3859,7 @@ components:
           maxLength: 100
         category:
           type: string
-          enum: [green, white, yellow, red, oolong, dark]
+          enum: [green, white, yellow, red, oolong, dark, reprocessed]
         origin:
           type: string
           maxLength: 200

@@ -11,13 +11,14 @@
   --color-primary-hover: #7a6548;
   --color-primary-dark: #6b5740;
 
-  /* 六大茶类标签色 */
+  /* 七大茶类标签色 */
   --color-tea-green: #5cb85c;
   --color-tea-white: #d4d0c8;
   --color-tea-yellow: #e6c25b;
   --color-tea-red: #c0392b;
   --color-tea-oolong: #d35400;
   --color-tea-dark: #4a3728;
+  --color-tea-reprocessed: #b98a9b;
 
   /* 背景色 */
   --color-bg-page: #faf8f5;

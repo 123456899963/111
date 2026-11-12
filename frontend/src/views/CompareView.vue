@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * 六大茶类摘要对比（S3）
+ * 七大茶类摘要对比（S3）
  *
- * 纯前端页面：每个茶类取一款代表茶（收藏最多）→ 拉取详情 → 组装六列对比表。
+ * 纯前端页面：每个茶类取一款代表茶（收藏最多）→ 拉取详情 → 组装七列对比表。
  * 无后端契约变更，数据全部来自既有只读接口。
  */
 
@@ -67,12 +67,12 @@ onMounted(() => void load())
         <span class="breadcrumb__sep">›</span>
         <RouterLink to="/teas">茶品列表</RouterLink>
         <span class="breadcrumb__sep">›</span>
-        <span class="breadcrumb__current">六大茶类对比</span>
+        <span class="breadcrumb__current">七大茶类对比</span>
       </nav>
 
       <header class="compare-header">
         <p class="page-kicker page-kicker--center">Side by Side</p>
-        <h1 class="compare-header__title">六大茶类摘要对比</h1>
+        <h1 class="compare-header__title">七大茶类摘要对比</h1>
         <p class="compare-header__desc">
           每类甄选一款代表茶，横向对比外形、汤色、香气、滋味与冲泡要点。
         </p>
@@ -199,7 +199,7 @@ onMounted(() => void load())
 .compare-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 880px;
+  min-width: 1000px;
 }
 
 .compare-table th,

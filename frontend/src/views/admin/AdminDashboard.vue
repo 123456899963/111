@@ -56,7 +56,7 @@ onMounted(async () => {
     </div>
 
     <section v-if="stats" class="panel">
-      <h3 class="text-h3 panel-title">六大茶类分布</h3>
+      <h3 class="text-h3 panel-title">七大茶类分布</h3>
       <div class="distribution">
         <div
           v-for="item in stats.category_distribution"

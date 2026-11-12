@@ -2,10 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { buildBrewingDraft } from './brewing'
 import type { TeaCategory } from '@/types'
 
-const CATEGORIES: TeaCategory[] = ['green', 'white', 'yellow', 'red', 'oolong', 'dark']
+const CATEGORIES: TeaCategory[] = [
+  'green',
+  'white',
+  'yellow',
+  'red',
+  'oolong',
+  'dark',
+  'reprocessed',
+]
 
 describe('buildBrewingDraft', () => {
-  it('六大茶类都生成 6 步且字段非空', () => {
+  it('七大茶类都生成 6 步且字段非空', () => {
     for (const category of CATEGORIES) {
       const guide = buildBrewingDraft({ category, water_temp: 90, tea_amount: 5, brew_time: 30 })
       expect(guide.steps).toHaveLength(6)

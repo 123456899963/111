@@ -32,6 +32,7 @@ CATEGORY_LABELS = {
     "red": "红茶",
     "oolong": "乌龙茶",
     "dark": "黑茶",
+    "reprocessed": "再加工茶",
 }
 TIPS_FIELDS = ("tips_history", "tips_suitable", "tips_misconception", "tips_official_note")
 TIPS_FIELD_TO_COLUMN = {
